@@ -2,7 +2,6 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type TouchEvent as ReactTouchEvent,
-  type WheelEvent as ReactWheelEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -25,15 +24,18 @@ import {
   buildSkyFrame,
   buildSkyTargets,
   clamp,
+  clampPan,
   eclipticLongitudeOf,
   findSkyTarget,
   formatDec,
   formatRa,
   horizonScale,
   makeProjector,
+  mapScale,
   phaseName,
   skyTone,
   specialTargetEquatorial,
+  wheelZoomFactor,
   wrap180,
   zoomAroundPoint,
   type SkyMode,
@@ -236,6 +238,7 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
 
   const applyZoom = useCallback(
     (factor: number, point: { x: number; y: number }) => {
+      if (!Number.isFinite(factor) || factor <= 0 || factor === 1) return;
       setView((previous) => zoomAroundPoint(mode, previous, point, factor, size.width, size.height));
     },
     [mode, size.height, size.width]
@@ -317,10 +320,25 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
 
   /* --------------------------------------------------------------- chuột & cảm ứng */
 
+  /**
+   * Giữ con trỏ trong khung canvas khi kéo. Một số trình duyệt/môi trường (jsdom, con trỏ đã
+   * huỷ) ném lỗi khi bắt giữ nên phải kiểm tra và bọc lại — nếu không thao tác kéo chết giữa chừng.
+   */
+  const capturePointer = (element: HTMLCanvasElement, pointerId: number, capture: boolean) => {
+    const action = capture ? element.setPointerCapture : element.releasePointerCapture;
+    if (typeof action !== "function" || !Number.isFinite(pointerId)) return;
+    try {
+      action.call(element, pointerId);
+    } catch {
+      // Con trỏ không còn hợp lệ: bỏ qua, kéo vẫn hoạt động nhờ toạ độ toàn cục.
+    }
+  };
+
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     event.currentTarget.focus();
+    // Mốc kéo mới; nếu đang chụm hai ngón thì handlePointerMove sẽ bỏ qua kéo (xem pinchRef).
     dragRef.current = { x: event.clientX, y: event.clientY, moved: false, time: performance.now() };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    capturePointer(event.currentTarget, event.pointerId, true);
   };
 
   const updatePointerReadout = (event: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -340,6 +358,8 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
       updatePointerReadout(event);
       return;
     }
+    // Đang chụm hai ngón thì bỏ qua kéo, nếu không bản đồ vừa phóng vừa bị giật theo một ngón.
+    if (pinchRef.current) return;
 
     const dx = event.clientX - drag.x;
     const dy = event.clientY - drag.y;
@@ -350,14 +370,12 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
 
     setView((previous) => {
       if (mode === "horizon") {
-        return {
-          ...previous,
-          x: clamp(previous.x + dx, -size.width * 0.85, size.width * 0.85),
-          y: clamp(previous.y + dy, -size.height * 0.85, size.height * 0.85)
-        };
+        const pan = clampPan(previous.x + dx, previous.y + dy, size.width, size.height);
+        return { ...previous, x: pan.x, y: pan.y };
       }
-      const scale = previous.zoom * ((size.height || size.width) * 0.96 / 182);
-      const degreesPerPixel = 1 / scale;
+      // Dùng chung một công thức thang đo với phép chiếu để kéo và zoom khớp nhau từng điểm ảnh.
+      const scale = mapScale(size.width, size.height, previous.zoom);
+      const degreesPerPixel = scale > 0 ? 1 / scale : 0;
       return {
         ...previous,
         centerRa: wrap180(previous.centerRa + dx * degreesPerPixel),
@@ -370,6 +388,7 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
   const handlePointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const drag = dragRef.current;
     dragRef.current = null;
+    capturePointer(event.currentTarget, event.pointerId, false);
     if (!drag || drag.moved) return;
 
     const rect = event.currentTarget.getBoundingClientRect();
@@ -390,11 +409,29 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
     setSelected(best);
   };
 
-  const handleWheel = (event: ReactWheelEvent<HTMLCanvasElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-    applyZoom(event.deltaY < 0 ? 1.14 : 0.88, point);
-  };
+  /**
+   * Lăn chuột / lướt bàn rê = phóng to quanh con trỏ.
+   *
+   * KHÔNG dùng `onWheel` của React: React gắn wheel/touch ở chế độ **passive** nên
+   * `preventDefault()` bị bỏ qua (và báo lỗi ở chế độ dev) → trang vẫn cuộn theo mỗi lần lăn,
+   * bản đồ vừa zoom vừa bị kéo đi. Phải tự gắn listener native với `{ passive: false }`.
+   */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const onWheel = (event: WheelEvent) => {
+      // Chặn cả cuộn trang lẫn zoom trang của trình duyệt (Ctrl + lăn = cử chỉ chụm trên bàn rê).
+      if (event.cancelable) event.preventDefault();
+      const factor = wheelZoomFactor(event);
+      if (factor === 1) return;
+      const rect = canvas.getBoundingClientRect();
+      applyZoom(factor, { x: event.clientX - rect.left, y: event.clientY - rect.top });
+    };
+
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
+  }, [applyZoom]);
 
   const handleDoubleClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     event.preventDefault();
@@ -403,17 +440,25 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
   };
 
   const handleTouchStart = (event: ReactTouchEvent<HTMLCanvasElement>) => {
-    if (event.touches.length === 2) {
-      dragRef.current = null;
-      pinchRef.current = {
-        distance: Math.hypot(
-          event.touches[0].clientX - event.touches[1].clientX,
-          event.touches[0].clientY - event.touches[1].clientY
-        ),
-        midX: (event.touches[0].clientX + event.touches[1].clientX) / 2,
-        midY: (event.touches[0].clientY + event.touches[1].clientY) / 2
-      };
+    if (event.touches.length !== 2) {
+      pinchRef.current = null;
+      return;
     }
+    dragRef.current = null;
+    pinchRef.current = {
+      distance: Math.hypot(
+        event.touches[0].clientX - event.touches[1].clientX,
+        event.touches[0].clientY - event.touches[1].clientY
+      ),
+      midX: (event.touches[0].clientX + event.touches[1].clientX) / 2,
+      midY: (event.touches[0].clientY + event.touches[1].clientY) / 2
+    };
+  };
+
+  const handleTouchEnd = (event: ReactTouchEvent<HTMLCanvasElement>) => {
+    if (event.touches.length < 2) pinchRef.current = null;
+    // Bỏ luôn mốc kéo cũ: nếu không, ngón còn lại sẽ "nhảy" một đoạn dài khi tiếp tục di chuyển.
+    dragRef.current = null;
   };
 
   const handleTouchMove = (event: ReactTouchEvent<HTMLCanvasElement>) => {
@@ -805,7 +850,10 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
         ))}
       </div>
 
-      <div ref={wrapperRef} className="relative mt-4 h-[26rem] w-full overflow-hidden rounded-xl border border-slate-800 md:h-[34rem]">
+      <div
+        ref={wrapperRef}
+        className="relative mt-4 h-[26rem] w-full touch-none select-none overflow-hidden overscroll-contain rounded-xl border border-slate-800 md:h-[34rem]"
+      >
         <canvas
           ref={canvasRef}
           tabIndex={0}
@@ -816,23 +864,23 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
             dragRef.current = null;
             setPointerReadout(null);
           }}
-          onPointerCancel={() => {
+          onPointerCancel={(event) => {
             dragRef.current = null;
+            pinchRef.current = null;
+            capturePointer(event.currentTarget, event.pointerId, false);
           }}
-          onWheel={handleWheel}
           onDoubleClick={handleDoubleClick}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
-          onTouchEnd={() => {
-            pinchRef.current = null;
-          }}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
           onKeyDown={handleKeyDown}
           className="h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 active:cursor-grabbing"
         />
         <div className="pointer-events-none absolute bottom-3 left-3 max-w-[19rem] rounded-lg border border-slate-700/70 bg-slate-950/80 px-3 py-2 text-[11px] leading-relaxed text-slate-300">
           {mode === "horizon"
-            ? "Kéo để dịch chuyển · lăn chuột hoặc chụm hai ngón để phóng to quanh con trỏ · nháy đúp để phóng to nhanh · bấm vào sao để xem chi tiết."
-            : "Kéo ngang để xoay theo xích kinh, kéo dọc để đổi xích vĩ · lăn chuột để phóng to quanh con trỏ · nháy đúp để phóng to nhanh · phím ←→↑↓ để dịch, +/− để phóng to."}
+            ? "Kéo để dịch chuyển · lăn chuột hoặc chụm hai ngón để phóng to quanh con trỏ (trang đứng yên, không cuộn theo) · nháy đúp để phóng to nhanh · bấm vào sao để xem chi tiết."
+            : "Kéo ngang để xoay theo xích kinh, kéo dọc để đổi xích vĩ · lăn chuột để phóng to quanh con trỏ (trang đứng yên, không cuộn theo) · nháy đúp để phóng to nhanh · phím ←→↑↓ để dịch, +/− để phóng to."}
           <span className="mt-1 block text-slate-400">
             {mode === "horizon"
               ? "Màu trời, hấp thụ và khúc xạ tính theo độ cao Mặt Trời; núi và mặt đất che phần bầu trời bên dưới chân trời."

@@ -19,7 +19,7 @@ Web app tiếng Việt: **lập bản đồ sao (natal chart) → xem bản đ�
    - **Sao** có quầng sáng và tia nhiễu xạ theo cấp sao; **Mặt Trăng đúng pha** (hình dạng khuyết theo góc ly giác với Mặt Trời, quầng sáng theo độ được chiếu sáng).
    - **Mặt đất & ba dải núi** che phần bầu trời dưới chân trời (đúng phương vị, có phối cảnh khí quyển), vòng chân trời 8 hướng, nhãn tự tránh chồng nhau theo thứ tự ưu tiên.
    - Hai chế độ xem: bầu trời theo **độ cao - phương vị** (tâm là thiên đỉnh) và **toàn cảnh xích kinh - xích vĩ**.
-   - **Điều khiển**: lăn chuột/chụm hai ngón **phóng to ngay tại con trỏ**, nháy đúp để phóng to nhanh, kéo để dịch (bản đồ: kéo ngang đổi xích kinh, kéo dọc đổi xích vĩ), thanh trượt mức phóng, nút **Căn lại**, các nút đi nhanh (Bắc/Đông/Nam/Tây/Thiên đỉnh · Dải Ngân Hà và 4 vùng xích kinh), **ô tra cứu** sao - chòm - thiên thể - hành tinh (gõ được cả tên tiếng Việt không dấu như "sao thien lang", "bac cuc", "m42"), **đọc toạ độ ngay dưới con trỏ**, phím ←→↑↓ +/−/0, chế độ **theo giờ thực** và chạy thời gian (±giờ/ngày, 1 giờ → 1 tuần mỗi nhịp).
+   - **Điều khiển**: lăn chuột/chụm hai ngón **phóng to ngay tại con trỏ mà trang không bị cuộn theo** (listener `wheel` non-passive, chặn cả Ctrl + lăn; tốc độ zoom chuẩn hoá cho chuột rời, bàn rê và Firefox), nháy đúp để phóng to nhanh, kéo để dịch (bản đồ: kéo ngang đổi xích kinh, kéo dọc đổi xích vĩ), thanh trượt mức phóng, nút **Căn lại**, các nút đi nhanh (Bắc/Đông/Nam/Tây/Thiên đỉnh · Dải Ngân Hà và 4 vùng xích kinh), **ô tra cứu** sao - chòm - thiên thể - hành tinh (gõ được cả tên tiếng Việt không dấu như "sao thien lang", "bac cuc", "m42"), **đọc toạ độ ngay dưới con trỏ**, phím ←→↑↓ +/−/0, chế độ **theo giờ thực** và chạy thời gian (±giờ/ngày, 1 giờ → 1 tuần mỗi nhịp).
    - Bấm vào sao/hành tinh/thiên thể để xem toạ độ (cả J2000 và hệ của ngày), độ cao, phương vị, vị trí hoàng đạo, **đưa đối tượng vào giữa khung** và **hỏi AI về riêng đối tượng đó**.
    - Thẻ phụ: hành tinh đang thấy được, giờ mọc/lặn Mặt Trời - Mặt Trăng, hành tinh theo cung.
 
@@ -53,8 +53,8 @@ Các engine được kiểm chứng tự động với **Swiss Ephemeris** (`npm
 | 7 hệ hoàng đạo / ayanamsa | 366 mốc 1800-2100 | Lahiri/Fagan-Bradley 0,0002° · Raman/KP 0,0004° · Ngân Hà 0,0059° |
 | Điểm ảo | 41 mốc 1900-2100 × 28 thiên thể | node trung bình 0,00015° · Lilith 0,115° · hành tinh giả định ≤ 0,007° · tiểu hành tinh 0,28-0,99° |
 | Lớp biến thể | 7 hệ hoàng đạo × 12 hệ nhà, dasha/varga/Tứ Trụ/Tử Vi/Maya/HD | kiểm tra tính nhất quán (cusp ↔ nhà, ayanamsa ↔ cung) |
-| Bản đồ sao (hiển thị) | 14.919 phép kiểm: khúc xạ/hấp thụ, phép chiếu & nghịch đảo, phóng to quanh con trỏ, dựng khung 4 vĩ độ, Ngân Hà, pha Trăng, tra cứu | 0 lỗi (sai số nghịch đảo < 0,05°) |
-| Giao diện bản đồ sao | 1 lần chạy jsdom: gắn giao diện, vẽ 72.000 lời gọi, mô phỏng lăn/kéo/bấm sao/đổi chế độ/tra cứu/bàn phím | 0 ngoại lệ, 0 console.error |
+| Bản đồ sao (hiển thị) | 14.963 phép kiểm: khúc xạ/hấp thụ, phép chiếu & nghịch đảo, phóng to quanh con trỏ, **quy đổi lăn chuột & giới hạn dịch chuyển khung**, dựng khung 4 vĩ độ, Ngân Hà, pha Trăng, tra cứu | 0 lỗi (sai số nghịch đảo < 0,05°) |
+| Giao diện bản đồ sao | 1 lần chạy jsdom: gắn giao diện, vẽ ≈110.000 lời gọi, mô phỏng lăn (khẳng định `preventDefault` để trang không cuộn + zoom đúng hướng)/kéo/bấm sao/đổi chế độ/tra cứu/bàn phím | 0 ngoại lệ, 0 console.error |
 
 ## Chạy dự án
 

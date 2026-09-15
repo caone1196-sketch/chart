@@ -11,6 +11,7 @@
  *  5. Phép chiếu chân trời: thiên đỉnh ở tâm, chân trời là vòng tròn bán kính 2×scale, hình học đúng.
  *  6. Nghịch đảo phép chiếu khớp vòng tròn với phép chiếu thuận (sai số < 0.5°).
  *  7. Phóng to quanh con trỏ giữ nguyên điểm dưới con trỏ (chế độ bản đồ và chân trời).
+ *  7b. Quy đổi lăn chuột (hướng, deltaMode Firefox, kẹp hệ số, đơn điệu) và giới hạn dịch chuyển khung.
  *  8. Vẽ: mỗi sao chỉ xuất hiện một lần trong danh sách bắt sự kiện; toạ độ nằm trong khung.
  *  9. Ngân Hà: sinh tất định, toạ độ hợp lệ, có vùng sáng và vùng tối (rãnh tối).
  * 10. Hình dạng Mặt Trăng: trăng mới → 0%, trăng tròn → 100%, bán nguyệt → 50%.
@@ -23,12 +24,14 @@ import { renderToString } from "react-dom/server";
 import { createCanvas } from "@napi-rs/canvas";
 import StarMap from "../src/components/StarMap.tsx";
 import {
+  HORIZON_PAN_LIMIT,
   HORIZON_ZOOM,
   MAP_ZOOM,
   airmass,
   buildSkyFrame,
   buildSkyTargets,
   clamp,
+  clampPan,
   eclipticLongitudeOf,
   extinctionMag,
   findSkyTarget,
@@ -49,6 +52,7 @@ import {
   terrainMaxDeg,
   toHorizontalSafe,
   trueAltitude,
+  wheelZoomFactor,
   wrap180,
   zoomAroundPoint,
   MILKY_WAY_POINTS
@@ -289,6 +293,96 @@ const CASES: Array<{ name: string; lat: number; lon: number; utc: Date }> = [
     if (clampedLow.zoom !== (mode === "map" ? MAP_ZOOM.min : HORIZON_ZOOM.min)) fail("giới hạn phóng", `${mode}: vượt sàn phóng đại`);
     ok();
   }
+}
+
+/* ------------------------------------- 7b. quy đổi lăn chuột & giới hạn dịch chuyển */
+{
+  // a) Đúng hướng: lăn lên (deltaY < 0) phóng to, lăn xuống thu nhỏ.
+  if (!(wheelZoomFactor({ deltaY: -120 }) > 1)) fail("lăn chuột", "lăn lên không cho hệ số phóng to");
+  ok();
+  if (!(wheelZoomFactor({ deltaY: 120 }) < 1)) fail("lăn chuột", "lăn xuống không cho hệ số thu nhỏ");
+  ok();
+
+  // b) Đối xứng: phóng rồi thu cùng lượng thì về đúng mức cũ (không trôi dần về một phía).
+  const up = wheelZoomFactor({ deltaY: -100 });
+  const down = wheelZoomFactor({ deltaY: 100 });
+  if (!near(up * down, 1, 1e-9)) fail("lăn chuột", `phóng/thu không đối xứng: ${up} × ${down}`);
+  ok();
+
+  // c) Độ nhạy chuẩn: một nấc ≈ 1,15×, năm nấc ≈ 2×.
+  if (!near(wheelZoomFactor({ deltaY: -120 }), Math.pow(2, 1 / 5), 1e-9)) fail("lăn chuột", "một nấc lăn sai độ nhạy chuẩn");
+  ok();
+  let fiveNotches = 1;
+  for (let i = 0; i < 5; i += 1) fiveNotches *= wheelZoomFactor({ deltaY: -120 });
+  if (!near(fiveNotches, 2, 1e-9)) fail("lăn chuột", `năm nấc lăn không gấp đôi mức phóng (${fiveNotches})`);
+  ok();
+
+  // d) deltaMode: 3 "dòng" của Firefox phải xấp xỉ một nấc 100px của Chrome, không chậm gấp đôi.
+  const firefox = wheelZoomFactor({ deltaY: -3, deltaMode: 1 });
+  const chrome = wheelZoomFactor({ deltaY: -100 });
+  if (!near(firefox, chrome, 0.02)) fail("lăn chuột", `deltaMode=1 (Firefox) lệch deltaMode=0: ${firefox} so với ${chrome}`);
+  ok();
+  const pageMode = wheelZoomFactor({ deltaY: -1, deltaMode: 2 });
+  if (!(pageMode > 1)) fail("lăn chuột", "deltaMode=2 (trang) không phóng to");
+  ok();
+
+  // e) Kẹp hệ số mỗi sự kiện: chuột gaming / quán tính bàn rê gửi delta rất lớn cũng không nhảy cóc.
+  const huge = wheelZoomFactor({ deltaY: -100000 });
+  if (!(huge > 1 && huge <= 2.4 + 1e-9)) fail("lăn chuột", `delta cực lớn không được kẹp (${huge})`);
+  ok();
+
+  // f) deltaY = 0 thì đứng yên; sự kiện không có deltaY (môi trường giả lập) vẫn có dự phòng.
+  if (wheelZoomFactor({ deltaY: 0 }) !== 1) fail("lăn chuột", "deltaY = 0 vẫn làm đổi mức phóng");
+  ok();
+  if (!(wheelZoomFactor({}) > 1)) fail("lăn chuột", "thiếu deltaY không có bước dự phòng");
+  ok();
+
+  // g) Đơn điệu theo độ lớn delta: lướt bàn rê nhẹ thì zoom nhẹ, mạnh thì zoom mạnh.
+  let previous = 1;
+  for (const delta of [1, 4, 16, 60, 120, 400]) {
+    const factor = wheelZoomFactor({ deltaY: -delta });
+    if (!(factor > previous)) fail("lăn chuột", `hệ số phóng không đơn điệu tại deltaY = ${delta}`);
+    previous = factor;
+    ok();
+  }
+
+  // h) Ctrl + lăn (cử chỉ chụm hai ngón trên bàn rê) vẫn phóng bản đồ theo đúng hướng.
+  if (!(wheelZoomFactor({ deltaY: -6, ctrlKey: true }) > 1)) fail("lăn chuột", "Ctrl + lăn không phóng to");
+  ok();
+  if (!(wheelZoomFactor({ deltaY: 6, ctrlKey: true }) < 1)) fail("lăn chuột", "Ctrl + lăn ngược không thu nhỏ");
+  ok();
+
+  // i) Zoom dồn dập quanh một điểm sát mép khung không được đẩy bầu trời ra ngoài màn hình:
+  //    mỗi lần phóng, phần dịch chuyển bị nhân thêm đúng hệ số phóng nên nếu không kẹp thì chỉ
+  //    vài nấc lăn ở góc khung là tâm bầu trời bay mất (xa hơn cả giới hạn kéo), thu nhỏ lại chỉ còn nền trống.
+  const width = 900;
+  const height = 520;
+  const limitX = width * HORIZON_PAN_LIMIT;
+  const limitY = height * HORIZON_PAN_LIMIT;
+  let view = { zoom: 1, x: 0, y: 0, centerRa: 0, centerDec: 20 };
+  const panPath: Array<{ x: number; y: number }> = [{ x: view.x, y: view.y }];
+  for (let step = 0; step < 24; step += 1) {
+    // 12 nấc lăn phóng to ở sát góc trên-trái, rồi 12 nấc thu nhỏ để "quay về".
+    view = zoomAroundPoint("horizon", view, { x: 4, y: 4 }, step < 12 ? 1.45 : 1 / 1.45, width, height);
+    panPath.push({ x: view.x, y: view.y });
+    if (!Number.isFinite(view.x) || !Number.isFinite(view.y) || Math.abs(view.x) > limitX + 1e-9 || Math.abs(view.y) > limitY + 1e-9) {
+      fail("giới hạn dịch chuyển", `zoom sát mép khung đẩy khung nhìn ra ngoài ở nấc ${step}: (${view.x.toFixed(1)}, ${view.y.toFixed(1)})`);
+      break;
+    }
+    ok();
+  }
+  // Kịch bản phải thật sự chạm phần kẹp (bị ghim đúng giới hạn), nếu không phép kiểm ở trên là vô nghĩa.
+  if (!panPath.some((item) => Math.abs(Math.abs(item.x) - limitX) < 1e-6 && Math.abs(Math.abs(item.y) - limitY) < 1e-6)) {
+    fail("giới hạn dịch chuyển", "chuỗi zoom thử nghiệm chưa chạm giới hạn kẹp — không còn kiểm tra được lỗi trôi khung");
+  }
+  ok();
+
+  // j) clampPan chặn cả NaN/Infinity (kéo nhanh, sự kiện lỗi).
+  const badPan = clampPan(Number.NaN, Number.POSITIVE_INFINITY, width, height);
+  if (!Number.isFinite(badPan.x) || !Number.isFinite(badPan.y) || Math.abs(badPan.y) > limitY + 1e-9) {
+    fail("giới hạn dịch chuyển", `clampPan không xử lý NaN/Infinity: (${badPan.x}, ${badPan.y})`);
+  }
+  ok();
 }
 
 /* --------------------------------------------------- 8. vẽ & bắt sự kiện */

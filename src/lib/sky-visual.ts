@@ -401,6 +401,53 @@ export type ProjectedPoint = { x: number; y: number; visible: boolean };
 export const HORIZON_ZOOM = { min: 0.6, max: 22, initial: 1 };
 export const MAP_ZOOM = { min: 1, max: 24, initial: 1 };
 
+/** Giới hạn dịch chuyển khung chân trời (tỉ lệ cạnh khung) — dùng chung cho kéo, phím tắt và zoom. */
+export const HORIZON_PAN_LIMIT = 0.85;
+
+/** Kẹp toạ độ dịch chuyển của khung chân trời vào trong giới hạn cho phép. */
+export const clampPan = (x: number, y: number, width: number, height: number) => ({
+  x: clamp(Number.isFinite(x) ? x : 0, -width * HORIZON_PAN_LIMIT, width * HORIZON_PAN_LIMIT),
+  y: clamp(Number.isFinite(y) ? y : 0, -height * HORIZON_PAN_LIMIT, height * HORIZON_PAN_LIMIT)
+});
+
+/* --------------------------------------------------------- quy đổi sự kiện lăn chuột */
+
+/** Một nấc lăn chuột chuẩn của trình duyệt (Chrome/Edge/Safari gửi ±100…±120 cho mỗi nấc). */
+const WHEEL_NOTCH = 120;
+/** Số nấc chuẩn để mức phóng thay đổi gấp đôi → 5 nấc ≈ 2×, tức mỗi nấc ≈ 1,15×. */
+const WHEEL_NOTCHES_PER_DOUBLE = 5;
+/** Một sự kiện đơn lẻ không được phóng/thu quá hệ số này (chuột gaming gửi deltaY rất lớn). */
+const WHEEL_FACTOR_LIMIT = 2.4;
+
+export type WheelZoomInput = {
+  deltaY?: number;
+  deltaMode?: number;
+  ctrlKey?: boolean;
+};
+
+/**
+ * Quy đổi sự kiện lăn chuột / lướt bàn rê thành **hệ số phóng to** (>1 phóng to, <1 thu nhỏ).
+ *
+ * Vì sao cần hàm riêng thay vì đọc thẳng `deltaY`:
+ *  - `deltaMode` khác nhau giữa trình duyệt: Chrome/Safari = 0 (điểm ảnh), Firefox = 1 (dòng, ±3 mỗi nấc),
+ *    một số trường hợp = 2 (trang). Không chuẩn hoá thì Firefox phóng chậm gấp ~2 lần Chrome.
+ *  - Bàn rê gửi hàng chục sự kiện nhỏ (deltaY ≈ 1…10) còn chuột rời gửi một nấc ±100…±120;
+ *    ánh xạ theo hàm mũ của delta nên cả hai đều mượt và không bị "nhảy cóc" khi lướt nhanh.
+ *  - Cử chỉ chụm hai ngón trên bàn rê được gửi kèm `ctrlKey` (trình duyệt coi là zoom trang) —
+ *    ta tự xử lý để phóng bản đồ thay vì phóng cả trang.
+ *  - Sự kiện không có `deltaY` hữu hạn (trình giả lập, `MouseEvent` thường) coi như một nấc lăn lên.
+ */
+export const wheelZoomFactor = (event: WheelZoomInput): number => {
+  const raw = Number(event?.deltaY);
+  let delta = Number.isFinite(raw) ? raw : -WHEEL_NOTCH;
+  if (event?.deltaMode === 1) delta *= 32; // dòng → điểm ảnh (3 dòng ≈ một nấc 100px của Chrome)
+  else if (event?.deltaMode === 2) delta *= 800; // trang → điểm ảnh
+  if (delta === 0) return 1;
+  const notches = delta / WHEEL_NOTCH;
+  const factor = Math.pow(2, -notches / WHEEL_NOTCHES_PER_DOUBLE);
+  return clamp(factor, 1 / WHEEL_FACTOR_LIMIT, WHEEL_FACTOR_LIMIT);
+};
+
 /** Tỉ lệ px/đơn-vị cho phép chiếu phương vị – độ cao (vòm trời vừa khung ở zoom 1). */
 export const horizonScale = (width: number, height: number, zoom: number) => (Math.min(width, height) * 0.23) * zoom;
 
@@ -509,7 +556,8 @@ export const toHorizontalSafe = (ra: number, dec: number, lstDeg: number, latDeg
 
 /**
  * Phóng to quanh một điểm màn hình: giữ nguyên vật thể đang nằm dưới con trỏ.
- * Trả về khung nhìn mới (kèm zoom đã kẹp trong khoảng cho phép của chế độ).
+ * Trả về khung nhìn mới (kèm zoom đã kẹp trong khoảng cho phép của chế độ);
+ * ở chế độ chân trời phần dịch chuyển cũng được kẹp trong `HORIZON_PAN_LIMIT`.
  */
 export const zoomAroundPoint = (
   mode: SkyMode,
@@ -529,7 +577,10 @@ export const zoomAroundPoint = (
     const centerX = width / 2 + view.x;
     const centerY = height / 2 + view.y;
     const ratio = after / before;
-    return { ...view, zoom, x: point.x - (point.x - centerX) * ratio - width / 2, y: point.y - (point.y - centerY) * ratio - height / 2 };
+    // Kẹp lại như khi kéo: nếu không, zoom liên tục quanh một điểm ở rìa khung sẽ đẩy bầu trời
+    // ra ngoài màn hình và không có cách nào lấy lại ngoài nút "Căn lại".
+    const pan = clampPan(point.x - (point.x - centerX) * ratio - width / 2, point.y - (point.y - centerY) * ratio - height / 2, width, height);
+    return { ...view, zoom, x: pan.x, y: pan.y };
   }
 
   const before = mapScale(width, height, view.zoom);

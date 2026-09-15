@@ -77,3 +77,92 @@ và trong báo cáo gửi cho AI.
   app ghi chú rõ thay vì tự nghĩ ra số.
 - Tiểu hành tinh (Ceres…Vesta) và hành tinh giả định dùng mô hình Kepler 2 vật thể: sai số tới ~1° (Juno) so với SE — đã có ngưỡng riêng trong `test:points`.
 - Trụ **tháng** của Tứ Trụ (app, theo tiết khí) và của `iztro` (theo tháng âm lịch) khác quy ước nên `test:tuvi` không so trụ tháng.
+
+---
+
+# Soát lỗi phần phóng to – thu nhỏ bản đồ sao — biên bản lần 2
+
+Ngày soát: 15/09/2026 · phạm vi: `src/components/StarMap.tsx`, `src/lib/sky-visual.ts` (nhóm điều khiển khung nhìn),
+`tests/sky.check.ts`, `tests/ui-smoke.mjs` · nhánh `arena/01a0a6c4-chart`.
+Lỗi người dùng báo: **lăn chuột để phóng to bản đồ thì cả trang bị kéo đi theo**.
+
+## 5. Lỗi tìm được và đã sửa
+
+### 5.1 Lăn chuột vừa zoom vừa cuộn cả trang (lỗi được báo)
+`StarMap` gắn zoom qua prop `onWheel` của React. React 19 đăng ký `wheel`/`touchstart`/`touchmove`
+ở **gốc ứng dụng với `passive: true`**, nên `preventDefault()` trong handler bị bỏ qua (dev còn in cảnh báo
+"Unable to preventDefault inside passive event listener"); ở đây handler thậm chí không gọi `preventDefault()`.
+Kết quả: mỗi nấc lăn vừa đổi `view.zoom` vừa để trình duyệt cuộn trang (càng khó chịu vì `html { scroll-behavior: smooth }`
+làm trang trượt êm), bản đồ "chạy" khỏi con trỏ.
+**Sửa:** bỏ `onWheel`, tự gắn listener native trong `useEffect` với `canvas.addEventListener("wheel", handler, { passive: false })`
+và gọi `event.preventDefault()` khi `event.cancelable`. Nhờ vậy cũng chặn luôn **Ctrl + lăn** (cử chỉ chụm hai ngón trên bàn rê)
+không cho trình duyệt zoom cả trang. Kiểm chứng: `test:ui` — `event.defaultPrevented` phải `true` cho 5 tình huống lăn.
+
+### 5.2 Tốc độ zoom phụ thuộc trình duyệt và thiết bị
+Hệ số cũ cố định `1.14`/`0.88` cho **mỗi sự kiện**, không đọc độ lớn `deltaY`:
+chuột rời (1 nấc = 1 sự kiện) thì vừa phải, nhưng bàn rê gửi hàng chục sự kiện nhỏ mỗi lần lướt → zoom nhảy vọt mất kiểm soát;
+Firefox gửi `deltaMode = 1` (đơn vị dòng, ±3 mỗi nấc) nên cùng một nấc lăn lại zoom khác Chrome/Safari (`deltaMode = 0`, ±100…±120).
+**Sửa:** thêm hàm thuần `wheelZoomFactor()` trong `sky-visual.ts`: chuẩn hoá `deltaMode` (dòng ×32, trang ×800),
+ánh xạ hệ số theo hàm mũ `2^(−nấc/5)` → một nấc ≈ 1,15×, năm nấc ≈ 2×, đối xứng phóng/thu,
+kẹp mỗi sự kiện trong `[1/2,4 ; 2,4]` để delta cực lớn (chuột gaming, quán tính bàn rê) không nhảy cóc,
+`deltaY = 0` thì giữ nguyên, `deltaY` không hữu hạn (môi trường giả lập) coi như một nấc lăn lên.
+Kiểm chứng: `test:sky` nhóm 7b (hướng, đối xứng, độ nhạy chuẩn, Firefox ≈ Chrome, kẹp, đơn điệu, Ctrl + lăn).
+
+### 5.3 Zoom sát mép khung làm "trôi" bầu trời ra ngoài màn hình
+Khi kéo, `view.x/y` được kẹp trong ±0,85 cạnh khung, nhưng `zoomAroundPoint()` (chế độ chân trời) thì **không kẹp**:
+mỗi lần phóng, phần dịch chuyển bị nhân thêm đúng hệ số phóng, nên chỉ vài nấc lăn với con trỏ ở sát góc khung
+đã đẩy tâm bầu trời ra xa hàng nghìn điểm ảnh (đo được 913,7px / 524,4px ở khung 900×520, vượt trần 765 / 442);
+thu nhỏ lại chỉ thấy nền trống và phải bấm "Căn lại" mới lấy lại được trời.
+**Sửa:** thêm `HORIZON_PAN_LIMIT` + `clampPan()` (chặn luôn `NaN`/`Infinity`) và kẹp trong `zoomAroundPoint()`,
+`handlePointerMove` dùng lại chính hàm đó để kéo và zoom cùng một giới hạn.
+Kiểm chứng: `test:sky` nhóm 7b — 24 nấc zoom liên tiếp sát góc khung không vượt giới hạn, và kịch bản phải thật sự chạm phần kẹp.
+
+### 5.4 Chụm hai ngón vừa phóng vừa giật khung
+Trên màn hình cảm ứng, `pointerdown`/`pointermove` và `touchstart`/`touchmove` cùng bắn: `handleTouchStart` huỷ `dragRef`
+khi có 2 ngón nhưng `pointerdown` của ngón thứ hai lại đặt mốc kéo mới → bản đồ vừa pinch-zoom vừa bị kéo giật theo một ngón.
+Khi nhấc một ngón, mốc kéo cũ còn sót lại làm khung nhìn "nhảy" một đoạn dài.
+**Sửa:** `handlePointerMove` bỏ qua kéo khi `pinchRef.current` đang hoạt động; `touchstart` với < 2 ngón thì xoá pinch;
+`touchend`/`touchcancel` xoá cả pinch lẫn mốc kéo.
+
+### 5.5 Bắt giữ con trỏ có thể ném lỗi, làm chết thao tác kéo
+`event.currentTarget.setPointerCapture(event.pointerId)` gọi thẳng, không bảo vệ: môi trường không cài API này
+(jsdom — `test:ui` phải tự vá prototype) hoặc `pointerId` đã huỷ sẽ ném `TypeError`/`NotFoundError` ngay giữa lần kéo.
+**Sửa:** gói vào `capturePointer()` kiểm tra API + `pointerId` hữu hạn + `try/catch`, và **nhả** bắt giữ ở
+`pointerup`/`pointercancel` (trước đây chỉ bắt, không nhả).
+
+### 5.6 Hai công thức thang đo cho cùng một phép chiếu
+Kéo ở chế độ toàn cảnh tự nhân `previous.zoom * ((size.height || size.width) * 0.96 / 182)` thay vì gọi `mapScale()`
+như phép chiếu → chỉ cần đổi một chỗ là kéo lệch zoom (bản đồ dịch sai số độ/điểm ảnh).
+**Sửa:** dùng `mapScale(size.width, size.height, previous.zoom)`, kèm chắn `scale > 0`.
+
+### 5.7 `test:ui` chập chờn và không soi đúng lỗi
+Bài kiểm tra chờ cứng `await wait(120)` rồi mới đếm lời gọi vẽ, trong khi lần vẽ đầu (5.044 sao + Ngân Hà) trong jsdom
+nặng hơn nhiều → chạy ra **6 lỗi giả** ("họa tiết vẽ quá ít lời gọi (0)") dù tổng vẫn ~64.000 lời gọi.
+Sự kiện lăn chuột lại được tạo bằng `new MouseEvent("wheel", { deltaY: -120 })` — `MouseEvent` **không có** `deltaY`,
+nên thực chất test đang lăn với `deltaY = undefined`, và không hề kiểm tra trang có bị cuộn hay không.
+**Sửa:** chờ bằng `waitForPaint()` (poll tới khi canvas vẽ đủ, tối đa 30 s); lăn bằng `new WheelEvent(...)` thật
+với `deltaY`/`deltaMode`/`ctrlKey`; khẳng định `defaultPrevented` (trang không cuộn), mức phóng hiển thị **tăng khi lăn lên /
+giảm khi lăn xuống**, `deltaMode = 1` và Ctrl + lăn cũng bị chặn, `deltaY = 0` không đổi mức phóng;
+trả khung nhìn về mặc định (phím `0`) trước khi bấm chọn sao để toạ độ sao do `__skyTest` tính sẵn còn đúng.
+
+## 6. Bất biến mới được khoá bằng test
+
+| Bất biến | Test |
+| --- | --- |
+| Mọi sự kiện `wheel` trên canvas phải bị `preventDefault` (trang không cuộn, trình duyệt không zoom trang) | `test:ui` (jsdom có tôn trọng `passive`, nên listener passive sẽ bị phát hiện) |
+| Lăn lên phóng to / lăn xuống thu nhỏ, mức phóng hiển thị đổi đúng hướng | `test:ui` |
+| `wheelZoomFactor` đối xứng, đơn điệu theo `|delta|`, chuẩn hoá `deltaMode`, kẹp hệ số mỗi sự kiện | `test:sky` 7b |
+| Dịch chuyển khung chân trời không bao giờ vượt `HORIZON_PAN_LIMIT`, kể cả khi zoom dồn dập sát mép | `test:sky` 7b |
+| Zoom quanh con trỏ vẫn giữ nguyên điểm dưới con trỏ ở cả 2 chế độ (bất biến cũ, còn nguyên) | `test:sky` 7 |
+
+Kết quả sau khi sửa: `npm test` → 12 hệ nhà · ayanamsa · âm lịch · điểm ảo · biến thể · Tử Vi · nhất quán 18.522 ·
+**sky 14.963** · **ui ≈110.000 lời gọi vẽ** · ví dụ 1996 — tất cả 0 lỗi; `npm run typecheck` và `npm run build` sạch.
+
+## 7. Giới hạn còn lại (có chủ ý, không phải lỗi)
+
+- Con lăn chuột **luôn** thuộc về bản đồ khi con trỏ nằm trên khung (kể cả khi đã zoom tới trần/sàn):
+  đó chính là yêu cầu "không kéo cả trang". Muốn cuộn trang thì đưa con trỏ ra ngoài khung canvas
+  hoặc dùng thanh cuộn/bàn phím; khung chỉ cao 26–34 rem nên không "nhốt" được trang.
+- `touch-none` trên khung giữ cử chỉ chụm/kéo cho bản đồ (như trước), nghĩa là vuốt trên khung không cuộn trang trên điện thoại.
+- Giới hạn dịch chuyển ±0,85 cạnh khung là hằng số theo khung, không đổi theo mức phóng (giữ nguyên hành vi kéo cũ):
+  ở zoom nhỏ vẫn có thể kéo vòm trời lệch hẳn sang một bên, nhưng nút **⟲ Căn lại** và phím `0` luôn đưa về khung mặc định.

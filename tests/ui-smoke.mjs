@@ -117,6 +117,12 @@ const ok = () => undefined;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Chờ tới khi canvas thực sự được vẽ (lần vẽ đầu nặng ~5.000 sao nên không hẹn giờ cứng). */
+const waitForPaint = async (minimumCalls = 500, timeoutMs = 30000) => {
+  const started = Date.now();
+  while (drawCalls.total < minimumCalls && Date.now() - started < timeoutMs) await wait(50);
+};
+
 const run = new Function(
   ...Object.keys(globals),
   `${bundle}\nreturn function dispose() { return null; };`
@@ -128,7 +134,7 @@ try {
   fail(`không gắn được giao diện: ${error instanceof Error ? error.message : String(error)}`);
 }
 
-await wait(120);
+await waitForPaint();
 
 const canvas = window.document.querySelector("canvas");
 if (!canvas) fail("không tìm thấy phần tử canvas");
@@ -144,12 +150,72 @@ for (const method of ["drawImage", "arc", "fillText", "stroke", "fill"]) {
 
 const clickCanvas = (type, init) => canvas.dispatchEvent(new window.MouseEvent(type, { bubbles: true, cancelable: true, ...init }));
 
-const beforeWheel = drawCalls.total;
-clickCanvas("wheel", { clientX: 400, clientY: 260, deltaY: -120 });
-await wait(60);
-if (drawCalls.total <= beforeWheel) fail("lăn chuột không vẽ lại canvas");
+/** Mức phóng đang hiển thị cạnh thanh trượt (ví dụ "1,15×") — dùng để soi zoom thật sự đổi. */
+const zoomReadout = () => {
+  const span = [...window.document.querySelectorAll("span")].find((item) => /^\d+\.\d{2}×$/.test((item.textContent ?? "").trim()));
+  return span ? Number.parseFloat(span.textContent.trim()) : Number.NaN;
+};
+
+/** Lăn chuột thật (WheelEvent, có deltaY/deltaMode/ctrlKey) và trả về sự kiện để soi `defaultPrevented`. */
+const spinWheel = (init) => {
+  const event = new window.WheelEvent("wheel", { bubbles: true, cancelable: true, clientX: 400, clientY: 260, ...init });
+  canvas.dispatchEvent(event);
+  return event;
+};
+
+const resetViewKey = async () => {
+  canvas.dispatchEvent(new window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "0" }));
+  await waitForPaint(drawCalls.total + 1);
+};
+
+/* --- lăn chuột: phóng to bản đồ và KHÔNG được kéo cả trang đi theo --- */
+const zoomStart = zoomReadout();
+if (!Number.isFinite(zoomStart)) fail("không đọc được mức phóng đang hiển thị");
 else ok();
 
+const beforeWheel = drawCalls.total;
+const wheelIn = spinWheel({ deltaY: -120 });
+await wait(80);
+if (!wheelIn.defaultPrevented) fail("lăn chuột trên bản đồ vẫn cuộn trang (sự kiện wheel chưa bị preventDefault)");
+else ok();
+if (drawCalls.total <= beforeWheel) fail("lăn chuột không vẽ lại canvas");
+else ok();
+const zoomIn = zoomReadout();
+if (!(zoomIn > zoomStart)) fail(`lăn lên không phóng to (${zoomStart} → ${zoomIn})`);
+else ok();
+
+const wheelOut = spinWheel({ deltaY: 240 });
+await wait(80);
+if (!wheelOut.defaultPrevented) fail("thu nhỏ vẫn cuộn trang");
+else ok();
+const zoomOut = zoomReadout();
+if (!(zoomOut < zoomIn)) fail(`lăn xuống không thu nhỏ (${zoomIn} → ${zoomOut})`);
+else ok();
+
+/* Firefox gửi deltaY theo "dòng" (deltaMode = 1), bàn rê gửi Ctrl + deltaY nhỏ khi chụm hai ngón. */
+const firefoxWheel = spinWheel({ deltaY: -3, deltaMode: 1 });
+await wait(80);
+if (!firefoxWheel.defaultPrevented) fail("wheel kiểu Firefox (deltaMode = 1) chưa bị chặn");
+else ok();
+if (!(zoomReadout() > zoomOut)) fail(`wheel kiểu Firefox không phóng to (${zoomOut} → ${zoomReadout()})`);
+else ok();
+
+const pinchWheel = spinWheel({ deltaY: -8, ctrlKey: true });
+await wait(80);
+if (!pinchWheel.defaultPrevented) fail("chụm hai ngón trên bàn rê (Ctrl + wheel) chưa bị chặn → trình duyệt zoom cả trang");
+else ok();
+
+/* deltaY = 0 (sự kiện rỗng) phải bị chặn nhưng không làm đổi mức phóng. */
+const zoomBeforeIdle = zoomReadout();
+const idleWheel = spinWheel({ deltaY: 0 });
+await wait(80);
+if (!idleWheel.defaultPrevented) fail("sự kiện wheel rỗng vẫn để trang cuộn");
+else ok();
+if (zoomReadout() !== zoomBeforeIdle) fail("sự kiện wheel rỗng làm đổi mức phóng");
+else ok();
+
+/* --- kéo bản đồ --- */
+await resetViewKey();
 const beforeDrag = drawCalls.total;
 clickCanvas("pointerdown", { clientX: 400, clientY: 260, pointerId: 1 });
 clickCanvas("pointermove", { clientX: 470, clientY: 300, pointerId: 1 });
@@ -157,6 +223,9 @@ clickCanvas("pointerup", { clientX: 470, clientY: 300, pointerId: 1 });
 await wait(60);
 if (drawCalls.total <= beforeDrag) fail("kéo bản đồ không vẽ lại canvas");
 else ok();
+
+// Trả khung nhìn về mặc định để toạ độ ngôi sao do __skyTest tính sẵn còn đúng.
+await resetViewKey();
 
 // Bấm chọn một ngôi sao: dùng đúng toạ độ do lần vẽ gần nhất ghi lại.
 const starHit = window.__skyTest?.starAt();

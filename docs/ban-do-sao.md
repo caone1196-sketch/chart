@@ -23,7 +23,7 @@ sâu) và mọi tính năng cũ (chạy thời gian, chọn đối tượng, h�
 | Mặt Trăng | đĩa tròn + quầng, không ghi tên | **đúng pha**: hình khuyết theo góc ly giác với Mặt Trời, quầng sáng tỉ lệ phần được chiếu sáng, **có nhãn "Mặt Trăng"/"Mặt Trời"** |
 | Mặt đất | vòng chân trời, không có đất | **ba dải núi khuất dần** + nền đất theo phối cảnh khí quyển; vật thể bị núi che không được vẽ; vòng chân trời có 8 hướng (B/ĐB/Đ/…/TB) |
 | Nhãn | vẽ theo thứ tự, hay đè nhau | xếp hàng theo ưu tiên (sao sáng → thiên thể sâu → hoàng đạo → chòm sao) và **tự bỏ nhãn nếu đè**; hành tinh/Mặt Trời/Mặt Trăng tự thử 4 vị trí quanh ký hiệu để không đè nhau; chỉ hiện chòm sao lớn khi thu nhỏ |
-| Zoom | luôn ở tâm khung | **zoom quanh con trỏ**, giới hạn theo chế độ (0,6–22× mặt đất · 1–24× bản đồ) |
+| Zoom | luôn ở tâm khung, lăn chuột thì **cuộn luôn cả trang** (React `onWheel` là listener passive nên không `preventDefault` được) | **zoom quanh con trỏ**, giới hạn theo chế độ (0,6–22× mặt đất · 1–24× bản đồ); listener `wheel` native `passive: false` nên **trang đứng yên** (kể cả Ctrl + lăn = chụm bàn rê); hệ số zoom chuẩn hoá theo `deltaMode` và độ lớn `deltaY` → chuột rời, bàn rê, Firefox như nhau; phần dịch chuyển khi zoom cũng bị kẹp ±0,85 cạnh khung như khi kéo nên không trôi bầu trời ra ngoài màn hình |
 | Kéo bản đồ | đổi tâm khung | kéo ngang = đổi xích kinh, kéo dọc = đổi xích vĩ, có kẹp −89,5°…+89,5° |
 | Đi tới đối tượng | không có | ô tra cứu (1.084 mục): sao, chòm sao, thiên thể sâu, hành tinh, tâm Ngân Hà, thiên đỉnh; gõ **không dấu** vẫn ra |
 | Đọc toạ độ | không có | hiện toạ độ ngay dưới con trỏ (xích kinh/xích vĩ ở bản đồ, độ cao/phương vị ở bầu trời) + nút 🎯 đưa điểm đó vào giữa khung |
@@ -51,6 +51,11 @@ Mặt Trời dưới −18° trở đi mới thấy tới cấp 6, chạng vạn
 - **Toàn cảnh**: thang đo đều `scale = 0,96·h/182·zoom` → 180° xích vĩ vừa đúng chiều cao khung ở zoom 1;
   xích kinh tăng về bên trái (đông ở phải), chân trời hiện tại là một đường nét đứt.
 - **Zoom quanh con trỏ** giữ nguyên vật thể dưới điểm trỏ (đã kiểm chứng ngược lại bằng phép chiếu nghịch đảo).
+- **Lăn chuột**: `wheelZoomFactor()` đổi `deltaY`/`deltaMode`/`ctrlKey` thành hệ số `2^(−nấc/5)` (một nấc ≈ 1,15×, năm nấc ≈ 2×),
+  kẹp mỗi sự kiện trong `[1/2,4 ; 2,4]`; listener gắn trực tiếp lên canvas với `{ passive: false }` và `preventDefault()`
+  để **trang không cuộn theo** — xem biên bản `docs/soat-loi.md` mục 5.
+- **Chạm**: chụm hai ngón chỉ phóng (không kéo song song), nhấc ngón thì xoá mốc kéo để khung không nhảy;
+  bắt giữ con trỏ (`setPointerCapture`) có kiểm tra API và nhả ở `pointerup`/`pointercancel`.
 - **Tra cứu** dùng danh mục 1.084 mục, bỏ dấu tiếng Việt + bí danh tên Việt ("Sao Bắc Cực" → Polaris,
   "Sao Thiên Lang" → Sirius, "Sao Hỏa" → Hỏa Tinh, "Tinh vân Lạp Hộ" → M42…).
 
@@ -58,8 +63,8 @@ Mặt Trời dưới −18° trở đi mới thấy tới cấp 6, chạng vạn
 
 | Lệnh | Nội dung | Kết quả |
 | --- | --- | --- |
-| `npm run test:sky` | 14 nhóm: khúc xạ (đơn điệu, nghịch đảo), khối khí quyển (so số tra cứu), hấp thụ, bảng màu trời đơn điệu, phép chiếu chân trời (thiên đỉnh ở tâm, bán kính, phương vị), phép chiếu bản đồ, **phóng to quanh con trỏ ở cả 2 chế độ**, dựng khung 4 vĩ độ (Hà Nội/Sydney/Tromsø/xích đạo), Ngân Hà (rãnh tối tối hơn nhánh sáng ≥ 25 %, Sgr A\* ở 266,42° / −28,94°), pha Trăng, tra cứu, định dạng toạ độ, dựng giao diện | **14.919 phép kiểm · 0 lỗi** |
-| `npm run test:ui` | chạy thật giao diện trong jsdom với canvas giả có ghi lại lời gọi: gắn giao diện, vẽ, lăn chuột, kéo, bấm chọn sao, đổi chế độ, tắt/bật lớp, tra cứu "Sao Thiên Lang", phím tắt | **72.000 lời gọi vẽ · 0 lỗi · 0 console.error** |
+| `npm run test:sky` | 14 nhóm: khúc xạ (đơn điệu, nghịch đảo), khối khí quyển (so số tra cứu), hấp thụ, bảng màu trời đơn điệu, phép chiếu chân trời (thiên đỉnh ở tâm, bán kính, phương vị), phép chiếu bản đồ, **phóng to quanh con trỏ ở cả 2 chế độ**, dựng khung 4 vĩ độ (Hà Nội/Sydney/Tromsø/xích đạo), Ngân Hà (rãnh tối tối hơn nhánh sáng ≥ 25 %, Sgr A\* ở 266,42° / −28,94°), pha Trăng, tra cứu, định dạng toạ độ, **quy đổi lăn chuột & giới hạn dịch chuyển (7b)**, dựng giao diện | **14.963 phép kiểm · 0 lỗi** |
+| `npm run test:ui` | chạy thật giao diện trong jsdom với canvas giả có ghi lại lời gọi: gắn giao diện, vẽ, **lăn chuột thật bằng `WheelEvent` và khẳng định `defaultPrevented` (trang không cuộn) + mức phóng tăng/giảm đúng hướng (kể cả `deltaMode = 1` của Firefox và Ctrl + lăn)**, kéo, bấm chọn sao, đổi chế độ, tắt/bật lớp, tra cứu "Sao Thiên Lang", phím tắt; chờ lần vẽ đầu bằng poll thay vì hẹn giờ cứng | **≈110.000 lời gọi vẽ · 0 lỗi · 0 console.error** |
 | `npm test` | toàn bộ chuỗi cũ (12 hệ nhà 42.952 điểm · ayanamsa · âm lịch 32.874 · điểm ảo · biến thể · Tử Vi 11.848 · nhất quán 18.522 · ví dụ 11/11/1996 216) + 2 nhóm mới | **EXIT 0** |
 | `npm run shot:sky` | render 12 cảnh ra PNG (đêm/chạng vạng/ban ngày, zoom, bán cầu nam, khung điện thoại) để soi bằng mắt; có bản "tăng sáng" để kiểm tra cấu trúc | dùng khi cần rà lại hình |
 
