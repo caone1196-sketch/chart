@@ -159,8 +159,10 @@ export const buildBazi = (
   const sunLongitude = normalizeDegree(SunPosition(utcDate).elon);
   const monthIndex = solarMonthIndex(sunLongitude); // 0 = Dần
 
-  // Trụ năm: đổi năm tại Lập Xuân
-  const beforeLichun = normalizeDegree(sunLongitude) >= 285 && normalizeDegree(sunLongitude) < 315;
+  // Trụ năm: năm can chi đổi tại Lập Xuân (Mặt Trời 315°). Chỉ tháng 1–2 mới có thể còn trước Lập Xuân,
+  // nên điều kiện "chưa qua Lập Xuân" = đang ở tháng 1 hoặc 2 và kinh độ Mặt Trời < 315°.
+  const beforeLichun =
+    (localDate.getMonth() === 0 || localDate.getMonth() === 1) && normalizeDegree(sunLongitude) < 315;
   const baziYear = beforeLichun ? localDate.getFullYear() - 1 : localDate.getFullYear();
   const yearStem = ((baziYear - 4) % 10 + 10) % 10;
   const yearBranch = ((baziYear - 4) % 12 + 12) % 12;
@@ -330,6 +332,7 @@ const LIFE_MASTERS: Record<number, string> = {
 /** Bảng Thân Chủ theo chi năm sinh. */
 const BODY_MASTERS: Record<number, string> = {
   0: "Hỏa Tinh",
+  6: "Hỏa Tinh",
   1: "Thiên Tướng",
   7: "Thiên Tướng",
   2: "Thiên Lương",
@@ -348,6 +351,56 @@ const BUREAU_BY_ELEMENT: Record<Element, { name: string; number: number; note: s
   Kim: { name: "Kim Tứ Cục", number: 4, note: "tứ cục: cần thời gian tôi luyện mới bền" },
   Thổ: { name: "Thổ Ngũ Cục", number: 5, note: "ngũ cục: tích luỹ chậm mà chắc" },
   Hỏa: { name: "Hỏa Lục Cục", number: 6, note: "lục cục: bùng nổ muộn nhưng mạnh" }
+};
+
+/**
+ * Can của 12 cung theo quy tắc **Ngũ Hổ Độn**: can năm quyết định can của cung Dần,
+ * rồi đi thuận (Dần → Mão → …).
+ */
+const yinPalaceStem = (yearStem: number) => ((yearStem % 5) * 2 + 2) % 10;
+
+/** Can của một cung địa chi bất kỳ (dùng Ngũ Hổ Độn từ can năm). */
+const palaceStem = (yearStem: number, branch: number) =>
+  (yinPalaceStem(yearStem) + (((branch - 2) % 12) + 12) % 12) % 10;
+
+/** Tứ Hóa theo can năm: [Hóa Lộc, Hóa Quyền, Hóa Khoa, Hóa Kỵ]. */
+const FOUR_TRANSFORMATIONS: Record<number, [string, string, string, string]> = {
+  0: ["Liêm Trinh", "Phá Quân", "Vũ Khúc", "Thái Dương"],
+  1: ["Thiên Cơ", "Thiên Lương", "Tử Vi", "Thái Âm"],
+  2: ["Thiên Đồng", "Thiên Cơ", "Văn Xương", "Liêm Trinh"],
+  3: ["Thái Âm", "Thiên Đồng", "Thiên Cơ", "Cự Môn"],
+  4: ["Tham Lang", "Thái Âm", "Hữu Bật", "Thiên Cơ"],
+  5: ["Vũ Khúc", "Tham Lang", "Thiên Lương", "Văn Khúc"],
+  6: ["Thái Dương", "Vũ Khúc", "Thái Âm", "Thiên Đồng"],
+  7: ["Cự Môn", "Thái Dương", "Văn Khúc", "Văn Xương"],
+  8: ["Thiên Lương", "Tử Vi", "Tả Phù", "Vũ Khúc"],
+  9: ["Phá Quân", "Cự Môn", "Thái Âm", "Tham Lang"]
+};
+const TRANSFORM_LABELS = ["Lộc", "Quyền", "Khoa", "Kỵ"] as const;
+
+/** Thiên Khôi / Thiên Việt theo can năm. */
+const KUI_YUE: Array<[number, number]> = [
+  [1, 7], // Giáp: Khôi Sửu, Việt Mùi
+  [0, 8], // Ất: Khôi Tý, Việt Thân
+  [11, 9], // Bính: Khôi Hợi, Việt Dậu
+  [11, 9], // Đinh
+  [1, 7], // Mậu
+  [0, 8], // Kỷ
+  [1, 7], // Canh
+  [6, 2], // Tân: Khôi Ngọ, Việt Dần
+  [3, 5], // Nhâm: Khôi Mão, Việt Tỵ
+  [3, 5] // Quý
+];
+
+/** Lộc Tồn theo can năm. */
+const LU_CUN = [2, 3, 5, 6, 5, 6, 8, 9, 11, 0];
+
+/** Nhóm tam hợp của chi năm → [chi khởi Hỏa Tinh, chi khởi Linh Tinh, chi Thiên Mã]. */
+const YEAR_GROUP = (branch: number): [number, number, number] => {
+  if ([2, 6, 10].includes(branch)) return [1, 3, 8]; // Dần Ngọ Tuất
+  if ([8, 0, 4].includes(branch)) return [2, 10, 2]; // Thân Tý Thìn
+  if ([5, 9, 1].includes(branch)) return [3, 10, 11]; // Tỵ Dậu Sửu
+  return [9, 10, 5]; // Hợi Mão Mùi
 };
 
 const ZIWEI_SYSTEM: Array<{ name: string; offset: number }> = [
@@ -370,103 +423,164 @@ const TIANFU_SYSTEM: Array<{ name: string; offset: number }> = [
   { name: "Phá Quân", offset: 10 }
 ];
 
+export type ZiweiStarKind = "major" | "lucky" | "malefic" | "helper";
+
+export type ZiweiStar = {
+  name: string;
+  kind: ZiweiStarKind;
+  /** Tứ Hóa: Lộc / Quyền / Khoa / Kỵ (nếu sao này được hóa trong năm sinh). */
+  mutagen?: string;
+};
+
 export type ZiweiPalace = {
   index: number;
   branch: number;
   branchVi: string;
+  /** Can của cung (Ngũ Hổ Độn từ can năm). */
+  stem: number;
+  stemVi: string;
   name: string;
   meaning: string;
   isLife: boolean;
   isBody: boolean;
-  stars: string[];
+  stars: ZiweiStar[];
 };
 
 export type ZiweiChart = {
   lunarMonth: number;
   lunarDay: number;
+  lunarYear: number;
+  leapMonth: boolean;
   lifeBranch: number;
   bodyBranch: number;
   lifeMaster: string;
   bodyMaster: string;
   bureau: { name: string; number: number; note: string };
+  /** Tứ Hóa của năm sinh: sao nào hóa gì, nằm ở cung nào. */
+  transformations: Array<{ star: string; label: string; branch: number }>;
   palaces: ZiweiPalace[];
   note: string;
 };
 
-/** Tử Vi Đẩu Số: 12 cung, Mệnh/Thân, Ngũ Hành Cục và 14 chính tinh. */
-export const buildZiwei = (
-  utcDate: Date,
-  localDate: Date | null,
-  localHour: number,
-  sunLongitude: number,
-  moonLongitude: number,
-  yearStem: number,
-  yearBranch: number
-): ZiweiChart => {
-  void utcDate;
-  void sunLongitude;
-  void moonLongitude;
+/**
+ * Tử Vi Đẩu Số — an sao theo công thức cổ điển:
+ *  · Cung Mệnh từ tháng âm lịch và giờ sinh; cung Thân cộng thay vì trừ giờ.
+ *  · Ngũ Hành Cục = nạp âm của **can cung Mệnh** (Ngũ Hổ Độn từ can năm) với chi cung Mệnh.
+ *  · Tử Vi tinh theo cục số và ngày âm lịch; Thiên Phủ đối xứng qua trục Dần-Thân.
+ *  · 14 chính tinh, 6 cát tinh, 6 sát tinh, Lộc Tồn, Thiên Mã và Tứ Hóa.
+ */
+export const buildZiwei = (localDate: Date | null, localHour: number): ZiweiChart => {
   // Ngày âm lịch thật (sóc + trung khí), không ước lượng theo pha Mặt Trăng.
   const birthDate = localDate ?? new Date();
   const lunar = lunarForBirth(birthDate, localHour);
   const lunarDay = lunar.day;
   const lunarMonth = lunar.month;
+  // Tử Vi Đẩu Số dùng **năm âm lịch** (đổi tại Tết), khác Bát Tự dùng năm tiết khí (đổi tại Lập Xuân).
+  const yearStem = (((lunar.year - 4) % 10) + 10) % 10;
+  const yearBranch = (((lunar.year - 4) % 12) + 12) % 12;
 
   // Giờ sinh theo 12 canh (Tý = 23h-1h)
   const hourBranch = Math.floor((((localHour + 1) % 24) + 24) % 24 / 2) % 12;
 
-  // Mệnh cung: từ Dần (2) tiến (tháng - 1), rồi lùi theo giờ
-  const lifeBranch = (( 2 + (lunarMonth - 1) - hourBranch) % 12 + 12) % 12;
+  // Mệnh cung: từ Dần (2) tiến (tháng - 1), rồi lùi theo giờ; Thân cung: tiến theo giờ
+  const lifeBranch = ((2 + (lunarMonth - 1) - hourBranch) % 12 + 12) % 12;
   const bodyBranch = ((2 + (lunarMonth - 1) + hourBranch) % 12 + 12) % 12;
 
-  // Ngũ Hành Cục theo Nạp Âm của (can năm, chi Mệnh cung)
-  const bureauElement = nayinElement(yearStem, lifeBranch);
-  const bureau = BUREAU_BY_ELEMENT[bureauElement];
+  // Ngũ Hành Cục theo Nạp Âm của (can cung Mệnh, chi cung Mệnh)
+  const lifeStem = palaceStem(yearStem, lifeBranch);
+  const bureau = BUREAU_BY_ELEMENT[nayinElement(lifeStem, lifeBranch)];
 
   // Vị trí Tử Vi theo công thức cổ điển (紫微斗數全書)
   const q = Math.ceil(lunarDay / bureau.number);
   const diff = q * bureau.number - lunarDay;
   const base = (2 + q - 1) % 12;
-  const ziweiBranch = ((diff % 2 === 0 ? base + diff : base - diff) % 12 + 12) % 12;
+  const ziweiBranch = (((diff % 2 === 0 ? base + diff : base - diff) % 12) + 12) % 12;
   const tianfuBranch = ((4 - ziweiBranch) % 12 + 12) % 12;
 
-  const starByBranch = new Map<number, string[]>();
-  const place = (branch: number, star: string) => {
+  // Tứ Hóa của năm sinh
+  const transformByStar = new Map<string, string>();
+  const transformations = (FOUR_TRANSFORMATIONS[yearStem] ?? []).map((star, index) => {
+    const label = TRANSFORM_LABELS[index];
+    transformByStar.set(star, label);
+    return { star, label, branch: -1 };
+  });
+  const mutate = (star: ZiweiStar): ZiweiStar =>
+    transformByStar.has(star.name) ? { ...star, mutagen: transformByStar.get(star.name) } : star;
+
+  const starByBranch = new Map<number, ZiweiStar[]>();
+  const place = (branch: number, star: ZiweiStar) => {
     const key = ((branch % 12) + 12) % 12;
-    starByBranch.set(key, [...(starByBranch.get(key) ?? []), star]);
+    const list = starByBranch.get(key) ?? [];
+    list.push(mutate(star));
+    starByBranch.set(key, list);
   };
 
-  ZIWEI_SYSTEM.forEach((star) => place(ziweiBranch + star.offset, star.name));
-  TIANFU_SYSTEM.forEach((star) => place(tianfuBranch + star.offset, star.name));
+  // 14 chính tinh
+  ZIWEI_SYSTEM.forEach((star) => place(ziweiBranch + star.offset, { name: star.name, kind: "major" }));
+  TIANFU_SYSTEM.forEach((star) => place(tianfuBranch + star.offset, { name: star.name, kind: "major" }));
+
+  // Lục cát tinh: Tả Phù / Hữu Bật theo tháng, Văn Xương / Văn Khúc theo giờ, Thiên Khôi / Thiên Việt theo can năm
+  place(4 + (lunarMonth - 1), { name: "Tả Phù", kind: "lucky" });
+  place(10 - (lunarMonth - 1), { name: "Hữu Bật", kind: "lucky" });
+  place(10 - hourBranch, { name: "Văn Xương", kind: "lucky" });
+  place(4 + hourBranch, { name: "Văn Khúc", kind: "lucky" });
+  const [kui, yue] = KUI_YUE[yearStem] ?? [1, 7];
+  place(kui, { name: "Thiên Khôi", kind: "lucky" });
+  place(yue, { name: "Thiên Việt", kind: "lucky" });
+
+  // Lục sát tinh: Kình Dương / Đà La từ Lộc Tồn, Hỏa Tinh / Linh Tinh theo chi năm + giờ, Địa Không / Địa Kiếp theo giờ
+  const luCunBranch = LU_CUN[yearStem] ?? 2;
+  place(luCunBranch, { name: "Lộc Tồn", kind: "helper" });
+  place(luCunBranch + 1, { name: "Kình Dương", kind: "malefic" });
+  place(luCunBranch - 1, { name: "Đà La", kind: "malefic" });
+  const [huoStart, lingStart, maBranch] = YEAR_GROUP(yearBranch);
+  place(huoStart + hourBranch, { name: "Hỏa Tinh", kind: "malefic" });
+  place(lingStart + hourBranch, { name: "Linh Tinh", kind: "malefic" });
+  place(11 - hourBranch, { name: "Địa Không", kind: "malefic" });
+  place(11 + hourBranch, { name: "Địa Kiếp", kind: "malefic" });
+  place(maBranch, { name: "Thiên Mã", kind: "helper" });
 
   const palaces: ZiweiPalace[] = PALACE_NAMES.map((name, index) => {
     // Cung Mệnh tại lifeBranch, các cung tiếp theo đi ngược chiều kim đồng hồ (giảm chi)
     const branch = ((lifeBranch - index) % 12 + 12) % 12;
+    const stem = palaceStem(yearStem, branch);
     return {
       index,
       branch,
       branchVi: BRANCHES[branch],
+      stem,
+      stemVi: STEMS[stem],
       name,
       meaning: PALACE_MEANING[name] ?? "",
       isLife: index === 0,
       isBody: branch === bodyBranch,
-      stars: starByBranch.get(branch) ?? []
+      stars: (starByBranch.get(branch) ?? []).sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "major" ? -1 : b.kind === "major" ? 1 : 0))
     };
   });
 
+  // Điền chi của các sao được hóa để tiện tra cứu
+  for (const entry of transformations) {
+    const palace = palaces.find((item) => item.stars.some((star) => star.name === entry.star));
+    entry.branch = palace?.branch ?? -1;
+  }
+
   const lunarLabel = `${twoDigit(lunarDay)} tháng ${twoDigit(lunarMonth)}${lunar.leap ? " nhuận" : ""} âm lịch năm ${STEMS[yearStem]} ${BRANCHES[yearBranch]}`;
+  const transformText = transformations.map((entry) => `${entry.star} hóa ${entry.label}`).join(", ");
   return {
     lunarMonth,
     lunarDay,
+    lunarYear: lunar.year,
+    leapMonth: lunar.leap,
     lifeBranch,
     bodyBranch,
     lifeMaster: LIFE_MASTERS[lifeBranch] ?? "—",
     bodyMaster: BODY_MASTERS[yearBranch] ?? "—",
     bureau,
+    transformations,
     palaces,
-    note: `Ngày ${lunarLabel}, giờ ${BRANCHES[hourBranch]}. Ngày âm lịch tính từ sóc và trung khí (mùng 1 = ngày chứa trăng mới, tháng 11 = tháng chứa Đông chí).${
+    note: `Ngày ${lunarLabel}, giờ ${BRANCHES[hourBranch]}. Cung Mệnh ${STEMS[lifeStem]}${BRANCHES[lifeBranch]} → nạp âm ${bureau.name}. Ngày âm lịch tính từ sóc và trung khí (mùng 1 = ngày chứa trăng mới, tháng 11 = tháng chứa Đông chí).${
       lunar.shiftedToNextDay ? " Ca sinh từ 23 giờ được tính sang ngày hôm sau (giờ Tý bắt đầu từ 23 giờ)." : ""
-    } Vị trí Tử Vi tính theo công thức cổ điển — nên đối chiếu với phần mềm Tử Vi chuyên dụng vì có nhiều trường phái đặt tháng nhuận.`
+    } Tứ Hóa năm sinh: ${transformText}. Vị trí sao theo công thức cổ điển — các phái khác nhau ở cách đặt tháng nhuận nên vẫn nên đối chiếu phần mềm chuyên dụng.`
   };
 };
 

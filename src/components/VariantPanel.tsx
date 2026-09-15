@@ -409,8 +409,12 @@ export default function VariantPanel({
           <div className={card}>
             <h3 className="text-lg font-semibold">Tử Vi Đẩu Số</h3>
             <p className="mt-2 text-sm text-slate-300">
-              Ngày {variant.chinese.ziwei.lunarDay} tháng {variant.chinese.ziwei.lunarMonth} âm lịch · {variant.chinese.ziwei.bureau.name} · Mệnh chủ{" "}
+              Ngày {variant.chinese.ziwei.lunarDay} tháng {variant.chinese.ziwei.lunarMonth}
+              {variant.chinese.ziwei.leapMonth ? " nhuận" : ""} âm lịch · {variant.chinese.ziwei.bureau.name} · Mệnh chủ{" "}
               {variant.chinese.ziwei.lifeMaster} · Thân chủ {variant.chinese.ziwei.bodyMaster}
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              Tứ Hóa năm sinh: {variant.chinese.ziwei.transformations.map((item) => `${item.star} hóa ${item.label}`).join(" · ")}
             </p>
             <p className="mt-1 text-xs text-slate-400">{variant.chinese.ziwei.note}</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
@@ -422,10 +426,32 @@ export default function VariantPanel({
                   }`}
                 >
                   <p className="text-slate-100">
-                    {palace.name} · {palace.branchVi}
+                    {palace.name}
+                    {palace.isBody && !palace.isLife ? " (Thân)" : ""} · {palace.stemVi}
+                    {palace.branchVi}
                   </p>
                   <p className="text-slate-400">{palace.meaning}</p>
-                  {palace.stars.length > 0 && <p className="text-sky-200">{palace.stars.join(", ")}</p>}
+                  {palace.stars.length > 0 && (
+                    <p className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5">
+                      {palace.stars.map((star) => (
+                        <span
+                          key={star.name}
+                          className={
+                            star.kind === "major"
+                              ? "text-sky-200"
+                              : star.kind === "lucky"
+                                ? "text-emerald-200"
+                                : star.kind === "malefic"
+                                  ? "text-rose-200"
+                                  : "text-amber-200"
+                          }
+                        >
+                          {star.name}
+                          {star.mutagen ? ` (${star.mutagen})` : ""}
+                        </span>
+                      ))}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

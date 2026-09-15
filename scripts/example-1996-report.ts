@@ -8,6 +8,7 @@
  * hai giá trị tham chiếu độc lập của NASA/JPL Horizons (DE441).
  */
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import {
   ZODIAC_SIGNS,
   calcObliquity,
@@ -19,6 +20,7 @@ import {
 import { computeHouses } from "@/lib/houses";
 import { ayanamsa } from "@/lib/zodiac";
 import { computeExtraPoints } from "@/lib/points";
+import { BRANCHES as CN_BRANCHES, STEMS as CN_STEMS } from "@/lib/chinese";
 import { buildVariantChart, compareHouseSystems, variantReport } from "@/lib/chart-variants";
 
 const out: string[] = [];
@@ -46,6 +48,98 @@ const variant = buildVariantChart({
   houseSystem: "placidus",
   zodiacFrame: "lahiri"
 });
+
+const ziwei = variant.chinese.ziwei;
+
+/* --------------------------------------------------- tham chiếu Tử Vi: iztro */
+
+const require = createRequire(import.meta.url);
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { astro: iztroAstro } = require("iztro") as {
+  astro: { bySolar: (date: string, hour: number, gender: string, fixLeap: boolean, lang: string) => IztroChart };
+};
+
+type IztroStar = { name: string; mutagen?: string };
+type IztroPalace = { name: string; heavenlyStem: string; earthlyBranch: string; isBodyPalace?: boolean; majorStars: IztroStar[]; minorStars: IztroStar[] };
+type IztroChart = {
+  fiveElementsClass: string;
+  soul: string;
+  body: string;
+  palaces: IztroPalace[];
+  rawDates: { lunarDate: { lunarYear: number; lunarMonth: number; lunarDay: number; isLeap: boolean } };
+};
+
+const IZTRO_STAR_VI: Record<string, string> = {
+  紫微: "Tử Vi", 天机: "Thiên Cơ", 太阳: "Thái Dương", 武曲: "Vũ Khúc", 天同: "Thiên Đồng", 廉贞: "Liêm Trinh",
+  天府: "Thiên Phủ", 太阴: "Thái Âm", 贪狼: "Tham Lang", 巨门: "Cự Môn", 天相: "Thiên Tướng", 天梁: "Thiên Lương",
+  七杀: "Thất Sát", 破军: "Phá Quân", 左辅: "Tả Phù", 右弼: "Hữu Bật", 文昌: "Văn Xương", 文曲: "Văn Khúc",
+  天魁: "Thiên Khôi", 天钺: "Thiên Việt", 禄存: "Lộc Tồn", 擎羊: "Kình Dương", 陀罗: "Đà La", 火星: "Hỏa Tinh",
+  铃星: "Linh Tinh", 地空: "Địa Không", 地劫: "Địa Kiếp", 天马: "Thiên Mã"
+};
+const IZTRO_STEM_VI = ["Giáp", "Ất", "Bính", "Đinh", "Mậu", "Kỷ", "Canh", "Tân", "Nhâm", "Quý"];
+const IZTRO_BRANCH_VI = ["Tý", "Sửu", "Dần", "Mão", "Thìn", "Tỵ", "Ngọ", "Mùi", "Thân", "Dậu", "Tuất", "Hợi"];
+const IZTRO_BRANCH_HAN = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"];
+const IZTRO_BUREAU_VI: Record<string, string> = {
+  水二局: "Thủy Nhị Cục", 木三局: "Mộc Tam Cục", 金四局: "Kim Tứ Cục", 土五局: "Thổ Ngũ Cục", 火六局: "Hỏa Lục Cục"
+};
+const IZTRO_MUTAGEN_VI: Record<string, string> = { 禄: "Lộc", 权: "Quyền", 科: "Khoa", 忌: "Kỵ" };
+
+const viStar = (name: string) => IZTRO_STAR_VI[name] ?? name;
+const viBranch = (branch: string) => IZTRO_BRANCH_VI[IZTRO_BRANCH_HAN.indexOf(branch)] ?? branch;
+
+const tuvichart = (): IztroChart => iztroAstro.bySolar("1996-11-11", 0, "男", false, "zh-CN");
+
+const iztroMajorByBranch = (chart: IztroChart): Record<number, string[]> => {
+  const out: Record<number, string[]> = {};
+  for (const palace of chart.palaces) {
+    const branch = IZTRO_BRANCH_HAN.indexOf(palace.earthlyBranch);
+    const stars = palace.majorStars.map((star) => viStar(star.name));
+    if (stars.length) out[branch] = stars;
+  }
+  return out;
+};
+
+const iztroBranchOf = (chart: IztroChart, starName: string) => {
+  for (const palace of chart.palaces) {
+    if ([...palace.majorStars, ...palace.minorStars].some((star) => viStar(star.name) === starName)) {
+      return viBranch(palace.earthlyBranch);
+    }
+  }
+  return "—";
+};
+
+const iztroTransformations = (chart: IztroChart) =>
+  chart.palaces
+    .flatMap((palace) => [...palace.majorStars, ...palace.minorStars])
+    .filter((star) => star.mutagen)
+    .map((star) => `${viStar(star.name)} hóa ${IZTRO_MUTAGEN_VI[star.mutagen as string]}`)
+    .sort()
+    .join(", ");
+
+const iztroComparison = (mine: ReturnType<typeof buildVariantChart>["chinese"]["ziwei"], chart: IztroChart) => {
+  const life = chart.palaces.find((palace) => palace.name === "命宫");
+  const body = chart.palaces.find((palace) => palace.isBodyPalace);
+  const mineTransform = mine.transformations.map((item) => `${item.star} hóa ${item.label}`).sort().join(", ");
+  return [
+    [
+      "Ngũ Hành Cục",
+      mine.bureau.name,
+      IZTRO_BUREAU_VI[chart.fiveElementsClass] ?? chart.fiveElementsClass
+    ],
+    [
+      "Cung Mệnh (can chi)",
+      `${CN_STEMS[mine.palaces[0].stem]}${CN_BRANCHES[mine.lifeBranch]}`,
+      `${IZTRO_STEM_VI["甲乙丙丁戊己庚辛壬癸".indexOf(life?.heavenlyStem ?? "")] ?? ""}${viBranch(life?.earthlyBranch ?? "")}`
+    ],
+    ["Cung Thân", CN_BRANCHES[mine.bodyBranch], viBranch(body?.earthlyBranch ?? "")],
+    ["Mệnh chủ", mine.lifeMaster, viStar(chart.soul)],
+    ["Thân chủ", mine.bodyMaster, viStar(chart.body)],
+    ["Tử Vi tinh ở", CN_BRANCHES[mine.palaces.find((palace) => palace.stars.some((star) => star.name === "Tử Vi"))?.branch ?? 0], iztroBranchOf(chart, "Tử Vi")],
+    ["Tứ Hóa năm sinh", mineTransform, iztroTransformations(chart)]
+  ] as Array<[string, string, string]>;
+};
+
+
 const comparison = compareHouseSystems(chart);
 const housesOf = (system: string, key: string) => comparison.find((entry) => entry.id === system)?.houses[key] ?? 0;
 const fixture = JSON.parse(fs.readFileSync(new URL("../tests/fixtures/example-1996-swisseph.json", import.meta.url), "utf8"));
@@ -302,11 +396,59 @@ say();
 say(`- Ngũ hành cục: ${variant.chinese.ziwei.bureau.name} · Mệnh chủ ${variant.chinese.ziwei.lifeMaster} · Thân chủ ${variant.chinese.ziwei.bodyMaster}.`);
 say(`- ${variant.chinese.ziwei.note}`);
 say();
-say("| Cung | Địa chi | Sao chính | Ý nghĩa |");
-say("| --- | --- | --- | --- |");
-for (const palace of variant.chinese.ziwei.palaces) {
-  say(`| ${palace.isLife ? "**Mệnh**" : palace.name} | ${palace.branchVi} | ${palace.stars.join(", ") || "—"} | ${palace.meaning} |`);
+say(`- Cung Mệnh: **${CN_STEMS[ziwei.palaces[0].stem]}${CN_BRANCHES[ziwei.lifeBranch]}** · cung Thân: ${CN_STEMS[ziwei.palaces.find((p) => p.isBody)?.index ?? 0]}${
+  CN_BRANCHES[ziwei.bodyBranch]
+} · Tứ Hóa năm sinh: ${ziwei.transformations.map((item) => `${item.star} hóa ${item.label}`).join(", ")}.`);
+say();
+say("| Cung | Can chi | Chính tinh | Cát tinh | Sát tinh | Ý nghĩa |");
+say("| --- | --- | --- | --- | --- | --- |");
+for (const palace of ziwei.palaces) {
+  const pick = (kind: string) =>
+    palace.stars
+      .filter((star) => star.kind === kind)
+      .map((star) => `${star.name}${star.mutagen ? ` (hóa ${star.mutagen})` : ""}`)
+      .join(", ") || "—";
+  say(
+    `| ${palace.isLife ? "**Mệnh**" : palace.name}${palace.isBody ? " (Thân)" : ""} | ${palace.stemVi}${palace.branchVi} | ${pick("major")} | ${pick(
+      "lucky"
+    )}${palace.stars.some((s) => s.kind === "helper") ? `, ${pick("helper")}` : ""} | ${pick("malefic")} | ${palace.meaning} |`
+  );
 }
+say();
+say("### Đối chiếu Tử Vi với thư viện độc lập **iztro**");
+say();
+say("`iztro` (thư viện Tử Vi Đẩu Số độc lập) cho cùng lá số ở từng mục:");
+say();
+say("| Mục | App | iztro | Khớp |");
+say("| --- | --- | --- | --- |");
+const iztroChart = tuvichart();
+for (const [label, mine, theirs] of iztroComparison(ziwei, iztroChart)) {
+  say(`| ${label} | ${mine} | ${theirs} | ${mine === theirs ? "✔" : "✘"} |`);
+}
+say();
+say("Vị trí 14 chính tinh theo từng cung (so từng sao một):");
+say();
+say("| Cung (chi) | App | iztro |");
+say("| --- | --- | --- |");
+for (const label of IZTRO_BRANCH_VI) {
+  const branchKey = String(IZTRO_BRANCH_VI.indexOf(label));
+  const branch = Number(branchKey);
+  const mine = (ziwei.palaces.find((palace) => palace.branch === branch)?.stars ?? [])
+    .filter((star) => star.kind === "major")
+    .map((star) => star.name)
+    .sort()
+    .join(", ");
+  const theirs = (iztroMajorByBranch(iztroChart)[branch] ?? []).sort().join(", ");
+  say(`| ${label} | ${mine || "—"} | ${theirs || "—"} |`);
+}
+say();
+say("> Toàn bộ 12 cung, 28 sao (14 chính tinh + lục cát + lục sát + Lộc Tồn + Thiên Mã), Tứ Hóa và Tứ Trụ");
+say("> được đối chiếu tự động trên **600 ca sinh ngẫu nhiên 1900–2100** bằng `npm run test:tuvi`");
+say("> (chỉ khác ở những ca mà lịch Việt Nam và lịch Trung Quốc vốn lệch nhau).");
+say();
+say("> Lưu ý trường phái: app tính **tháng nhuận giữ nguyên số tháng** (quy ước cổ điển). iztro có thêm chế độ");
+say("> chia nửa tháng nhuận (nửa đầu tính tháng trước, nửa sau tính tháng sau) — chọn chế độ này sẽ dịch cung Mệnh");
+say("> và Tả Phù/Hữu Bật ở các ca sinh trong tháng nhuận.");
 say();
 say("### Lịch Maya");
 say();
@@ -450,7 +592,18 @@ say();
 say("> Ca sinh **00:30** nằm ở đầu giờ Tý nên vẫn thuộc ngày 11/11 (mùng 1 tháng 10). Nếu sinh trong khoảng 23:00–23:59 thì");
 say("> theo quy ước “ngày bắt đầu từ 23 giờ”, ngày âm lịch được tính sang hôm sau — app đã xử lý tự động.");
 say();
-say("> Chạy lại kiểm chứng: `npm run test:example` và `npm run test:lunar` (đều nằm trong `npm test`). Generator tham chiếu: `tests/gen/example-ref.c`, `tests/gen/lunar-ref.mjs`.");
+say("### 9.4. Điểm ảo Selena (White Moon) — một lỗi đã tìm ra và sửa");
+say();
+say("Dải quét 1900–2100 của `tests/points.check.ts` phát hiện **Selena lệch tới 175,7°** so với Swiss Ephemeris (lệch trung bình 111,2°).");
+say("Nguyên nhân: engine lấy nhầm chuyển động trung bình theo định luật Kepler (0,9856076686 / a^1,5 ≈ 81,2°/ngày) thay vì hằng số của chính điểm ảo này");
+say("trong `seorbel.txt` (0,1408225°/ngày), và bỏ qua tiến động của hệ quy chiếu JDATE.");
+say();
+say("| Selena | App trước khi sửa | Swiss Ephemeris | App sau khi sửa |");
+say("| --- | --- | --- | --- |");
+say("| Hoàng kinh tại 11/11/1996 00:30 UT+7 | 80,72942° (Song Tử 20°43) | 80,72950° | **80,72950°** |");
+say("| Sai số trên dải 1900–2100 | ≤ 175,7° (trung bình 111,2°) | — | **≤ 0,0002°** |");
+say();
+say("> Chạy lại kiểm chứng: `npm run test:example`, `npm run test:points` và `npm run test:lunar` (đều nằm trong `npm test`). Generator tham chiếu: `tests/gen/example-ref.c`, `tests/gen/points-ref.c`, `tests/gen/lunar-ref.mjs`.");
 say();
 
 /* ------------------------------------------------- 10. nơi sinh ảnh hưởng thế nào */

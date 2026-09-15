@@ -10,7 +10,16 @@ import { ZODIAC_SIGNS, displayAngle, normalizeDegree, signedSeparation } from "@
 import { findAspectPatterns, chartShapeOf, hemisphereEmphasis, type AspectPattern, type ChartShape } from "@/lib/patterns";
 import { EXTRA_POINTS, ALL_EXTRA_POINTS, computeExtraPoints, type ExtraPointPosition } from "@/lib/points";
 import { buildHellenistic, type HellenisticChart } from "@/lib/hellenistic";
-import { buildBazi, buildMayan, buildZiwei, type BaziChart, type MayanDate, type ZiweiChart } from "@/lib/chinese";
+import {
+  BRANCHES as CN_BRANCHES,
+  STEMS as CN_STEMS,
+  buildBazi,
+  buildMayan,
+  buildZiwei,
+  type BaziChart,
+  type MayanDate,
+  type ZiweiChart
+} from "@/lib/chinese";
 import { buildHumanDesign, type HDChart } from "@/lib/humandesign";
 import {
   NAKSHATRAS,
@@ -191,7 +200,7 @@ export const buildVariantChart = (input: VariantInput): VariantChart => {
   const chinese = {
     bazi,
     // Tử Vi dùng đúng can chi trụ năm của Tứ Trụ (đã tính theo tiết khí Lập Xuân)
-    ziwei: buildZiwei(chart.utcDate, localDate, localHour, sun.longitude, moon.longitude, bazi.pillars[0].stem, bazi.pillars[0].branch),
+    ziwei: buildZiwei(localDate, localHour),
     mayan: buildMayan(localDate)
   };
 
@@ -477,7 +486,17 @@ export const variantReport = (variant: VariantChart): string => {
   );
 
   const ziwei = chinese.ziwei;
-  lines.push(`- Tử Vi Đẩu Số: ${ziwei.bureau.name} · Mệnh chủ ${ziwei.lifeMaster}, Thân chủ ${ziwei.bodyMaster}.`);
+  lines.push(
+    `- Tử Vi Đẩu Số: ${ziwei.lunarDay}/${ziwei.lunarMonth}${ziwei.leapMonth ? " nhuận" : ""} âm lịch · ${ziwei.bureau.name} · cung Mệnh ${
+      CN_STEMS[ziwei.palaces[0].stem]
+    }${CN_BRANCHES[ziwei.lifeBranch]} · Mệnh chủ ${ziwei.lifeMaster}, Thân chủ ${ziwei.bodyMaster}.`
+  );
+  lines.push(`  · Tứ Hóa: ${ziwei.transformations.map((item) => `${item.star} hóa ${item.label}`).join(", ")}.`);
+  lines.push(
+    `  · Chính tinh theo cung: ${ziwei.palaces
+      .map((palace) => `${palace.name} (${palace.branchVi}): ${palace.stars.filter((star) => star.kind === "major").map((star) => star.name).join(", ") || "—"}`)
+      .join(" | ")}`
+  );
   lines.push(`  · ${ziwei.note}`);
 
   lines.push(`- Maya: ${chinese.mayan.tzolkin.full} · Haab ${chinese.mayan.haab.full} · Long Count ${chinese.mayan.longCount}.`);
