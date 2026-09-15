@@ -138,26 +138,30 @@ export const toEcliptic = (raDeg: number, decDeg: number, obliquityDeg: number) 
   return { lon: normalizeDegree(lon), lat: Math.asin(Math.max(-1, Math.min(1, latSin))) / DEG };
 };
 
-/** Ngân Hà: dải quanh mặt phẳng thiên hà (xích J2000). */
-export const galacticBand = (bDeg: number) => {
+/** Chuyển toạ độ thiên hà (l, b) sang xích kinh/xích vĩ J2000. */
+export const galacticToEquatorial = (lDeg: number, bDeg: number) => {
   const alphaG = 192.85948 * DEG;
   const deltaG = 27.12825 * DEG;
   const lNcp = 122.93192 * DEG;
-  const points: Array<{ ra: number; dec: number }> = [];
-
-  for (let l = 0; l <= 360; l += 2) {
-    const lRad = l * DEG;
-    const bRad = bDeg * DEG;
-    const dec = Math.asin(
-      Math.sin(deltaG) * Math.sin(bRad) + Math.cos(deltaG) * Math.cos(bRad) * Math.cos(lNcp - lRad)
+  const lRad = lDeg * DEG;
+  const bRad = bDeg * DEG;
+  const dec = Math.asin(
+    Math.sin(deltaG) * Math.sin(bRad) + Math.cos(deltaG) * Math.cos(bRad) * Math.cos(lNcp - lRad)
+  );
+  const ra =
+    alphaG +
+    Math.atan2(
+      Math.cos(bRad) * Math.sin(lNcp - lRad),
+      Math.cos(deltaG) * Math.sin(bRad) - Math.sin(deltaG) * Math.cos(bRad) * Math.cos(lNcp - lRad)
     );
-    const ra = alphaG + Math.atan2(Math.cos(bRad) * Math.sin(lNcp - lRad), Math.cos(deltaG) * Math.sin(bRad) - Math.sin(deltaG) * Math.cos(bRad) * Math.cos(lNcp - lRad));
-    points.push({
-      ra: ((((ra / DEG + 180) % 360) + 360) % 360) - 180,
-      dec: dec / DEG
-    });
-  }
 
+  return { ra: ((((ra / DEG + 180) % 360) + 360) % 360) - 180, dec: dec / DEG };
+};
+
+/** Ngân Hà: dải quanh mặt phẳng thiên hà (xích J2000). */
+export const galacticBand = (bDeg: number) => {
+  const points: Array<{ ra: number; dec: number }> = [];
+  for (let l = 0; l <= 360; l += 2) points.push(galacticToEquatorial(l, bDeg));
   return points;
 };
 

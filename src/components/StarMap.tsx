@@ -1,175 +1,66 @@
-import { type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent, type WheelEvent as ReactWheelEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChartData } from "@/lib/astro";
-import { calcObliquity, displayAngle, localSiderealDegrees, normalizeDegree, signedSeparation } from "@/lib/astro";
 import {
-  CONSTELLATION_LINES,
-  CONSTELLATION_META,
-  DEEP_SKY,
-  MILKY_WAY_BANDS,
-  STARS,
-  compass,
-  computeSkySnapshot,
-  eclipticPath,
-  precessFromJ2000,
-  signPositionOf,
-  toHorizontal,
-  type PlanetSky
-} from "@/lib/sky";
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type TouchEvent as ReactTouchEvent,
+  type WheelEvent as ReactWheelEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
+import type { ChartData } from "@/lib/astro";
+import { displayAngle, signedSeparation } from "@/lib/astro";
+import { DEEP_SKY, STARS, compass, signPositionOf, toHorizontal } from "@/lib/sky";
+import {
+  createSpriteCache,
+  drawSky,
+  type SkyDrawToggles,
+  type SkyHit,
+  type SkySelection
+} from "@/lib/sky-render";
+import {
+  HORIZON_ZOOM,
+  MAP_ZOOM,
+  buildSkyFrame,
+  buildSkyTargets,
+  clamp,
+  eclipticLongitudeOf,
+  findSkyTarget,
+  formatDec,
+  formatRa,
+  horizonScale,
+  makeProjector,
+  phaseName,
+  skyTone,
+  specialTargetEquatorial,
+  wrap180,
+  zoomAroundPoint,
+  type SkyMode,
+  type SkyTarget,
+  type SkyView
+} from "@/lib/sky-visual";
 
-type Mode = "horizon" | "map";
-
-type SkyFrame = {
-  lstDeg: number;
-  obliquity: number;
-  planets: PlanetSky[];
-  stars: Array<{ index: number; ra: number; dec: number; alt: number; az: number; mag: number; bv: number; label: number | null }>;
-  lines: Array<{ abbr: string; points: Array<{ ra: number; dec: number; alt: number; az: number }> }>;
-  milkyWay: Array<Array<{ ra: number; dec: number; alt: number; az: number }>>;
-  ecliptic: Array<{ ra: number; dec: number; alt: number; az: number }>;
-  horizon: Array<{ ra: number; dec: number; alt: number; az: number }>;
-  deepSky: Array<{ ra: number; dec: number; alt: number; az: number }>;
-  constellationLabels: Array<{ vi: string; latin: string; ra: number; dec: number; alt: number; az: number }>;
+const MODE_LABEL: Record<SkyMode, string> = {
+  horizon: "Bầu trời (độ cao – phương vị)",
+  map: "Toàn cảnh (xích kinh – xích vĩ)"
 };
 
-type Selected =
-  | { kind: "star"; index: number }
-  | { kind: "deepsky"; index: number }
-  | { kind: "planet"; key: string }
-  | null;
-
-const STAR_COLORS: Array<[number, [number, number, number]]> = [
-  [-0.35, [155, 176, 255]],
-  [0, [170, 191, 255]],
-  [0.3, [202, 215, 255]],
-  [0.58, [248, 247, 255]],
-  [0.85, [255, 244, 232]],
-  [1.1, [255, 222, 180]],
-  [1.4, [255, 191, 145]],
-  [1.75, [255, 160, 118]],
-  [2.4, [255, 130, 100]]
+const MAP_PRESETS: Array<{ label: string; ra: number; dec: number }> = [
+  { label: "Dải Ngân Hà", ra: 266, dec: -28 },
+  { label: "Vùng 0h (Thu)", ra: 0, dec: 0 },
+  { label: "Vùng 6h (Đông)", ra: 90, dec: 0 },
+  { label: "Vùng 12h (Hạ)", ra: 180, dec: -10 },
+  { label: "Vùng 18h (Xuân)", ra: 270, dec: 5 }
 ];
 
-const starColor = (bv: number) => {
-  const value = Number.isFinite(bv) ? bv : 0.6;
-  let lower = STAR_COLORS[0];
-  let upper = STAR_COLORS[STAR_COLORS.length - 1];
-
-  for (let i = 0; i < STAR_COLORS.length - 1; i += 1) {
-    if (value >= STAR_COLORS[i][0] && value <= STAR_COLORS[i + 1][0]) {
-      lower = STAR_COLORS[i];
-      upper = STAR_COLORS[i + 1];
-      break;
-    }
-  }
-
-  const span = upper[0] - lower[0] || 1;
-  const t = Math.max(0, Math.min(1, (value - lower[0]) / span));
-  const mix = lower[1].map((channel, index) => Math.round(channel + (upper[1][index] - channel) * t));
-  return `rgb(${mix[0]}, ${mix[1]}, ${mix[2]})`;
-};
-
-const wrap180 = (value: number) => ((((value + 180) % 360) + 360) % 360) - 180;
-
-/** Kinh độ hoàng đạo (tropical) của một điểm xích đạo. */
-const toEclipticLon = (ra: number, dec: number, obliquity: number) => {
-  const raRad = (ra * Math.PI) / 180;
-  const decRad = (dec * Math.PI) / 180;
-  const eps = (obliquity * Math.PI) / 180;
-  return normalizeDegree(
-    (Math.atan2(Math.sin(raRad) * Math.cos(eps) + Math.tan(decRad) * Math.sin(eps), Math.cos(raRad)) * 180) / Math.PI
-  );
-};
-
-const buildFrame = (date: Date, latitude: number, longitude: number): SkyFrame => {
-  const lstDeg = localSiderealDegrees(date, longitude);
-  const obliquity = calcObliquity(date);
-
-  const project = (ra: number, dec: number) => ({ ra, dec, ...toHorizontal(ra, dec, lstDeg, latitude) });
-
-  const ecliptic = eclipticPath(date).map((point) => {
-    const ofDate = precessFromJ2000(point.ra, point.dec, date);
-    return project(ofDate.ra, ofDate.dec);
-  });
-
-  const stars = STARS.map((star) => {
-    const ofDate = precessFromJ2000(star.ra, star.dec, date);
-    const horizontal = toHorizontal(ofDate.ra, ofDate.dec, lstDeg, latitude);
-    return {
-      index: star.index,
-      ra: ofDate.ra,
-      dec: ofDate.dec,
-      alt: horizontal.alt,
-      az: horizontal.az,
-      mag: star.mag,
-      bv: star.bv,
-      label: star.alternatives.length ? star.index : null
-    };
-  });
-
-  const lines = Object.entries(CONSTELLATION_LINES).map(([abbr, polylines]) => ({
-    abbr,
-    points: polylines.flatMap((flat) => {
-      const points: Array<{ ra: number; dec: number; alt: number; az: number }> = [];
-      for (let i = 0; i < flat.length; i += 2) {
-        const ofDate = precessFromJ2000(flat[i], flat[i + 1], date);
-        points.push(project(ofDate.ra, ofDate.dec));
-        if (i > 0) points.push({ ra: Number.NaN, dec: Number.NaN, alt: Number.NaN, az: Number.NaN });
-      }
-      return points;
-    })
-  }));
-
-  const milkyWay = [MILKY_WAY_BANDS.outer, MILKY_WAY_BANDS.inner].map((band) =>
-    band.map((point) => {
-      const ofDate = precessFromJ2000(point.ra, point.dec, date);
-      return project(ofDate.ra, ofDate.dec);
-    })
-  );
-
-  const horizon: Array<{ ra: number; dec: number; alt: number; az: number }> = [];
-  const lat = (latitude * Math.PI) / 180;
-  for (let az = 0; az <= 360; az += 4) {
-    const azRad = (az * Math.PI) / 180;
-    const dec = (Math.asin(Math.max(-1, Math.min(1, Math.cos(lat) * Math.cos(azRad)))) * 180) / Math.PI;
-    const H = (Math.atan2(-Math.sin(azRad), -Math.sin(lat) * Math.cos(azRad)) * 180) / Math.PI;
-    horizon.push({ ra: wrap180(lstDeg - H), dec, alt: 0, az });
-  }
-
-  const deepSky = DEEP_SKY.map((object) => {
-    const ofDate = precessFromJ2000(object.ra, object.dec, date);
-    return project(ofDate.ra, ofDate.dec);
-  });
-
-  const constellationLabels = CONSTELLATION_META.map((meta) => {
-    const ofDate = precessFromJ2000(meta.ra, meta.dec, date);
-    const horizontal = toHorizontal(ofDate.ra, ofDate.dec, lstDeg, latitude);
-    return { vi: meta.vi, latin: meta.latin, ra: ofDate.ra, dec: ofDate.dec, ...horizontal };
-  });
-
-  const snapshot = computeSkySnapshot(date, latitude, longitude, lstDeg, obliquity);
-
-  return { lstDeg, obliquity, planets: snapshot.planets, stars, lines, milkyWay, ecliptic, horizon, deepSky, constellationLabels };
-};
-
-const DSO_SYMBOL: Record<string, "cluster" | "nebula" | "galaxy"> = {
-  oc: "cluster",
-  gc: "cluster",
-  cl: "cluster",
-  s: "galaxy",
-  sd: "galaxy",
-  e: "galaxy",
-  i: "galaxy",
-  gg: "galaxy",
-  gxy: "galaxy",
-  en: "nebula",
-  rn: "nebula",
-  bn: "nebula",
-  pn: "nebula",
-  snr: "nebula",
-  sfr: "nebula",
-  neb: "nebula",
-  pos: "cluster"
-};
+const HORIZON_PRESETS: Array<{ label: string; az: number; alt: number }> = [
+  { label: "Bắc", az: 0, alt: 35 },
+  { label: "Đông", az: 90, alt: 35 },
+  { label: "Nam", az: 180, alt: 35 },
+  { label: "Tây", az: 270, alt: 35 },
+  { label: "Thiên đỉnh", az: 0, alt: 80 }
+];
 
 export type StarMapProps = {
   latitude: number;
@@ -182,18 +73,25 @@ export type StarMapProps = {
 export default function StarMap({ latitude, longitude, placeLabel, chart, onAskAbout }: StarMapProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const starScreenRef = useRef<Array<{ x: number; y: number; index: number }>>([]);
-  const dragRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
-  const pinchRef = useRef<number | null>(null);
+  const hitsRef = useRef<SkyHit[]>([]);
+  const dragRef = useRef<{ x: number; y: number; moved: boolean; time: number } | null>(null);
+  const pinchRef = useRef<{ distance: number; midX: number; midY: number } | null>(null);
+  const spritesRef = useRef(createSpriteCache());
+  const rafRef = useRef<number | null>(null);
 
-  const [mode, setMode] = useState<Mode>("horizon");
+  const [mode, setMode] = useState<SkyMode>("horizon");
   const [date, setDate] = useState(() => new Date());
+  const [live, setLive] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [speedHours, setSpeedHours] = useState(1);
-  const [view, setView] = useState({ zoom: 1, x: 0, y: 0, centerRa: 0, centerDec: 20 });
-  const [selected, setSelected] = useState<Selected>(null);
+  const [view, setView] = useState<SkyView>({ zoom: HORIZON_ZOOM.initial, x: 0, y: 0, centerRa: 0, centerDec: 20 });
+  const [selected, setSelected] = useState<SkySelection>(null);
   const [size, setSize] = useState({ width: 900, height: 560 });
-  const [toggles, setToggles] = useState({
+  const [query, setQuery] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [pointerReadout, setPointerReadout] = useState<string | null>(null);
+  const pointerPointRef = useRef<{ x: number; y: number } | null>(null);
+  const [toggles, setToggles] = useState<SkyDrawToggles>({
     lines: true,
     constellationNames: true,
     starNames: true,
@@ -201,16 +99,34 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
     milkyWay: true,
     ecliptic: true,
     planets: true,
-    grid: true
+    grid: true,
+    atmosphere: true,
+    ground: true
   });
 
   const timeBucket = Math.round(date.getTime() / 2000);
   const frame = useMemo(
-    () => buildFrame(date, latitude, longitude),
-    // Tính lại theo từng mốc 2 giây để việc kéo/zoom không phải dựng lại toàn bộ catalogue.
+    () => buildSkyFrame(date, latitude, longitude),
+    // Tính lại theo mốc 2 giây để thao tác kéo/zoom không phải dựng lại toàn bộ catalogue.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [timeBucket, latitude, longitude]
   );
+  const targets = useMemo(() => buildSkyTargets(), []);
+  const suggestions = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (needle.length < 2) return [];
+    const matches = targets.filter((target) => target.search.includes(needle) || target.label.toLowerCase().includes(needle));
+    return matches.slice(0, 8);
+  }, [query, targets]);
+
+  /* ------------------------------------------------------------------ thời gian */
+
+  useEffect(() => {
+    if (!live) return;
+    setDate(new Date());
+    const timer = window.setInterval(() => setDate(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, [live]);
 
   useEffect(() => {
     if (!playing) return;
@@ -219,6 +135,13 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
     }, 900);
     return () => window.clearInterval(timer);
   }, [playing, speedHours]);
+
+  const stopTimeMotion = () => {
+    setLive(false);
+    setPlaying(false);
+  };
+
+  /* -------------------------------------------------------------------- kích thước */
 
   useEffect(() => {
     const element = wrapperRef.current;
@@ -233,473 +156,343 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
     return () => observer.disconnect();
   }, []);
 
-  const project = useCallback(
-    (point: { ra: number; dec: number; alt: number; az: number }, width: number, height: number) => {
-      if (mode === "horizon") {
-        if (!Number.isFinite(point.alt)) return { x: Number.NaN, y: Number.NaN, scale: 1 };
-        const clamped = Math.max(point.alt, -80);
-        const radius = 2 * Math.tan(((90 - clamped) * Math.PI) / 360);
-        const scale = ((Math.min(width, height) / 2) * 0.92) * view.zoom;
-        const azRad = (point.az * Math.PI) / 180;
-        return {
-          x: width / 2 + radius * Math.sin(azRad) * scale + view.x,
-          y: height / 2 - radius * Math.cos(azRad) * scale + view.y,
-          scale
-        };
-      }
+  const toLocalInput = (value: Date) =>
+    new Date(value.getTime() - value.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
-      if (!Number.isFinite(point.ra)) return { x: Number.NaN, y: Number.NaN, scale: 1 };
-      const scale = ((Math.min(width, height) / 180) * Math.PI) * 0.55 * view.zoom;
-      return {
-        x: width / 2 - wrap180(point.ra - view.centerRa) * scale,
-        y: height / 2 - (point.dec - view.centerDec) * scale,
-        scale
-      };
-    },
-    [mode, view]
-  );
+  /* ------------------------------------------------------------------------ vẽ */
 
-  useEffect(() => {
+  const drawParams = { frame, mode, size, toggles, selected, view };
+  const drawParamsRef = useRef(drawParams);
+  drawParamsRef.current = drawParams;
+
+  const paint = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const context = canvas.getContext("2d");
-    if (!context) return;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) return;
+    const { frame: currentFrame, mode: currentMode, size: currentSize, toggles: currentToggles, selected: currentSelected, view: currentView } =
+      drawParamsRef.current;
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const { width, height } = size;
-    canvas.width = Math.floor(width * dpr);
-    canvas.height = Math.floor(height * dpr);
+    const { width, height } = currentSize;
+    if (canvas.width !== Math.floor(width * dpr) || canvas.height !== Math.floor(height * dpr)) {
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
+    }
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    context.clearRect(0, 0, width, height);
 
-    const background = context.createRadialGradient(width / 2, height / 2, 40, width / 2, height / 2, Math.max(width, height) * 0.75);
-    background.addColorStop(0, "#070d21");
-    background.addColorStop(0.55, "#03060f");
-    background.addColorStop(1, "#01030a");
-    context.fillStyle = background;
-    context.fillRect(0, 0, width, height);
-
-    const magLimit = Math.min(6.2, 4.1 + Math.log2(view.zoom) * 0.9 + (mode === "map" ? 0.4 : 0));
-    const labelLimit = view.zoom > 2.4 ? 5.2 : view.zoom > 1.4 ? 3.4 : 2.4;
-    const base = ((Math.min(width, height) / 2) * 0.92) * view.zoom;
-
-    if (toggles.milkyWay) {
-      const [outer, inner] = frame.milkyWay;
-      const drawBand = (band: typeof outer, alpha: number, color: string) => {
-        context.beginPath();
-        let started = false;
-        for (const point of band) {
-          if (point.alt < -3) {
-            started = false;
-            continue;
-          }
-          const { x, y } = project(point, width, height);
-          if (!Number.isFinite(x)) continue;
-          if (!started) {
-            context.moveTo(x, y);
-            started = true;
-          } else {
-            context.lineTo(x, y);
-          }
-        }
-        context.strokeStyle = color;
-        context.globalAlpha = alpha;
-        context.lineWidth = mode === "horizon" ? 26 * Math.sqrt(view.zoom) : 34 * view.zoom;
-        context.lineCap = "round";
-        context.stroke();
-        context.globalAlpha = 1;
-      };
-      drawBand(outer, 0.14, "#8b9cf7");
-      drawBand(inner, 0.1, "#c7d2fe");
-    }
-
-    if (toggles.grid) {
-      context.strokeStyle = "rgba(148, 163, 184, 0.18)";
-      context.lineWidth = 1;
-
-      if (mode === "horizon") {
-        for (const altitude of [0, 30, 60]) {
-          const radius = 2 * Math.tan(((90 - altitude) * Math.PI) / 360) * base;
-          context.beginPath();
-          context.arc(width / 2 + view.x, height / 2 + view.y, radius, 0, Math.PI * 2);
-          context.stroke();
-        }
-        for (let az = 0; az < 360; az += 45) {
-          const azRad = (az * Math.PI) / 180;
-          context.beginPath();
-          context.moveTo(width / 2 + view.x, height / 2 + view.y);
-          context.lineTo(width / 2 + view.x + Math.sin(azRad) * 2 * base, height / 2 + view.y - Math.cos(azRad) * 2 * base);
-          context.stroke();
-        }
-      } else {
-        for (let dec = -80; dec <= 80; dec += 20) {
-          const { y } = project({ ra: 0, dec, alt: 0, az: 0 }, width, height);
-          context.beginPath();
-          context.moveTo(0, y);
-          context.lineTo(width, y);
-          context.stroke();
-        }
-        for (let hour = 0; hour < 24; hour += 2) {
-          const { x } = project({ ra: wrap180(hour * 15), dec: 0, alt: 0, az: 0 }, width, height);
-          for (const line of [x, x + 360 * project({ ra: 0, dec: 0, alt: 0, az: 0 }, width, height).scale]) {
-            if (line < -20 || line > width + 20) continue;
-            context.beginPath();
-            context.moveTo(line, 0);
-            context.lineTo(line, height);
-            context.stroke();
-          }
-        }
+    const result = drawSky({
+      ctx: context,
+      width,
+      height,
+      mode: currentMode,
+      view: currentView,
+      frame: currentFrame,
+      toggles: currentToggles,
+      selected: currentSelected,
+      sprites: spritesRef.current,
+      spriteFactory: (spriteWidth, spriteHeight) => {
+        const sprite = document.createElement("canvas");
+        sprite.width = spriteWidth;
+        sprite.height = spriteHeight;
+        return sprite;
       }
-    }
-
-    if (toggles.lines) {
-      context.strokeStyle = "rgba(125, 211, 252, 0.42)";
-      context.lineWidth = 1.1;
-      for (const line of frame.lines) {
-        context.beginPath();
-        let started = false;
-        let previousX = Number.NaN;
-        for (const point of line.points) {
-          if (!Number.isFinite(point.alt) || point.alt < -6) {
-            started = false;
-            continue;
-          }
-          const { x, y } = project(point, width, height);
-          if (!Number.isFinite(x)) {
-            started = false;
-            continue;
-          }
-          if (Number.isFinite(previousX) && Math.abs(x - previousX) > width * 0.5) started = false;
-          if (!started) {
-            context.moveTo(x, y);
-            started = true;
-          } else {
-            context.lineTo(x, y);
-          }
-          previousX = x;
-        }
-        context.stroke();
-      }
-    }
-
-    if (toggles.constellationNames && view.zoom > 1.05) {
-      context.textAlign = "center";
-      for (const meta of frame.constellationLabels) {
-        if (meta.alt < 5) continue;
-        const { x, y } = project(meta, width, height);
-        if (!Number.isFinite(x) || x < 40 || x > width - 40 || y < 24 || y > height - 24) continue;
-        context.font = "600 12px system-ui, sans-serif";
-        context.fillStyle = "rgba(125, 211, 252, 0.58)";
-        context.fillText(meta.vi.toUpperCase(), x, y);
-        context.font = "10px system-ui, sans-serif";
-        context.fillStyle = "rgba(148, 163, 184, 0.5)";
-        context.fillText(meta.latin, x, y + 12);
-      }
-    }
-
-    if (toggles.ecliptic) {
-      context.strokeStyle = "rgba(251, 191, 36, 0.6)";
-      context.lineWidth = 1.4;
-      context.setLineDash([6, 5]);
-      context.beginPath();
-      let started = false;
-      for (const point of frame.ecliptic) {
-        if (point.alt < -6) {
-          started = false;
-          continue;
-        }
-        const { x, y } = project(point, width, height);
-        if (!Number.isFinite(x)) {
-          started = false;
-          continue;
-        }
-        if (!started) {
-          context.moveTo(x, y);
-          started = true;
-        } else {
-          context.lineTo(x, y);
-        }
-      }
-      context.stroke();
-      context.setLineDash([]);
-
-      const obliquity = (frame.obliquity * Math.PI) / 180;
-      const names = ["Bạch Dương", "Kim Ngưu", "Song Tử", "Cự Giải", "Sư Tử", "Xử Nữ", "Thiên Bình", "Bọ Cạp", "Nhân Mã", "Ma Kết", "Bảo Bình", "Song Ngư"];
-      context.font = "700 11px system-ui, sans-serif";
-      context.textAlign = "center";
-      context.fillStyle = "rgba(251, 191, 36, 0.85)";
-      names.forEach((label, index) => {
-        const lon = (index * 30 * Math.PI) / 180;
-        const ra = (Math.atan2(Math.sin(lon) * Math.cos(obliquity), Math.cos(lon)) * 180) / Math.PI;
-        const dec = (Math.asin(Math.sin(obliquity) * Math.sin(lon)) * 180) / Math.PI;
-        const ofDate = precessFromJ2000(ra, dec, date);
-        const horizontal = toHorizontal(ofDate.ra, ofDate.dec, frame.lstDeg, latitude);
-        if (horizontal.alt < 3) return;
-        const { x, y } = project({ ra: ofDate.ra, dec: ofDate.dec, ...horizontal }, width, height);
-        if (!Number.isFinite(x) || x < 30 || x > width - 30 || y < 18 || y > height - 18) return;
-        context.fillText(label, x, y - 8);
-      });
-    }
-
-    if (toggles.deepSky && view.zoom > 1.1) {
-      frame.deepSky.forEach((object, index) => {
-        if (object.alt < 0) return;
-        const { x, y } = project(object, width, height);
-        if (!Number.isFinite(x) || x < 0 || x > width || y < 0 || y > height) return;
-        const meta = DEEP_SKY[index];
-        const symbol = DSO_SYMBOL[meta.type] ?? "nebula";
-        const isSelected = selected?.kind === "deepsky" && selected.index === index;
-        context.strokeStyle = isSelected ? "#facc15" : "rgba(129, 230, 217, 0.8)";
-        context.lineWidth = isSelected ? 2 : 1.2;
-        context.beginPath();
-        if (symbol === "cluster") {
-          context.setLineDash([2, 2]);
-          context.arc(x, y, 5, 0, Math.PI * 2);
-          context.stroke();
-          context.setLineDash([]);
-        } else if (symbol === "galaxy") {
-          context.ellipse(x, y, 6, 3.2, 0.5, 0, Math.PI * 2);
-          context.stroke();
-        } else {
-          context.rect(x - 4, y - 4, 8, 8);
-          context.stroke();
-        }
-        if (view.zoom > 2.2 || ["M31", "M42", "M45", "M8", "M13", "M44", "ω Cen"].includes(meta.id)) {
-          context.font = "10px system-ui, sans-serif";
-          context.fillStyle = "rgba(129, 230, 217, 0.9)";
-          context.textAlign = "left";
-          context.fillText(meta.id, x + 8, y + 3);
-        }
-      });
-    }
-
-    const starScreen: Array<{ x: number; y: number; index: number }> = [];
-    for (const star of frame.stars) {
-      if (star.mag > magLimit || star.alt < -1.5) continue;
-      const { x, y } = project(star, width, height);
-      if (!Number.isFinite(x) || x < -20 || x > width + 20 || y < -20 || y > height + 20) continue;
-      const radius = Math.max(0.5, (6.4 - star.mag) * 0.42 * Math.min(1.7, Math.max(0.75, view.zoom * 0.85)));
-      const isSelected = selected?.kind === "star" && selected.index === star.index;
-      context.beginPath();
-      context.fillStyle = isSelected ? "#fde68a" : starColor(star.bv);
-      context.globalAlpha = Math.min(1, 0.5 + (6.2 - star.mag) / 6);
-      context.arc(x, y, radius, 0, Math.PI * 2);
-      context.fill();
-      context.globalAlpha = 1;
-      starScreen.push({ x, y, index: star.index });
-
-      if (toggles.starNames && star.label !== null && star.mag <= labelLimit) {
-        const name = STARS[star.index].alternatives[0];
-        if (name) {
-          context.font = "11px system-ui, sans-serif";
-          context.fillStyle = isSelected ? "rgba(253, 230, 138, 0.95)" : "rgba(226, 232, 240, 0.72)";
-          context.textAlign = "left";
-          context.fillText(name, x + radius + 3, y - radius - 1);
-        }
-      }
-    }
-    starScreenRef.current = starScreen;
-
-    if (toggles.planets) {
-      for (const planet of frame.planets) {
-        if (planet.alt < -3) continue;
-        const { x, y } = project(planet, width, height);
-        if (!Number.isFinite(x) || x < -40 || x > width + 40 || y < -40 || y > height + 40) continue;
-        const isSelected = selected?.kind === "planet" && selected.key === planet.key;
-        const radius = planet.key === "sun" ? 7 : planet.key === "moon" ? 6.5 : 4.6;
-
-        if (planet.key === "sun" || planet.key === "moon") {
-          const glow = context.createRadialGradient(x, y, 1, x, y, radius * 3.4);
-          glow.addColorStop(0, planet.key === "sun" ? "rgba(251, 191, 36, 0.6)" : "rgba(226, 232, 240, 0.45)");
-          glow.addColorStop(1, "rgba(0,0,0,0)");
-          context.fillStyle = glow;
-          context.beginPath();
-          context.arc(x, y, radius * 3.4, 0, Math.PI * 2);
-          context.fill();
-        }
-
-        context.beginPath();
-        context.fillStyle = planet.color;
-        context.arc(x, y, radius, 0, Math.PI * 2);
-        context.fill();
-        context.strokeStyle = isSelected ? "#fde68a" : "rgba(15, 23, 42, 0.85)";
-        context.lineWidth = isSelected ? 2.4 : 1;
-        context.stroke();
-
-        context.font = "600 11px system-ui, sans-serif";
-        context.fillStyle = "rgba(241, 245, 249, 0.95)";
-        context.textAlign = "left";
-        context.fillText(planet.label, x + radius + 4, y + 3.5);
-      }
-    }
-
-    if (mode === "horizon") {
-      context.strokeStyle = "rgba(56, 189, 248, 0.75)";
-      context.lineWidth = 1.6;
-      context.beginPath();
-      context.arc(width / 2 + view.x, height / 2 + view.y, base, 0, Math.PI * 2);
-      context.stroke();
-
-      context.font = "700 13px system-ui, sans-serif";
-      context.fillStyle = "rgba(125, 211, 252, 0.95)";
-      context.textAlign = "center";
-      for (const direction of [
-        { label: "B", az: 0 },
-        { label: "Đ", az: 90 },
-        { label: "N", az: 180 },
-        { label: "T", az: 270 }
-      ]) {
-        const azRad = (direction.az * Math.PI) / 180;
-        context.fillText(direction.label, width / 2 + view.x + Math.sin(azRad) * base, height / 2 + view.y - Math.cos(azRad) * base - 8);
-      }
-    } else {
-      context.strokeStyle = "rgba(56, 189, 248, 0.6)";
-      context.lineWidth = 1.4;
-      context.setLineDash([5, 5]);
-      context.beginPath();
-      frame.horizon.forEach((point, index) => {
-        const { x, y } = project(point, width, height);
-        if (!Number.isFinite(x)) return;
-        if (index === 0) context.moveTo(x, y);
-        else context.lineTo(x, y);
-      });
-      context.stroke();
-      context.setLineDash([]);
-      context.font = "11px system-ui, sans-serif";
-      context.fillStyle = "rgba(56, 189, 248, 0.8)";
-      context.textAlign = "left";
-      const legend = frame.horizon[10];
-      if (legend) context.fillText("đường chân trời hiện tại", project(legend, width, height).x + 6, project(legend, width, height).y);
-    }
-  }, [frame, mode, project, selected, size, toggles, view, latitude, date]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const preventScroll = (event: WheelEvent) => event.preventDefault();
-    canvas.addEventListener("wheel", preventScroll, { passive: false });
-    return () => canvas.removeEventListener("wheel", preventScroll);
+    });
+    hitsRef.current = result.hits;
   }, []);
 
-  const toLocalInput = (value: Date) => new Date(value.getTime() - value.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  const scheduleDraw = useCallback(() => {
+    if (rafRef.current !== null) return;
+    rafRef.current = window.requestAnimationFrame(() => {
+      rafRef.current = null;
+      paint();
+    });
+  }, [paint]);
+
+  useEffect(() => {
+    scheduleDraw();
+    return () => {
+      if (rafRef.current !== null) {
+        window.cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, [scheduleDraw, frame, mode, size, toggles, selected, view]);
+
+  /* ---------------------------------------------------------------- khung nhìn */
+
+  const centerScreen = useMemo(() => ({ x: size.width / 2, y: size.height / 2 }), [size.height, size.width]);
+
+  const resetView = useCallback(() => {
+    setView({
+      zoom: mode === "map" ? MAP_ZOOM.initial : HORIZON_ZOOM.initial,
+      x: 0,
+      y: 0,
+      centerRa: wrap180(frame.lstDeg),
+      centerDec: latitude >= 0 ? 25 : -25
+    });
+  }, [frame.lstDeg, latitude, mode]);
+
+  const applyZoom = useCallback(
+    (factor: number, point: { x: number; y: number }) => {
+      setView((previous) => zoomAroundPoint(mode, previous, point, factor, size.width, size.height));
+    },
+    [mode, size.height, size.width]
+  );
+
+  const zoomTo = useCallback(
+    (zoom: number, point?: { x: number; y: number }) => {
+      const target = point ?? centerScreen;
+      setView((previous) => {
+        const range = mode === "map" ? MAP_ZOOM : HORIZON_ZOOM;
+        const wanted = clamp(zoom, range.min, range.max);
+        const factor = wanted / previous.zoom;
+        return zoomAroundPoint(mode, previous, target, factor, size.width, size.height);
+      });
+    },
+    [centerScreen, mode, size.height, size.width]
+  );
+
+  const changeMode = (next: SkyMode) => {
+    setMode(next);
+    setView((previous) => ({
+      zoom: next === "map" ? Math.max(previous.zoom, MAP_ZOOM.initial) : HORIZON_ZOOM.initial,
+      x: 0,
+      y: 0,
+      centerRa: wrap180(frame.lstDeg),
+      centerDec: next === "map" ? previous.centerDec || (latitude >= 0 ? 25 : -25) : previous.centerDec
+    }));
+  };
+
+  /** Đưa một toạ độ (xích đạo, hệ của ngày) vào giữa khung nhìn. */
+  const centerOnEquatorial = useCallback(
+    (ra: number, dec: number, zoomBoost = 2.4) => {
+      const horizontal = toHorizontal(ra, dec, frame.lstDeg, latitude);
+      if (mode === "map") {
+        setView((previous) => ({
+          ...previous,
+          zoom: clamp(Math.max(previous.zoom, zoomBoost), MAP_ZOOM.min, MAP_ZOOM.max),
+          centerRa: wrap180(ra),
+          centerDec: clamp(dec, -89.5, 89.5)
+        }));
+        return;
+      }
+      const altitude = clamp(horizontal.alt, -60, 89.5);
+      const azRad = (horizontal.az * Math.PI) / 180;
+      setView((previous) => {
+        const zoom = clamp(Math.max(previous.zoom, zoomBoost), HORIZON_ZOOM.min, HORIZON_ZOOM.max);
+        const scale = horizonScale(size.width, size.height, zoom);
+        const radius = 2 * Math.tan(((90 - altitude) * Math.PI) / 360) * scale;
+        return { ...previous, zoom, x: -radius * Math.sin(azRad), y: radius * Math.cos(azRad) };
+      });
+    },
+    [frame.lstDeg, latitude, mode, size.height, size.width]
+  );
+
+  const goToTarget = useCallback(
+    (target: SkyTarget) => {
+      const equatorial = specialTargetEquatorial(target, frame);
+      if (!equatorial) return;
+      centerOnEquatorial(equatorial.ra, equatorial.dec);
+      if (target.kind === "star" || target.kind === "deepsky" || target.kind === "planet") {
+        setSelected({ kind: target.kind, key: String(target.key) });
+      }
+      setQuery("");
+      setShowSuggestions(false);
+    },
+    [centerOnEquatorial, frame]
+  );
+
+  const submitQuery = () => {
+    const target = findSkyTarget(targets, query);
+    if (target) goToTarget(target);
+  };
+
+  /** Bộ chiếu hiện hành: dùng cho đọc toạ độ con trỏ và nút "đưa vào giữa khung". */
+  const projector = useMemo(
+    () => makeProjector(mode, view, size.width, size.height, { refract: mode === "horizon" && toggles.atmosphere }),
+    [mode, size.height, size.width, toggles.atmosphere, view]
+  );
+
+  /* --------------------------------------------------------------- chuột & cảm ứng */
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    dragRef.current = { x: event.clientX, y: event.clientY, moved: false };
+    event.currentTarget.focus();
+    dragRef.current = { x: event.clientX, y: event.clientY, moved: false, time: performance.now() };
     event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const updatePointerReadout = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const point = projector.inverse(event.clientX - rect.left, event.clientY - rect.top);
+    pointerPointRef.current = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    const text =
+      mode === "map"
+        ? `${formatRa(point.ra)} · ${formatDec(point.dec)}`
+        : `cao ${point.alt.toFixed(1)}° · ${compass(point.az)} ${point.az.toFixed(1)}°`;
+    setPointerReadout((previous) => (previous === text ? previous : text));
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const drag = dragRef.current;
-    if (!drag) return;
+    if (!drag) {
+      updatePointerReadout(event);
+      return;
+    }
+
     const dx = event.clientX - drag.x;
     const dy = event.clientY - drag.y;
     if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
     drag.x = event.clientX;
     drag.y = event.clientY;
+    if (!drag.moved) return;
 
     setView((previous) => {
-      if (mode === "horizon") return { ...previous, x: previous.x + dx, y: previous.y + dy };
-      const scale = ((Math.min(size.width, size.height) / 180) * Math.PI) * 0.55 * previous.zoom;
-      const degreesPerPixel = 180 / (Math.PI * scale);
+      if (mode === "horizon") {
+        return {
+          ...previous,
+          x: clamp(previous.x + dx, -size.width * 0.85, size.width * 0.85),
+          y: clamp(previous.y + dy, -size.height * 0.85, size.height * 0.85)
+        };
+      }
+      const scale = previous.zoom * ((size.height || size.width) * 0.96 / 182);
+      const degreesPerPixel = 1 / scale;
       return {
         ...previous,
         centerRa: wrap180(previous.centerRa + dx * degreesPerPixel),
-        centerDec: Math.max(-89.5, Math.min(89.5, previous.centerDec + dy * degreesPerPixel))
+        centerDec: clamp(previous.centerDec + dy * degreesPerPixel, -89.5, 89.5)
       };
     });
+    updatePointerReadout(event);
   };
 
   const handlePointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const drag = dragRef.current;
     dragRef.current = null;
-    if (drag?.moved) return;
+    if (!drag || drag.moved) return;
 
     const rect = event.currentTarget.getBoundingClientRect();
     const px = event.clientX - rect.left;
     const py = event.clientY - rect.top;
-    const { width, height } = size;
+    const tolerance: Record<SkyHit["kind"], number> = { star: 12, deepsky: 13, planet: 17 };
 
-    let best: Selected = null;
-    let bestDistance = 14;
-
-    for (const star of starScreenRef.current) {
-      const distance = Math.hypot(star.x - px, star.y - py);
-      if (distance < bestDistance) {
+    let best: SkySelection = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const hit of hitsRef.current) {
+      const distance = Math.hypot(hit.x - px, hit.y - py);
+      const limit = Math.max(tolerance[hit.kind], hit.radius);
+      if (distance < bestDistance && distance <= limit) {
         bestDistance = distance;
-        best = { kind: "star", index: star.index };
+        best = { kind: hit.kind, key: hit.key };
       }
     }
-
-    frame.deepSky.forEach((object, index) => {
-      if (object.alt < 0) return;
-      const { x, y } = project(object, width, height);
-      const distance = Math.hypot(x - px, y - py);
-      if (distance < bestDistance && distance < 12) {
-        bestDistance = distance;
-        best = { kind: "deepsky", index };
-      }
-    });
-
-    frame.planets.forEach((planet) => {
-      const { x, y } = project(planet, width, height);
-      const distance = Math.hypot(x - px, y - py);
-      if (distance < bestDistance && distance < 16) {
-        bestDistance = distance;
-        best = { kind: "planet", key: planet.key };
-      }
-    });
-
     setSelected(best);
   };
 
   const handleWheel = (event: ReactWheelEvent<HTMLCanvasElement>) => {
-    const factor = event.deltaY < 0 ? 1.12 : 0.89;
-    setView((previous) => ({ ...previous, zoom: Math.max(0.6, Math.min(16, previous.zoom * factor)) }));
+    const rect = event.currentTarget.getBoundingClientRect();
+    const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    applyZoom(event.deltaY < 0 ? 1.14 : 0.88, point);
   };
 
-  const resetView = () =>
-    setView({ zoom: 1, x: 0, y: 0, centerRa: wrap180(frame.lstDeg), centerDec: latitude >= 0 ? 25 : -25 });
-
-  const changeMode = (next: Mode) => {
-    setMode(next);
-    setView((previous) => ({
-      ...previous,
-      zoom: next === "map" ? Math.max(previous.zoom, 1.3) : 1,
-      x: 0,
-      y: 0,
-      centerRa: wrap180(frame.lstDeg)
-    }));
+  const handleDoubleClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    applyZoom(1.9, { x: event.clientX - rect.left, y: event.clientY - rect.top });
   };
+
+  const handleTouchStart = (event: ReactTouchEvent<HTMLCanvasElement>) => {
+    if (event.touches.length === 2) {
+      dragRef.current = null;
+      pinchRef.current = {
+        distance: Math.hypot(
+          event.touches[0].clientX - event.touches[1].clientX,
+          event.touches[0].clientY - event.touches[1].clientY
+        ),
+        midX: (event.touches[0].clientX + event.touches[1].clientX) / 2,
+        midY: (event.touches[0].clientY + event.touches[1].clientY) / 2
+      };
+    }
+  };
+
+  const handleTouchMove = (event: ReactTouchEvent<HTMLCanvasElement>) => {
+    const pinch = pinchRef.current;
+    if (event.touches.length !== 2 || !pinch) return;
+    const distance = Math.hypot(
+      event.touches[0].clientX - event.touches[1].clientX,
+      event.touches[0].clientY - event.touches[1].clientY
+    );
+    const midX = (event.touches[0].clientX + event.touches[1].clientX) / 2;
+    const midY = (event.touches[0].clientY + event.touches[1].clientY) / 2;
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (pinch.distance > 0) applyZoom(distance / pinch.distance, { x: midX - rect.left, y: midY - rect.top });
+    pinchRef.current = { distance, midX, midY };
+  };
+
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLCanvasElement>) => {
+    const step = mode === "map" ? 8 / view.zoom : 40;
+    const zoomKeys: Record<string, number> = { "+": 1.25, "=": 1.25, "-": 0.8, _: 0.8 };
+    if (event.key === "0" || event.key === "Home") {
+      resetView();
+    } else if (event.key in zoomKeys) {
+      applyZoom(zoomKeys[event.key], centerScreen);
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowRight" || event.key === "ArrowUp" || event.key === "ArrowDown") {
+      const horizontal = event.key === "ArrowLeft" || event.key === "ArrowRight";
+      const direction = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+      setView((previous) => {
+        if (mode === "horizon") {
+          return {
+            ...previous,
+            x: clamp(previous.x + (horizontal ? direction * step : 0), -size.width * 0.85, size.width * 0.85),
+            y: clamp(previous.y + (horizontal ? 0 : direction * step), -size.height * 0.85, size.height * 0.85)
+          };
+        }
+        return {
+          ...previous,
+          centerRa: wrap180(previous.centerRa + (horizontal ? direction * step : 0)),
+          centerDec: clamp(previous.centerDec + (horizontal ? 0 : direction * step), -89.5, 89.5)
+        };
+      });
+    } else {
+      return;
+    }
+    event.preventDefault();
+  };
+
+  /* ------------------------------------------------------------------- thông tin */
 
   const selectedInfo = useMemo(() => {
     if (!selected) return null;
 
     if (selected.kind === "star") {
-      const meta = STARS[selected.index];
-      const position = frame.stars[selected.index];
-      const name = meta.alternatives[0] ?? `HIP ${selected.index}`;
+      const meta = STARS[Number(selected.key)];
+      const position = frame.stars[meta.index];
+      const name = meta.alternatives[0] ?? `HIP ${meta.index}`;
       const designation = meta.alternatives.slice(1).filter((item) => !item.startsWith("HIP")).join(" · ");
+      const eclipticLon = eclipticLongitudeOf(position.ra, position.dec, frame.obliquity);
       return {
         title: name,
         subtitle: [designation, meta.constellationVi ? `Chòm ${meta.constellationVi}` : ""].filter(Boolean).join(" · "),
         rows: [
           ["Cấp sao (mag)", meta.mag.toFixed(2)],
           ["Xích kinh / xích vĩ (J2000)", `${(((meta.ra + 360) % 360) / 15).toFixed(3)}h · ${meta.dec.toFixed(2)}°`],
+          ["Xích kinh / xích vĩ (của ngày)", `${formatRa(position.ra)} · ${formatDec(position.dec)}`],
           ["Độ cao / phương vị", `${position.alt.toFixed(1)}° · ${compass(position.az)} (${position.az.toFixed(0)}°)`],
-          ["Kinh độ hoàng đạo", signPositionOf(toEclipticLon(position.ra, position.dec, frame.obliquity))],
+          ["Kinh độ hoàng đạo", signPositionOf(eclipticLon)],
           ["Chỉ số màu B-V", meta.bv.toFixed(2)]
         ] as Array<[string, string]>,
         askQuestion: `${name} (${meta.constellationVi ?? ""}) nằm ở ${signPositionOf(
-          toEclipticLon(position.ra, position.dec, frame.obliquity)
+          eclipticLon
         )} — sao này có ý nghĩa gì với bản đồ sao của tôi?`
       };
     }
 
     if (selected.kind === "deepsky") {
-      const meta = DEEP_SKY[selected.index];
-      const position = frame.deepSky[selected.index];
+      const index = Number(selected.key);
+      const meta = DEEP_SKY[index];
+      const position = frame.deepSky[index];
+      const eclipticLon = eclipticLongitudeOf(position.ra, position.dec, frame.obliquity);
       return {
         title: meta.vi || meta.id,
         subtitle: [`${meta.id}${meta.alt ? ` · ${meta.alt}` : ""}`, meta.en, meta.typeVi].filter(Boolean).join(" · "),
@@ -707,7 +500,7 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
           ["Cấp sao", meta.mag !== null ? meta.mag.toFixed(1) : "—"],
           ["Xích kinh / xích vĩ (J2000)", `${(((meta.ra + 360) % 360) / 15).toFixed(3)}h · ${meta.dec.toFixed(2)}°`],
           ["Độ cao / phương vị", `${position.alt.toFixed(1)}° · ${compass(position.az)} (${position.az.toFixed(0)}°)`],
-          ["Kinh độ hoàng đạo", signPositionOf(toEclipticLon(position.ra, position.dec, frame.obliquity))]
+          ["Kinh độ hoàng đạo", signPositionOf(eclipticLon)]
         ] as Array<[string, string]>,
         askQuestion: `${meta.vi || meta.id} (${meta.typeVi}) có gì đáng quan sát và mang ý nghĩa gì trong chiêm tinh?`
       };
@@ -723,6 +516,7 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
       rows: [
         ["Độ cao / phương vị", `${planet.alt.toFixed(1)}° · ${compass(planet.az)} (${planet.az.toFixed(0)}°)`],
         ["Kinh độ hoàng đạo", displayAngle(planet.lon)],
+        ["Xích kinh / xích vĩ", `${formatRa(planet.ra)} · ${formatDec(planet.dec)}`],
         ...(natal
           ? ([
               ["Vị trí natal", displayAngle(natal.longitude)],
@@ -736,25 +530,12 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
     };
   }, [selected, frame, chart]);
 
-  const handleTouchStart = (event: ReactTouchEvent<HTMLCanvasElement>) => {
-    if (event.touches.length === 2) {
-      pinchRef.current = Math.hypot(
-        event.touches[0].clientX - event.touches[1].clientX,
-        event.touches[0].clientY - event.touches[1].clientY
-      );
-    }
-  };
-
-  const handleTouchMove = (event: ReactTouchEvent<HTMLCanvasElement>) => {
-    if (event.touches.length !== 2 || !pinchRef.current) return;
-    const distance = Math.hypot(
-      event.touches[0].clientX - event.touches[1].clientX,
-      event.touches[0].clientY - event.touches[1].clientY
-    );
-    const factor = distance / pinchRef.current;
-    pinchRef.current = distance;
-    setView((previous) => ({ ...previous, zoom: Math.max(0.6, Math.min(16, previous.zoom * factor)) }));
-  };
+  const tone = skyTone(frame.sunAlt);
+  const phase = useMemo(() => phaseName(frame.moonElongation), [frame.moonElongation]);
+  const centerReadout = useMemo(
+    () => `${formatRa(view.centerRa)} · ${formatDec(view.centerDec)}`,
+    [view.centerDec, view.centerRa]
+  );
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 md:p-6">
@@ -765,35 +546,93 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
             {placeLabel} · {latitude.toFixed(3)}°, {longitude.toFixed(3)}° · giờ sao địa phương {(frame.lstDeg / 15).toFixed(2)}h ·{" "}
             {date.toLocaleString("vi-VN", { hour12: false })}
           </p>
+          <p className="mt-1 text-xs text-slate-500">
+            {mode === "horizon"
+              ? `Mặt Trời ${frame.sunAlt.toFixed(1)}° · ${tone.day > 0.5 ? "ban ngày" : tone.starFactor < 0.35 ? "chạng vạng" : "đêm tối"} · Trăng ${phase}`
+              : `Tâm khung: ${centerReadout} · mức phóng ${view.zoom.toFixed(2)}×`}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
-          <button type="button" onClick={() => changeMode("horizon")} className={mode === "horizon" ? "chip chip-active" : "chip"}>
-            Bầu trời (độ cao – phương vị)
-          </button>
-          <button type="button" onClick={() => changeMode("map")} className={mode === "map" ? "chip chip-active" : "chip"}>
-            Toàn cảnh (xích kinh – xích vĩ)
-          </button>
+          {(["horizon", "map"] as SkyMode[]).map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => changeMode(item)}
+              className={mode === item ? "chip chip-active" : "chip"}
+            >
+              {MODE_LABEL[item]}
+            </button>
+          ))}
         </div>
       </div>
 
+      {/* ------------------------------ thanh thời gian */}
       <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-300">
-        <button type="button" className="chip" onClick={() => setDate(new Date())}>
-          Bây giờ
+        <button
+          type="button"
+          className={live ? "chip chip-active" : "chip"}
+          onClick={() => {
+            if (live) {
+              setLive(false);
+              return;
+            }
+            setDate(new Date());
+            setPlaying(false);
+            setLive(true);
+          }}
+          title="Bám theo giờ thực, tự cập nhật mỗi giây"
+        >
+          {live ? "● Đang theo giờ thực" : "Bây giờ (theo giờ thực)"}
         </button>
-        <button type="button" className="chip" onClick={() => setDate((value) => new Date(value.getTime() - 3600000))}>
+        <button
+          type="button"
+          className="chip"
+          onClick={() => {
+            stopTimeMotion();
+            setDate((value) => new Date(value.getTime() - 3600000));
+          }}
+        >
           −1 giờ
         </button>
-        <button type="button" className="chip" onClick={() => setDate((value) => new Date(value.getTime() + 3600000))}>
+        <button
+          type="button"
+          className="chip"
+          onClick={() => {
+            stopTimeMotion();
+            setDate((value) => new Date(value.getTime() + 3600000));
+          }}
+        >
           +1 giờ
         </button>
-        <button type="button" className="chip" onClick={() => setDate((value) => new Date(value.getTime() - 86400000))}>
+        <button
+          type="button"
+          className="chip"
+          onClick={() => {
+            stopTimeMotion();
+            setDate((value) => new Date(value.getTime() - 86400000));
+          }}
+        >
           −1 ngày
         </button>
-        <button type="button" className="chip" onClick={() => setDate((value) => new Date(value.getTime() + 86400000))}>
+        <button
+          type="button"
+          className="chip"
+          onClick={() => {
+            stopTimeMotion();
+            setDate((value) => new Date(value.getTime() + 86400000));
+          }}
+        >
           +1 ngày
         </button>
-        <button type="button" className={playing ? "chip chip-active" : "chip"} onClick={() => setPlaying((value) => !value)}>
-          {playing ? "⏸ Dừng" : "▶ Chạy thời gian"}
+        <button
+          type="button"
+          className={playing ? "chip chip-active" : "chip"}
+          onClick={() => {
+            setLive(false);
+            setPlaying((value) => !value);
+          }}
+        >
+          {playing ? "⏸ Dừng thời gian" : "▶ Chạy thời gian"}
         </button>
         <label className="flex items-center gap-2">
           Tốc độ
@@ -813,15 +652,133 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
           value={toLocalInput(date)}
           onChange={(event) => {
             const parsed = new Date(event.target.value);
-            if (!Number.isNaN(parsed.getTime())) setDate(parsed);
+            if (!Number.isNaN(parsed.getTime())) {
+              stopTimeMotion();
+              setDate(parsed);
+            }
           }}
           className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-slate-200"
         />
-        <button type="button" className="chip" onClick={resetView}>
-          Căn lại khung nhìn
-        </button>
       </div>
 
+      {/* ------------------------------ điều khiển khung nhìn + tra cứu */}
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-300">
+        <div className="flex items-center gap-1 rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1">
+          <button type="button" className="chip border-none bg-transparent px-2" onClick={() => applyZoom(0.8, centerScreen)} title="Thu nhỏ (−)">
+            −
+          </button>
+          <input
+            type="range"
+            min={mode === "map" ? MAP_ZOOM.min : HORIZON_ZOOM.min}
+            max={mode === "map" ? MAP_ZOOM.max : HORIZON_ZOOM.max}
+            step={0.1}
+            value={view.zoom}
+            onChange={(event) => zoomTo(Number(event.target.value))}
+            className="h-1 w-28 cursor-pointer accent-sky-400"
+            aria-label="Mức phóng"
+          />
+          <button type="button" className="chip border-none bg-transparent px-2" onClick={() => applyZoom(1.25, centerScreen)} title="Phóng to (+)">
+            +
+          </button>
+          <span className="w-12 text-right tabular-nums text-slate-400">{view.zoom.toFixed(2)}×</span>
+        </div>
+
+        <button type="button" className="chip" onClick={resetView} title="Về khung nhìn mặc định (phím 0)">
+          ⟲ Căn lại
+        </button>
+
+        {(mode === "map" ? MAP_PRESETS : HORIZON_PRESETS).map((preset) =>
+          mode === "map" ? (
+            <button
+              key={preset.label}
+              type="button"
+              className="chip"
+              onClick={() => {
+                const item = preset as { label: string; ra: number; dec: number };
+                setView((previous) => ({ ...previous, centerRa: wrap180(item.ra), centerDec: item.dec, zoom: Math.max(previous.zoom, 1.2) }));
+              }}
+            >
+              {preset.label}
+            </button>
+          ) : (
+            <button
+              key={preset.label}
+              type="button"
+              className="chip"
+              onClick={() => {
+                const item = preset as { label: string; az: number; alt: number };
+                const zoom = Math.max(view.zoom, 1.4);
+                const scale = horizonScale(size.width, size.height, zoom);
+                const radius = 2 * Math.tan(((90 - item.alt) * Math.PI) / 360) * scale;
+                const azRad = (item.az * Math.PI) / 180;
+                setView((previous) => ({ ...previous, zoom, x: -radius * Math.sin(azRad), y: radius * Math.cos(azRad) }));
+              }}
+            >
+              {preset.label}
+            </button>
+          )
+        )}
+
+        <div className="relative">
+          <input
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setShowSuggestions(true);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") submitQuery();
+              if (event.key === "Escape") setShowSuggestions(false);
+            }}
+            onFocus={() => setShowSuggestions(true)}
+            placeholder="Tìm sao, chòm sao, thiên thể…"
+            className="w-56 rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-slate-200 placeholder:text-slate-500"
+          />
+          <button type="button" className="chip ml-1" onClick={submitQuery}>
+            Đi tới
+          </button>
+          {showSuggestions && suggestions.length > 0 ? (
+            <ul className="absolute z-20 mt-1 max-h-64 w-72 overflow-auto rounded-lg border border-slate-700 bg-slate-950/97 py-1 shadow-xl">
+              {suggestions.map((target) => (
+                <li key={`${target.kind}-${target.key}`}>
+                  <button
+                    type="button"
+                    className="block w-full px-3 py-1.5 text-left text-xs text-slate-200 hover:bg-sky-400/10 hover:text-sky-100"
+                    onClick={() => goToTarget(target)}
+                  >
+                    {target.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+
+        <span className="ml-auto flex items-center gap-2 rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-[11px] text-slate-400">
+          {pointerReadout ?? (mode === "map" ? `Tâm: ${centerReadout}` : "Đưa chuột lên bản đồ để đọc toạ độ")}
+          <button
+            type="button"
+            className="text-sky-300 hover:text-sky-100"
+            title="Đưa điểm đang trỏ vào giữa khung"
+            onClick={() => {
+              const point = pointerPointRef.current;
+              if (!point) return;
+              const coordinates = projector.inverse(point.x, point.y);
+              if (mode === "map") centerOnEquatorial(coordinates.ra, coordinates.dec, view.zoom);
+              else {
+                const scale = horizonScale(size.width, size.height, view.zoom);
+                const radius = 2 * Math.tan(((90 - clamp(coordinates.alt, -60, 89.5)) * Math.PI) / 360) * scale;
+                const azRad = (coordinates.az * Math.PI) / 180;
+                setView((previous) => ({ ...previous, x: -radius * Math.sin(azRad), y: radius * Math.cos(azRad) }));
+              }
+            }}
+          >
+            🎯
+          </button>
+        </span>
+      </div>
+
+      {/* ------------------------------ lớp hiển thị */}
       <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
         {(
           [
@@ -832,8 +789,10 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
             ["milkyWay", "Ngân Hà"],
             ["ecliptic", "Hoàng đạo 12 cung"],
             ["planets", "Hành tinh"],
-            ["grid", "Lưới toạ độ"]
-          ] as Array<[keyof typeof toggles, string]>
+            ["grid", "Lưới toạ độ"],
+            ["atmosphere", "Khí quyển & ánh sáng nền"],
+            ["ground", "Mặt đất & núi"]
+          ] as Array<[keyof SkyDrawToggles, string]>
         ).map(([key, label]) => (
           <button
             key={key}
@@ -849,31 +808,47 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
       <div ref={wrapperRef} className="relative mt-4 h-[26rem] w-full overflow-hidden rounded-xl border border-slate-800 md:h-[34rem]">
         <canvas
           ref={canvasRef}
+          tabIndex={0}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          onPointerLeave={() => {
+            dragRef.current = null;
+            setPointerReadout(null);
+          }}
           onPointerCancel={() => {
             dragRef.current = null;
           }}
           onWheel={handleWheel}
+          onDoubleClick={handleDoubleClick}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={() => {
             pinchRef.current = null;
           }}
-          className="h-full w-full cursor-grab touch-none active:cursor-grabbing"
+          onKeyDown={handleKeyDown}
+          className="h-full w-full cursor-grab touch-none outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 active:cursor-grabbing"
         />
-        <div className="pointer-events-none absolute bottom-3 left-3 max-w-[18rem] rounded-lg border border-slate-700/70 bg-slate-950/80 px-3 py-2 text-[11px] leading-relaxed text-slate-300">
-          Kéo để di chuyển · lăn chuột hoặc chụm hai ngón để phóng to · bấm vào sao để xem chi tiết.
-          <span className="block text-slate-400">
-            {mode === "horizon" ? "Vòng xanh là đường chân trời, tâm là thiên đỉnh." : "Đường nét đứt xanh là chân trời hiện tại."}
+        <div className="pointer-events-none absolute bottom-3 left-3 max-w-[19rem] rounded-lg border border-slate-700/70 bg-slate-950/80 px-3 py-2 text-[11px] leading-relaxed text-slate-300">
+          {mode === "horizon"
+            ? "Kéo để dịch chuyển · lăn chuột hoặc chụm hai ngón để phóng to quanh con trỏ · nháy đúp để phóng to nhanh · bấm vào sao để xem chi tiết."
+            : "Kéo ngang để xoay theo xích kinh, kéo dọc để đổi xích vĩ · lăn chuột để phóng to quanh con trỏ · nháy đúp để phóng to nhanh · phím ←→↑↓ để dịch, +/− để phóng to."}
+          <span className="mt-1 block text-slate-400">
+            {mode === "horizon"
+              ? "Màu trời, hấp thụ và khúc xạ tính theo độ cao Mặt Trời; núi và mặt đất che phần bầu trời bên dưới chân trời."
+              : "Đường nét đứt xanh là chân trời hiện tại; mọi điểm cách nhau một khoảng bằng nhau trên bản đồ."}
           </span>
         </div>
+        {live || playing ? (
+          <span className="absolute right-3 top-3 rounded-full border border-sky-400/40 bg-slate-950/80 px-2 py-1 text-[10px] text-sky-200">
+            {live ? "theo giờ thực" : `chạy ${speedHours} giờ/nhịp`}
+          </span>
+        ) : null}
       </div>
 
       <p className="mt-2 text-[11px] text-slate-500">
-        Danh mục: 5.044 sao (Hipparcos tới cấp 6) · 88 chòm sao (tên Việt) · 118 thiên thể sâu · dữ liệu d3-celestial (MIT), tính toán
-        bằng astronomy-engine.
+        Danh mục: 5.044 sao (Hipparcos tới cấp 6) · 88 chòm sao (tên Việt) · 118 thiên thể sâu · dữ liệu d3-celestial (MIT), tính toán bằng
+        astronomy-engine · khí quyển theo Bennett (khúc xạ) và Kasten–Young (khối khí quyển).
       </p>
 
       {selectedInfo ? (
@@ -883,9 +858,23 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
               <p className="text-lg font-semibold text-sky-100">{selectedInfo.title}</p>
               {selectedInfo.subtitle ? <p className="text-xs text-slate-400">{selectedInfo.subtitle}</p> : null}
             </div>
-            <button type="button" className="chip" onClick={() => onAskAbout(selectedInfo.askQuestion)}>
-              Hỏi AI về đối tượng này
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="chip"
+                onClick={() => {
+                  const target = selected
+                    ? targets.find((item) => item.kind === selected.kind && String(item.key) === selected.key)
+                    : null;
+                  if (target) goToTarget(target);
+                }}
+              >
+                🎯 Đưa vào giữa khung
+              </button>
+              <button type="button" className="chip" onClick={() => onAskAbout(selectedInfo.askQuestion)}>
+                Hỏi AI về đối tượng này
+              </button>
+            </div>
           </div>
           <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
             {selectedInfo.rows.map(([label, value]) => (
@@ -898,8 +887,8 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
         </div>
       ) : (
         <p className="mt-4 text-sm text-slate-400">
-          Bấm vào một ngôi sao, thiên thể sâu hoặc hành tinh trên bản đồ để xem toạ độ, độ cao, vị trí hoàng đạo và hỏi AI về đối tượng
-          đó.
+          Bấm vào một ngôi sao, thiên thể sâu hoặc hành tinh trên bản đồ để xem toạ độ, độ cao, vị trí hoàng đạo và hỏi AI về đối tượng đó.
+          Ô tra cứu phía trên giúp tìm nhanh (ví dụ “Sao Bắc Cực”, “M42”, “Nhân Mã”).
         </p>
       )}
     </div>

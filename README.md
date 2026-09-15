@@ -12,11 +12,15 @@ Web app tiếng Việt: **lập bản đồ sao (natal chart) → xem bản đ�
    - **Điểm ảo**: Bắc/Nam giao điểm (trung bình và thật), Lilith, Chiron, Ceres, Pallas, Juno, Vesta, Eris, Sedna, 8 hành tinh giả định Hamburg (Cupido…Poseidon), Isis-Transpluto, Selena.
    - Cân bằng nguyên tố - tính chất, pha Mặt Trăng lúc sinh, sao cố định nằm gần các điểm natal (orb 1.5°), transit hiện tại lên bản đồ (orb 4°).
 
-2. **Bản đồ sao thực tế (bầu trời)**
-   - 5.044 ngôi sao Hipparcos (tới cấp sao 6) với màu theo chỉ số B-V, 88 chòm sao có đường nối và **tên tiếng Việt**, 118 thiên thể sâu (Messier, NGC, Magellan, Tua Rua, Tổ Ong…), dải Ngân Hà, hoàng đạo 12 cung.
+2. **Bản đồ sao thực tế (bầu trời)** — dựng lại theo hướng "trông như bầu trời thật" và "điều khiển dễ"
+   - 5.044 ngôi sao Hipparcos (tới cấp sao 6) với màu theo chỉ số B-V, 88 chòm sao có đường nối và **tên tiếng Việt**, 118 thiên thể sâu (Messier, NGC, Magellan, Tua Rua, Tổ Ong…), hoàng đạo 12 cung.
+   - **Khí quyển**: màu trời đổi theo độ cao Mặt Trời (đêm → chạng vạng → ngày), ráng chiều quanh phương vị Mặt Trời, khúc xạ khí quyển (Bennett 1982) nâng vật thể gần chân trời, hấp thụ làm mờ sao theo khối khí quyển (Kasten–Young 1989), ban ngày gần như không thấy sao.
+   - **Ngân Hà** vẽ bằng ~1.670 đám mây sao và hạt sao phân giải được, có trung tâm sáng (Nhân Mã), nhánh phình Thiên Nga và **rãnh tối (Great Rift)**.
+   - **Sao** có quầng sáng và tia nhiễu xạ theo cấp sao; **Mặt Trăng đúng pha** (hình dạng khuyết theo góc ly giác với Mặt Trời, quầng sáng theo độ được chiếu sáng).
+   - **Mặt đất & ba dải núi** che phần bầu trời dưới chân trời (đúng phương vị, có phối cảnh khí quyển), vòng chân trời 8 hướng, nhãn tự tránh chồng nhau theo thứ tự ưu tiên.
    - Hai chế độ xem: bầu trời theo **độ cao - phương vị** (tâm là thiên đỉnh) và **toàn cảnh xích kinh - xích vĩ**.
-   - Kéo để di chuyển, lăn chuột/chụm hai ngón để zoom, chạy thời gian (±giờ/ngày, tốc độ 1 giờ → 1 tuần mỗi nhịp), xem bầu trời ở bất kỳ thời điểm nào.
-   - Bấm vào sao/hành tinh/thiên thể để xem toạ độ, độ cao, phương vị, vị trí hoàng đạo và **hỏi AI về riêng đối tượng đó**.
+   - **Điều khiển**: lăn chuột/chụm hai ngón **phóng to ngay tại con trỏ**, nháy đúp để phóng to nhanh, kéo để dịch (bản đồ: kéo ngang đổi xích kinh, kéo dọc đổi xích vĩ), thanh trượt mức phóng, nút **Căn lại**, các nút đi nhanh (Bắc/Đông/Nam/Tây/Thiên đỉnh · Dải Ngân Hà và 4 vùng xích kinh), **ô tra cứu** sao - chòm - thiên thể - hành tinh (gõ được cả tên tiếng Việt không dấu như "sao thien lang", "bac cuc", "m42"), **đọc toạ độ ngay dưới con trỏ**, phím ←→↑↓ +/−/0, chế độ **theo giờ thực** và chạy thời gian (±giờ/ngày, 1 giờ → 1 tuần mỗi nhịp).
+   - Bấm vào sao/hành tinh/thiên thể để xem toạ độ (cả J2000 và hệ của ngày), độ cao, phương vị, vị trí hoàng đạo, **đưa đối tượng vào giữa khung** và **hỏi AI về riêng đối tượng đó**.
    - Thẻ phụ: hành tinh đang thấy được, giờ mọc/lặn Mặt Trời - Mặt Trăng, hành tinh theo cung.
 
 3. **Hỏi AI**
@@ -49,6 +53,8 @@ Các engine được kiểm chứng tự động với **Swiss Ephemeris** (`npm
 | 7 hệ hoàng đạo / ayanamsa | 366 mốc 1800-2100 | Lahiri/Fagan-Bradley 0,0002° · Raman/KP 0,0004° · Ngân Hà 0,0059° |
 | Điểm ảo | 41 mốc 1900-2100 × 28 thiên thể | node trung bình 0,00015° · Lilith 0,115° · hành tinh giả định ≤ 0,007° · tiểu hành tinh 0,28-0,99° |
 | Lớp biến thể | 7 hệ hoàng đạo × 12 hệ nhà, dasha/varga/Tứ Trụ/Tử Vi/Maya/HD | kiểm tra tính nhất quán (cusp ↔ nhà, ayanamsa ↔ cung) |
+| Bản đồ sao (hiển thị) | 14.919 phép kiểm: khúc xạ/hấp thụ, phép chiếu & nghịch đảo, phóng to quanh con trỏ, dựng khung 4 vĩ độ, Ngân Hà, pha Trăng, tra cứu | 0 lỗi (sai số nghịch đảo < 0,05°) |
+| Giao diện bản đồ sao | 1 lần chạy jsdom: gắn giao diện, vẽ 72.000 lời gọi, mô phỏng lăn/kéo/bấm sao/đổi chế độ/tra cứu/bàn phím | 0 ngoại lệ, 0 console.error |
 
 ## Chạy dự án
 
@@ -59,6 +65,10 @@ npm run typecheck  # kiểm tra TypeScript
 npm run build      # build ra dist/index.html (một tệp duy nhất)
 npm run preview    # phục vụ dist/ kèm API route
 npm run data       # sinh lại dữ liệu sao vào src/data/ từ gói npm d3-celestial
+npm test           # toàn bộ kiểm chứng số liệu + bản đồ sao + giao diện
+npm run test:sky   # mô hình hiển thị bầu trời (khúc xạ, phép chiếu, Ngân Hà, pha Trăng, tra cứu)
+npm run test:ui    # chạy giao diện bản đồ sao trong jsdom và mô phỏng thao tác
+npm run shot:sky   # render thử bản đồ ra PNG trong .cache/shots/ (cần @napi-rs/canvas)
 ```
 
 ### Biến môi trường (tuỳ chọn)
@@ -88,7 +98,9 @@ src/
   lib/variants.ts    bản đồ phái sinh: draconic, nhật tâm, harmonic, hồi quy, tiến triển, synastry/composite
   lib/chart-variants.ts  lớp tổng hợp biến thể + bảng so sánh hệ nhà/hệ hoàng đạo + báo cáo biến thể
   lib/variants-knowledge.ts 47 thẻ tri thức biến thể (nguồn gốc, cách tính, cách đọc, lưu ý)
-  lib/sky.ts         danh mục sao + toán thiên văn: precession J2000→ngày, alt/az, hoàng đạo, Ngân Hà, sao cố định, mọc/lặn
+  lib/sky.ts         danh mục sao + toán thiên văn: precession J2000→ngày, alt/az, hoàng đạo, toạ độ thiên hà, sao cố định, mọc/lặn
+  lib/sky-visual.ts  mô hình hiển thị: khí quyển (khúc xạ, hấp thụ, màu trời), cấp sao → quầng sáng, mây sao Ngân Hà, địa hình, pha Trăng, hai phép chiếu + nghịch đảo, danh mục tra cứu
+  lib/sky-render.ts  bộ vẽ canvas cho cả hai chế độ: nền trời, Ngân Hà, lưới, chòm sao, thiên thể sâu, sao, hành tinh - Trăng - Trời, mặt đất - núi, nhãn chống chồng, danh sách vật thể bấm được
   lib/knowledge.ts   bảng tri thức tiếng Việt (hành tinh, cung, nhà, góc chiếu, nguyên tố, pha trăng, từ khoá ý định)
   lib/interpret.ts   bộ luận giải nội bộ (rule-based) theo ý định câu hỏi
   lib/ai.ts          gọi /api/ai-chat và cơ chế dự phòng
@@ -108,6 +120,7 @@ scripts/build-data.mjs  sinh dữ liệu sao từ npm package d3-celestial
 - **Tính toán thiên văn**: [astronomy-engine](https://github.com/cosinekitty/astronomy) (Don Cross, MIT).
 - **Hệ nhà & điểm ảo**: công thức port từ [Swiss Ephemeris](https://github.com/aloistr/swisseph) (Dieter Koch, Alois Treindl) và được kiểm chứng lại bằng chính Swiss Ephemeris; phần tử quỹ đạo tiểu hành tinh lấy từ dịch vụ SBDB của JPL.
 - **Tra toạ độ**: OpenStreetMap Nominatim và Open-Meteo Geocoding.
+- **Mô hình khí quyển**: khúc xạ theo Bennett G. G. (1982, *Journal of Navigation*); khối khí quyển theo Kasten F. & Young A. T. (1989, *Applied Optics*) — cả hai công thức công khai, hằng số đã nêu trong `src/lib/sky-visual.ts`.
 
 ## Miễn trừ trách nhiệm
 
