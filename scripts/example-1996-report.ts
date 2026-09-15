@@ -128,8 +128,8 @@ const iztroComparison = (mine: ReturnType<typeof buildVariantChart>["chinese"]["
     ],
     [
       "Cung Mệnh (can chi)",
-      `${CN_STEMS[mine.palaces[0].stem]}${CN_BRANCHES[mine.lifeBranch]}`,
-      `${IZTRO_STEM_VI["甲乙丙丁戊己庚辛壬癸".indexOf(life?.heavenlyStem ?? "")] ?? ""}${viBranch(life?.earthlyBranch ?? "")}`
+      `${CN_STEMS[mine.palaces[0].stem]} ${CN_BRANCHES[mine.lifeBranch]}`,
+      `${IZTRO_STEM_VI["甲乙丙丁戊己庚辛壬癸".indexOf(life?.heavenlyStem ?? "")] ?? ""} ${viBranch(life?.earthlyBranch ?? "")}`
     ],
     ["Cung Thân", CN_BRANCHES[mine.bodyBranch], viBranch(body?.earthlyBranch ?? "")],
     ["Mệnh chủ", mine.lifeMaster, viStar(chart.soul)],

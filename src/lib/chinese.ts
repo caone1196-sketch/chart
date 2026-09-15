@@ -578,7 +578,7 @@ export const buildZiwei = (localDate: Date | null, localHour: number): ZiweiChar
     bureau,
     transformations,
     palaces,
-    note: `Ngày ${lunarLabel}, giờ ${BRANCHES[hourBranch]}. Cung Mệnh ${STEMS[lifeStem]}${BRANCHES[lifeBranch]} → nạp âm ${bureau.name}. Ngày âm lịch tính từ sóc và trung khí (mùng 1 = ngày chứa trăng mới, tháng 11 = tháng chứa Đông chí).${
+    note: `Ngày ${lunarLabel}, giờ ${BRANCHES[hourBranch]}. Cung Mệnh ${STEMS[lifeStem]} ${BRANCHES[lifeBranch]} → nạp âm ${bureau.name}. Ngày âm lịch tính từ sóc và trung khí (mùng 1 = ngày chứa trăng mới, tháng 11 = tháng chứa Đông chí).${
       lunar.shiftedToNextDay ? " Ca sinh từ 23 giờ được tính sang ngày hôm sau (giờ Tý bắt đầu từ 23 giờ)." : ""
     } Tứ Hóa năm sinh: ${transformText}. Vị trí sao theo công thức cổ điển — các phái khác nhau ở cách đặt tháng nhuận nên vẫn nên đối chiếu phần mềm chuyên dụng.`
   };
