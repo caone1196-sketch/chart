@@ -111,8 +111,9 @@ export default function VariantPanel({
                 <th className="p-1.5 text-left">Hệ nhà</th>
                 <th className="p-1.5">Cusp 1</th>
                 {chart.planets.map((planet) => (
-                  <th key={`h-${planet.key}`} className="p-1.5">
-                    {planet.label.split(" ").pop()}
+                  <th key={`h-${planet.key}`} className="p-1.5 text-base" title={planet.label}>
+                    <span aria-hidden="true">{planet.glyph}</span>
+                    <span className="sr-only">{planet.label}</span>
                   </th>
                 ))}
               </tr>
@@ -142,6 +143,18 @@ export default function VariantPanel({
               })}
             </tbody>
           </table>
+          <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-400">
+            {chart.planets.map((planet) => (
+              <span key={`legend-${planet.key}`}>
+                <span className="text-slate-200">{planet.glyph}</span> {planet.label}
+              </span>
+            ))}
+          </p>
+          <p className="mt-2 text-xs text-slate-400">
+            Cusp 1 là điểm bắt đầu nhà 1 của từng hệ. Toàn cung/Chia bằng nhau từ Thiên Đỉnh/Morinus/Sripati cố ý không đặt cusp 1
+            ở Cung Mọc; Sripati lấy <em>giữa</em> nhà làm cusp nên cusp 1 lệch khỏi Cung Mọc khoảng nửa nhà.
+          </p>
+          {chart.houseNote && <p className="mt-2 text-xs text-amber-200">⚠ {chart.houseNote}</p>}
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
           <div className={card}>
@@ -160,6 +173,7 @@ export default function VariantPanel({
               AC {displayAngle(chart.ascendant)} · MC {displayAngle(chart.midheaven)} · Vertex {displayAngle(chart.vertex)} · East Point{" "}
               {displayAngle(chart.eastPoint)}
             </p>
+            {chart.houseNote && <p className="mt-2 text-xs text-amber-200">⚠ {chart.houseNote}</p>}
           </div>
           <div className={card}>
             <h3 className="text-lg font-semibold">Hành tinh theo nhà</h3>
@@ -282,6 +296,10 @@ export default function VariantPanel({
         <div className="grid gap-4 lg:grid-cols-2">
           <div className={card}>
             <h3 className="text-lg font-semibold">Rashi · Nakshatra · Pada</h3>
+            <p className="mt-1 text-xs text-slate-400">
+              Sidereal (Jyotish) · ayanamsa Lahiri {variant.vedic.ayanamsa.toFixed(3)}° — luôn tính theo hệ sidereal, không phụ thuộc hệ hoàng đạo
+              đang chọn ở trên.
+            </p>
             <div className="mt-3">
               {variant.vedic.planets.map((planet) => (
                 <div key={planet.key} className={row}>

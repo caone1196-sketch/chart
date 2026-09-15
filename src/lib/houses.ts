@@ -138,7 +138,7 @@ export const HOUSE_SYSTEMS: HouseSystemInfo[] = [
     area: "Al-Battani / Alchabitius, thế kỷ 10",
     idea: "Chia bán cung ngày của Cung Mọc thành ba phần rồi chiếu lên hoàng đạo.",
     bestFor: "Horary và truyền thống Ả Rập, cách đọc nhà theo thời gian thực.",
-    caution: "Ở vĩ độ cao có thể cho nhà rất hẹp."
+    caution: "Ở vĩ độ cao có thể cho nhà rất hẹp; ngoài vòng cực thì app chuyển sang Porphyry."
   },
   {
     id: "topocentric",
@@ -148,7 +148,7 @@ export const HOUSE_SYSTEMS: HouseSystemInfo[] = [
     area: "Wendell Polich & Anthony Page, 1971",
     idea: "Placidus điều chỉnh cho vĩ độ và thị sai địa phương thực tế.",
     bestFor: "Bản đồ có vĩ độ cao vừa phải, quan sát địa phương chính xác.",
-    caution: "Vẫn suy biến gần vòng cực; ít tài liệu luận giải."
+    caution: "Vẫn suy biến gần vòng cực (app chuyển sang Porphyry ngoài vòng cực); ít tài liệu luận giải."
   },
   {
     id: "morinus",
@@ -418,6 +418,12 @@ export const computeHouses = (
       ];
 
       if (system === "topocentric") {
+        if (inPolar) {
+          note = "Ngoài vòng cực: Topocentric không xác định, đã chuyển sang Porphyry.";
+          polarSwap();
+          porphyryCusps(cusps, ac, mc);
+          break;
+        }
         cusps[11] = asc1(30 + armc, fh1, sinE, cosE);
         cusps[12] = asc1(60 + armc, fh2, sinE, cosE);
         cusps[2] = asc1(120 + armc, fh2, sinE, cosE);
@@ -467,6 +473,12 @@ export const computeHouses = (
       break;
     }
     case "alcabitius": {
+      if (inPolar) {
+        note = "Ngoài vòng cực: Alcabitius không xác định, đã chuyển sang Porphyry.";
+        polarSwap();
+        porphyryCusps(cusps, ac, mc);
+        break;
+      }
       polarSwap();
       const dek = asind(sind(asc) * sinE);
       let r = -tanLat * tand(dek);

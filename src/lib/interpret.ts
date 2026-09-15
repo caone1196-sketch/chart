@@ -316,7 +316,7 @@ const variantSection = (input: LocalAnswerInput, normalized: string): string => 
     parts.push(
       [
         `**Bản đồ của bạn đang dùng biến thể nào**`,
-        `- Hệ nhà: ${variant.houseSystemLabel} — cung 1 tại ${displayAngle(variant.cusps[0])}.`,
+        `- Hệ nhà: ${variant.houseSystemLabel} — cung 1 tại ${displayAngle(variant.cusps[0])}.${variant.houseNote ? ` ⚠ ${variant.houseNote}` : ""}`,
         variant.zodiacFrame === "tropical"
           ? "- Hệ hoàng đạo: nhiệt đới (tropical). Bật hệ sidereal để xem theo Vệ Đà/ sao cố định."
           : `- Hệ hoàng đạo: ${variant.zodiacFrame}, ayanamsa ${variant.ayanamsaValue.toFixed(4)}°; cung Mọc sidereal ${displayAngle(variant.sidereal.ascendant)}.`,

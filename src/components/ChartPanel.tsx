@@ -1,5 +1,6 @@
 import type { ChartData, TransitHit } from "@/lib/astro";
 import { ELEMENT_VI, MODALITY_VI, displayAngle, formatOffset } from "@/lib/astro";
+import { HOUSE_SYSTEMS } from "@/lib/houses";
 import type { FixedStarHit } from "@/lib/sky";
 
 const card = "rounded-2xl border border-slate-800 bg-slate-900/50 p-5 md:p-6";
@@ -94,7 +95,9 @@ export default function ChartPanel({
       </div>
 
       <div className={card}>
-        <h3 className="text-xl font-semibold">12 nhà (Whole Sign)</h3>
+        <h3 className="text-xl font-semibold">
+          12 nhà — {HOUSE_SYSTEMS.find((system) => system.id === chart.houseSystem)?.label ?? chart.houseSystem}
+        </h3>
         <div className="mt-4 grid gap-x-6 sm:grid-cols-2">
           {chart.houses.map((house) => (
             <div key={house.house} className={row}>
@@ -105,6 +108,7 @@ export default function ChartPanel({
             </div>
           ))}
         </div>
+        {chart.houseNote && <p className="mt-3 text-xs text-amber-200">⚠ {chart.houseNote}</p>}
       </div>
 
       <div className={card}>

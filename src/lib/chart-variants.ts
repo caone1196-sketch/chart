@@ -101,6 +101,8 @@ export type VedicResult = {
 export type VariantChart = {
   houseSystem: HouseSystemId;
   houseSystemLabel: string;
+  /** Ghi chú khi hệ nhà đang chọn phải thay thế ở vĩ độ này (ngoài vòng cực). */
+  houseNote?: string;
   cusps: number[];
   cuspSigns: string[];
   zodiacFrame: ZodiacFrameId;
@@ -158,8 +160,11 @@ export const buildVariantChart = (input: VariantInput): VariantChart => {
   const cusps = houseSetRaw.cusps.map((cusp) => normalizeDegree(cusp - chart.ayanamsa));
   const houses = { ...houseSetRaw, cusps };
   const houseOf = (longitude: number) => houseOfLongitude(longitude, houses.cusps);
+  // computeExtraPoints luôn trả kinh độ NHIỆT ĐỚI, nên phải so với cusp nhiệt đới (houseSetRaw),
+  // không phải cusp đã quy về hệ hiển thị — nếu không, ở hệ sidereal các điểm ảo sẽ lệch nhà.
+  const houseOfTropical = (longitude: number) => houseOfLongitude(longitude, houseSetRaw.cusps);
 
-  const extraPoints = computeExtraPoints(chart.utcDate).map((point) => ({ ...point, house: houseOf(point.longitude) }));
+  const extraPoints = computeExtraPoints(chart.utcDate).map((point) => ({ ...point, house: houseOfTropical(point.longitude) }));
   const extraPointsRaw = computeExtraPoints(chart.utcDate);
   const points = [
     ...chart.planets.map((planet) => ({ key: planet.key, label: planet.label, longitude: planet.longitude })),
@@ -191,7 +196,18 @@ export const buildVariantChart = (input: VariantInput): VariantChart => {
   sidereal.midheaven = normalizeDegree(tropicalChart.midheaven - ayanamsaValue);
   for (const point of extraPointsRaw) sidereal[point.key] = normalizeDegree(point.longitude - ayanamsaValue);
 
-  const vedic = { ...buildVedic(chart, sidereal, houseOf, zodiacFrame, localDate), ayanamsa: ayanamsaValue };
+  // Jyotish LUÔN là sidereal. Khi hệ hiển thị là nhiệt đới (ayanamsa = 0) thì dùng chuẩn Lahiri,
+  // nếu không lá số Vệ Đà sẽ hiển thị đúng bằng cung nhiệt đới — sai hẳn.
+  const vedicAyanamsa = zodiacFrame === "tropical" ? ayanamsa("lahiri", chart.utcDate) : ayanamsaValue;
+  const vedicLongitudes: Record<string, number> = {};
+  for (const planet of tropicalChart.planets) vedicLongitudes[planet.key] = normalizeDegree(planet.longitude - vedicAyanamsa);
+  vedicLongitudes.ascendant = normalizeDegree(tropicalChart.ascendant - vedicAyanamsa);
+  for (const point of extraPointsRaw) vedicLongitudes[point.key] = normalizeDegree(point.longitude - vedicAyanamsa);
+  // Cusp trong hệ sidereal của Vệ Đà (cùng một bộ nhà, chỉ đổi hệ quy chiếu).
+  const vedicCusps = houseSetRaw.cusps.map((cusp) => normalizeDegree(cusp - vedicAyanamsa));
+  const houseOfVedic = (longitude: number) => houseOfLongitude(longitude, vedicCusps);
+
+  const vedic = { ...buildVedic(chart, vedicLongitudes, houseOfVedic, "lahiri", localDate), ayanamsa: vedicAyanamsa };
 
   const sun = chart.planets.find((planet) => planet.key === "sun")!;
   const moon = chart.planets.find((planet) => planet.key === "moon")!;
@@ -217,8 +233,10 @@ export const buildVariantChart = (input: VariantInput): VariantChart => {
   return {
     houseSystem,
     houseSystemLabel: HOUSE_SYSTEM_LABEL(houseSystem),
+    houseNote: chart.houseNote,
     cusps: houses.cusps,
-    cuspSigns: houses.cusps.map((cusp) => ZODIAC_SIGNS[signIndexOf(cusp - ayanamsaValue)].name),
+    // `houses.cusps` đã quy về hệ hiển thị (đã trừ ayanamsa) — không trừ thêm lần nữa.
+    cuspSigns: houses.cusps.map((cusp) => ZODIAC_SIGNS[signIndexOf(cusp)].name),
     zodiacFrame,
     ayanamsaValue,
     extraPoints,
@@ -438,6 +456,7 @@ export const variantReport = (variant: VariantChart): string => {
 
   lines.push("BIẾN THỂ BẢN ĐỒ SAO (dùng trong luận giải)");
   lines.push(`- Hệ thống nhà: ${variant.houseSystemLabel} — cung 1 bắt đầu ${displayAngle(variant.cusps[0])}, cung 10 ${displayAngle(variant.cusps[9])}`);
+  if (variant.houseNote) lines.push(`  · Lưu ý: ${variant.houseNote}`);
   lines.push(
     variant.zodiacFrame === "tropical"
       ? "- Hệ hoàng đạo: nhiệt đới (tropical) — 0° Bạch Dương là điểm Xuân phân."
@@ -469,7 +488,7 @@ export const variantReport = (variant: VariantChart): string => {
   if (strongDignity.length) lines.push(`  · Hành tinh có phẩm chất mạnh: ${strongDignity.join(", ")}`);
 
   lines.push(
-    `- Vệ Đà (${variant.zodiacFrame === "tropical" ? "nên bật hệ sidereal để chuẩn Jyotish" : `ayanamsa ${variant.ayanamsaValue.toFixed(3)}°`}): ` +
+    `- Vệ Đà (luôn sidereal, ayanamsa Lahiri ${variant.vedic.ayanamsa.toFixed(3)}°, không phụ thuộc hệ hoàng đạo đang chọn): ` +
       `Mặt Trăng ở ${vedic.janmaRashi}, nakshatra ${vedic.moonNakshatra} (pada ${vedic.moonPada}); dasha hiện tại ${vedic.currentMahadasha}/${vedic.currentAntardasha}.`
   );
   lines.push(`  · Panchang: tithi ${vedic.panchang.tithi} (${vedic.panchang.paksha}), yoga ${vedic.panchang.yoga}, vara ${vedic.panchang.vara}.`);

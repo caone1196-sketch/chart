@@ -9,6 +9,8 @@ export type PlanetPosition = {
   key: string;
   label: string;
   symbol: string;
+  /** Ký hiệu chiêm tinh (☉ ☽ ☿ …) — dùng cho bảng biểu hẹp. */
+  glyph: string;
   color: string;
   longitude: number;
   retrograde: boolean;
@@ -65,6 +67,8 @@ export type ChartData = {
   /** Các điểm ảo cơ bản của hệ nhà đang dùng. */
   vertex: number;
   eastPoint: number;
+  /** Ghi chú khi hệ nhà đang chọn không xác định ở vĩ độ này và đã phải thay thế. */
+  houseNote?: string;
 };
 
 export type BalanceMap = {
@@ -122,16 +126,16 @@ export const MODALITY_VI: Record<string, string> = {
 };
 
 export const PLANETS: Array<Omit<PlanetPosition, "longitude" | "retrograde" | "house" | "speed"> & { body: Body }> = [
-  { key: "sun", label: "Mặt Trời", symbol: "Sun", body: Body.Sun, color: "#f59e0b" },
-  { key: "moon", label: "Mặt Trăng", symbol: "Moon", body: Body.Moon, color: "#cbd5e1" },
-  { key: "mercury", label: "Thủy Tinh", symbol: "Me", body: Body.Mercury, color: "#93c5fd" },
-  { key: "venus", label: "Kim Tinh", symbol: "Ve", body: Body.Venus, color: "#f9a8d4" },
-  { key: "mars", label: "Hỏa Tinh", symbol: "Ma", body: Body.Mars, color: "#f87171" },
-  { key: "jupiter", label: "Mộc Tinh", symbol: "Ju", body: Body.Jupiter, color: "#fb923c" },
-  { key: "saturn", label: "Thổ Tinh", symbol: "Sa", body: Body.Saturn, color: "#fde68a" },
-  { key: "uranus", label: "Thiên Vương", symbol: "Ur", body: Body.Uranus, color: "#67e8f9" },
-  { key: "neptune", label: "Hải Vương", symbol: "Ne", body: Body.Neptune, color: "#a5b4fc" },
-  { key: "pluto", label: "Diêm Vương", symbol: "Pl", body: Body.Pluto, color: "#d8b4fe" }
+  { key: "sun", label: "Mặt Trời", symbol: "Sun", body: Body.Sun, color: "#f59e0b", glyph: "☉" },
+  { key: "moon", label: "Mặt Trăng", symbol: "Moon", body: Body.Moon, color: "#cbd5e1", glyph: "☽" },
+  { key: "mercury", label: "Thủy Tinh", symbol: "Me", body: Body.Mercury, color: "#93c5fd", glyph: "☿" },
+  { key: "venus", label: "Kim Tinh", symbol: "Ve", body: Body.Venus, color: "#f9a8d4", glyph: "♀" },
+  { key: "mars", label: "Hỏa Tinh", symbol: "Ma", body: Body.Mars, color: "#f87171", glyph: "♂" },
+  { key: "jupiter", label: "Mộc Tinh", symbol: "Ju", body: Body.Jupiter, color: "#fb923c", glyph: "♃" },
+  { key: "saturn", label: "Thổ Tinh", symbol: "Sa", body: Body.Saturn, color: "#fde68a", glyph: "♄" },
+  { key: "uranus", label: "Thiên Vương", symbol: "Ur", body: Body.Uranus, color: "#67e8f9", glyph: "♅" },
+  { key: "neptune", label: "Hải Vương", symbol: "Ne", body: Body.Neptune, color: "#a5b4fc", glyph: "♆" },
+  { key: "pluto", label: "Diêm Vương", symbol: "Pl", body: Body.Pluto, color: "#d8b4fe", glyph: "♇" }
 ];
 
 export const ASPECTS = [
@@ -440,7 +444,9 @@ export const calculateChart = (
     zodiacFrame,
     ayanamsa: ayan,
     vertex: normalizeDegree(houseSet.vertex - ayan),
-    eastPoint: normalizeDegree(houseSet.eastPoint - ayan)
+    eastPoint: normalizeDegree(houseSet.eastPoint - ayan),
+    // Một số hệ nhà không xác định ngoài vòng cực và đã được thay bằng Porphyry — nói rõ cho người dùng.
+    houseNote: houseSet.note
   };
 };
 
