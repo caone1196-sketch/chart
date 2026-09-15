@@ -396,9 +396,10 @@ say();
 say(`- Ngũ hành cục: ${variant.chinese.ziwei.bureau.name} · Mệnh chủ ${variant.chinese.ziwei.lifeMaster} · Thân chủ ${variant.chinese.ziwei.bodyMaster}.`);
 say(`- ${variant.chinese.ziwei.note}`);
 say();
+const bodyPalace = ziwei.palaces.find((palace) => palace.isBody) ?? ziwei.palaces[0];
 say(`- Cung Mệnh: **${CN_STEMS[ziwei.palaces[0].stem]} ${CN_BRANCHES[ziwei.lifeBranch]}** · cung Thân: ${
-  CN_STEMS[ziwei.palaces.find((p) => p.isBody)?.index ?? 0]
-} ${CN_BRANCHES[ziwei.bodyBranch]} · Tứ Hóa năm sinh: ${ziwei.transformations.map((item) => `${item.star} hóa ${item.label}`).join(", ")}.`);
+  bodyPalace.isLife ? "trùng cung Mệnh" : `${CN_STEMS[bodyPalace.stem]} ${CN_BRANCHES[bodyPalace.branch]}`
+} (chi ${CN_BRANCHES[ziwei.bodyBranch]}) · Tứ Hóa năm sinh: ${ziwei.transformations.map((item) => `${item.star} hóa ${item.label}`).join(", ")}.`);
 say();
 say("| Cung | Can chi | Chính tinh | Cát tinh | Sát tinh | Ý nghĩa |");
 say("| --- | --- | --- | --- | --- | --- |");
