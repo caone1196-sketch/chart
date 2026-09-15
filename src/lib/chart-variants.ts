@@ -182,7 +182,7 @@ export const buildVariantChart = (input: VariantInput): VariantChart => {
   sidereal.midheaven = normalizeDegree(tropicalChart.midheaven - ayanamsaValue);
   for (const point of extraPointsRaw) sidereal[point.key] = normalizeDegree(point.longitude - ayanamsaValue);
 
-  const vedic = { ...buildVedic(chart, sidereal, houseOf, zodiacFrame), ayanamsa: ayanamsaValue };
+  const vedic = { ...buildVedic(chart, sidereal, houseOf, zodiacFrame, localDate), ayanamsa: ayanamsaValue };
 
   const sun = chart.planets.find((planet) => planet.key === "sun")!;
   const moon = chart.planets.find((planet) => planet.key === "moon")!;
@@ -240,7 +240,8 @@ const buildVedic = (
   chart: ChartData,
   sidereal: Record<string, number>,
   houseOf: (longitude: number) => number,
-  frame: ZodiacFrameId
+  frame: ZodiacFrameId,
+  localDate: Date
 ): VedicResult => {
   const planets: VedicPlanetPosition[] = chart.planets.map((planet) => {
     const longitude = sidereal[planet.key];
@@ -272,7 +273,7 @@ const buildVedic = (
 
   const sun = chart.planets.find((planet) => planet.key === "sun")!;
   const moon = chart.planets.find((planet) => planet.key === "moon")!;
-  const panchang = panchangAt(chart.utcDate, sun.longitude, moon.longitude, frame);
+  const panchang = panchangAt(chart.utcDate, sun.longitude, moon.longitude, frame, localDate);
 
   const signNamesOf = (divisions: number) => {
     const signs: Record<string, string> = {};

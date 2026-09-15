@@ -1,11 +1,11 @@
 #include <stdio.h>
 #include "swephexp.h"
 
-static const int CODES[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,21,15,17,18,19,20,40,41,42,43,44,45,46,47,48};
+static const int CODES[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,21,15,17,18,19,20,40,41,42,43,44,45,46,47,48,56};
 static const char *NAMES[] = {"sun","moon","mercury","venus","mars","jupiter","saturn","uranus","neptune","pluto",
   "meanNode","trueNode","meanApog","intpApog","chiron","ceres","pallas","juno","vesta",
-  "cupido","hades","zeus","kronos","apollon","admetos","vulkanus","poseidon","isisTranspluto"};
-static const int NBODY = 28;
+  "cupido","hades","zeus","kronos","apollon","admetos","vulkanus","poseidon","isisTranspluto","selena"};
+static const int NBODY = 29;
 
 int main(int argc, char **argv) {
   swe_set_ephe_path("/tmp/ephe");

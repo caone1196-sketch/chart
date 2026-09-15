@@ -20,7 +20,8 @@ const KEY_MAP: Record<string, string> = {
   admetos: "admetos",
   vulkanus: "vulkanus",
   poseidon: "poseidon",
-  isisTranspluto: "isisTranspluto"
+  isisTranspluto: "isisTranspluto",
+  selena: "selena"
 };
 
 const within = (value: number) => ((value % 360) + 360) % 360;
@@ -63,6 +64,9 @@ const TOLERANCE: Record<string, number> = {
   juno: 1.5,
   vesta: 0.6,
   cupido: 0.01,
+  // Selena/White Moon: phần tử "geo" trong seorbel.txt (M tuyến tính theo T), sai số còn lại do chênh
+  // lệch nhỏ giữa mô hình tuế sai/độ nghiêng của app và Swiss Ephemeris.
+  selena: 0.02,
   hades: 0.01,
   zeus: 0.01,
   kronos: 0.01,

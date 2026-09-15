@@ -551,7 +551,14 @@ const KARANA_NAMES = [
 ];
 
 /** Panchang cơ bản: tithi, nakshatra, yoga, karana, vara (ngày trong tuần). */
-export const panchangAt = (date: Date, tropicalSun: number, tropicalMoon: number, frame: ZodiacFrameId): Panchang => {
+export const panchangAt = (
+  date: Date,
+  tropicalSun: number,
+  tropicalMoon: number,
+  frame: ZodiacFrameId,
+  /** Ngày theo giờ địa phương nơi sinh — dùng cho "vara" (thứ trong tuần). */
+  localDate?: Date
+): Panchang => {
   const ayan = ayanamsa(frame, date);
   const sun = normalizeDegree(tropicalSun - ayan);
   const moon = normalizeDegree(tropicalMoon - ayan);
@@ -575,7 +582,7 @@ export const panchangAt = (date: Date, tropicalSun: number, tropicalMoon: number
     nakshatra,
     yoga: YOGA_NAMES[yogaIndex % 27],
     karana: KARANA_NAMES[karanaIndex % 11],
-    vara: varaNames[date.getDay()]
+    vara: varaNames[(localDate ?? date).getUTCDay()]
   };
 };
 

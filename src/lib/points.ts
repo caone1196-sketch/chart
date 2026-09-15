@@ -215,7 +215,15 @@ const J1900 = 2415020.0;
 const gaussianMeanMotion = (semiMajorAxis: number) => 0.9856076686 / Math.pow(semiMajorAxis, 1.5);
 const FICTITIOUS: Record<
   string,
-  { elements: ElementWindow; geocentric: boolean; equinoxJd: number; epochJd?: number; meaning: string }
+  {
+    elements: ElementWindow;
+    geocentric: boolean;
+    equinoxJd: number;
+    epochJd?: number;
+    /** Chuyển động trung bình ghi đè (độ/ngày) — chỉ Selena cần, vì seorbel.txt cho M theo T. */
+    meanMotion?: number;
+    meaning: string;
+  }
 > = {
   cupido: {
     elements: [40.99837, 0.0046, 1.0833, 129.8325, 171.4333, 163.7409, 0.003759342, 0],
@@ -274,11 +282,13 @@ const FICTITIOUS: Record<
     meaning: "Isis-Transpluto (Transpluto): sự hoàn thiện, hy sinh vì lý tưởng, tình yêu vũ trụ (hành tinh giả định, phần tử của Strubell 1952)."
   },
   selena: {
-    elements: [0.05280098949, 0.0, 0.0, 0.0, 0.0, 242.2205555, 0.1406900, 0],
+    // seorbel.txt: M = 242.2205555 + 5143.5418158·T (T tính theo thế kỷ từ J2000), a = 0.05280098949, e = 0.
+    elements: [0.05280098949, 0.0, 0.0, 0.0, 0.0, 242.2205555, 0.14082250009034908, 0],
     geocentric: true,
-    // seorbel.txt: equinox = "JDATE" (equinox của ngày) nên không tiến động
+    // equinox = "JDATE": hệ quy chiếu là equinox của chính thời điểm tính (phải tiến động về J2000).
     equinoxJd: 0,
     epochJd: J2000,
+    meanMotion: 0.14082250009034908,
     meaning: "Selena (White Moon): điểm ánh sáng/ân sủng, phần hoà bình và lý tưởng trong bản đồ (định nghĩa khác nhau giữa các trường phái)."
   }
 };
@@ -342,13 +352,13 @@ const fictitiousPosition = (name: string, jd: number): { vector: Vec3; geocentri
     node: entry.elements[3],
     peri: entry.elements[4],
     meanAnomaly: entry.elements[5],
-    meanMotion: gaussianMeanMotion(entry.elements[0]),
+    meanMotion: entry.meanMotion ?? gaussianMeanMotion(entry.elements[0]),
     meanMotionRate: entry.elements[7],
     epoch: entry.epochJd ?? entry.equinoxJd
   };
   const position = keplerPosition(elements, jd);
-  if (!entry.equinoxJd) return { vector: rotateX(position, obliquityAt(new Date((jd - 2440587.5) * 86400000))), geocentric: entry.geocentric };
-  const equatorial = equinoxEclipticToJ2000(position, entry.equinoxJd);
+  // equinoxJd === 0 ⇔ "JDATE" trong seorbel.txt: equinox của chính thời điểm tính.
+  const equatorial = equinoxEclipticToJ2000(position, entry.equinoxJd || jd);
   return { vector: equatorial, geocentric: entry.geocentric };
 };
 
