@@ -163,6 +163,18 @@ const spinWheel = (init) => {
   return event;
 };
 
+/** Toạ độ đang hiển thị ngay dưới con trỏ (góc phải thanh điều khiển). */
+const pointerReadoutText = () => {
+  const span = [...window.document.querySelectorAll("span")].find((item) => /cao -?\d+\.\d+°/.test(item.textContent ?? ""));
+  return span ? span.textContent.trim() : null;
+};
+
+/** Dòng "Tâm khung: … · mức phóng …" chỉ hiện ở chế độ Toàn cảnh. */
+const mapCenterText = () => {
+  const paragraph = [...window.document.querySelectorAll("p")].find((item) => (item.textContent ?? "").includes("Tâm khung:"));
+  return paragraph ? paragraph.textContent : null;
+};
+
 const resetViewKey = async () => {
   canvas.dispatchEvent(new window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "0" }));
   await waitForPaint(drawCalls.total + 1);
@@ -237,6 +249,36 @@ else {
   const html = window.document.body.innerHTML;
   if (!html.includes("Cấp sao (mag)")) fail("bấm vào sao không mở bảng thông tin");
   else ok();
+  if (!starHit.name || !html.includes(starHit.name)) fail(`bấm vào sao không hiện đúng tên (${starHit.name})`);
+  else ok();
+}
+
+/* --- kéo thật chậm (1px mỗi sự kiện): bản đồ vẫn phải dịch theo con trỏ --- */
+{
+  // Phải chờ React commit rồi mới đọc DOM, nếu không sẽ so sánh với toạ độ của lần di chuột trước đó.
+  const readoutAt = async (x, y) => {
+    clickCanvas("pointermove", { clientX: x, clientY: y, pointerId: 3 });
+    await wait(50);
+    return pointerReadoutText();
+  };
+
+  await resetViewKey();
+  const readoutBefore = await readoutAt(500, 300);
+  if (!readoutBefore) fail("không đọc được toạ độ dưới con trỏ trước khi kéo chậm");
+  else ok();
+
+  const beforeSlowDrag = drawCalls.total;
+  clickCanvas("pointerdown", { clientX: 300, clientY: 260, pointerId: 3 });
+  for (let step = 1; step <= 40; step += 1) clickCanvas("pointermove", { clientX: 300 + step, clientY: 260, pointerId: 3 });
+  clickCanvas("pointerup", { clientX: 340, clientY: 260, pointerId: 3 });
+  await wait(80);
+  if (drawCalls.total <= beforeSlowDrag) fail("kéo chậm 1px/sự kiện không vẽ lại canvas");
+  else ok();
+
+  const readoutAfter = await readoutAt(500, 300);
+  if (readoutAfter === readoutBefore) {
+    fail(`kéo chậm 40×1px không dịch bản đồ (toạ độ vẫn ${readoutBefore}) — ngưỡng kéo đang tính theo từng sự kiện`);
+  } else ok();
 }
 
 // Nút đổi chế độ + nút lớp hiển thị + ô tra cứu.
@@ -249,6 +291,23 @@ else {
   await wait(80);
   if (drawCalls.total <= before) fail("chuyển chế độ Toàn cảnh không vẽ lại");
   else ok();
+}
+
+/* --- kéo ở chế độ Toàn cảnh phải đổi xích kinh/xích vĩ của tâm khung (khoá công thức mapScale) --- */
+{
+  const centerBefore = mapCenterText();
+  if (!centerBefore) fail("không đọc được 'Tâm khung' ở chế độ Toàn cảnh");
+  else {
+    const beforeMapDrag = drawCalls.total;
+    clickCanvas("pointerdown", { clientX: 300, clientY: 260, pointerId: 5 });
+    clickCanvas("pointermove", { clientX: 420, clientY: 320, pointerId: 5 });
+    clickCanvas("pointerup", { clientX: 420, clientY: 320, pointerId: 5 });
+    await wait(80);
+    if (drawCalls.total <= beforeMapDrag) fail("kéo ở chế độ Toàn cảnh không vẽ lại canvas");
+    else ok();
+    if (mapCenterText() === centerBefore) fail("kéo ở chế độ Toàn cảnh không đổi tâm khung (xích kinh/xích vĩ)");
+    else ok();
+  }
 }
 
 const groundButton = buttons.find((button) => button.textContent?.includes("Mặt đất"));

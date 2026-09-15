@@ -145,6 +145,30 @@ với `deltaY`/`deltaMode`/`ctrlKey`; khẳng định `defaultPrevented` (trang 
 giảm khi lăn xuống**, `deltaMode = 1` và Ctrl + lăn cũng bị chặn, `deltaY = 0` không đổi mức phóng;
 trả khung nhìn về mặc định (phím `0`) trước khi bấm chọn sao để toạ độ sao do `__skyTest` tính sẵn còn đúng.
 
+### 5.8 Kéo chậm thì bản đồ đứng im, nhả tay lại bị coi là một cú bấm
+`handlePointerMove` xét ngưỡng "đã kéo" trên **độ dời của từng sự kiện** (`|dx| + |dy| > 3`) trong khi `drag.x/y`
+được cập nhật ngay sau đó, nên mỗi sự kiện lại "quên" quãng đã đi: kéo chậm (1–2px mỗi sự kiện — chuột tần số cao,
+bàn rê, người kéo từ tốn) không bao giờ vượt ngưỡng. Đo trong jsdom: kéo 40 sự kiện × 1px → bản đồ dịch **0px**,
+và khi nhả tay bị xử lý như một cú bấm → chọn/bỏ chọn sao ngoài ý muốn.
+**Sửa:** ngưỡng đo từ `startX/startY` (điểm bấm xuống, `Math.hypot > 3`); khi vượt ngưỡng thì kéo "bù" luôn phần
+dưới ngưỡng (`drag.x = drag.startX`) để bản đồ bám sát con trỏ, không hụt 3px đầu tiên.
+Kiểm chứng: `test:ui` — kéo 40×1px phải làm toạ độ dưới con trỏ đổi; chạy lại đúng mã cũ thì test báo
+"kéo chậm 40×1px không dịch bản đồ (toạ độ vẫn cao 64,2° · Đông Nam 119,2°)".
+
+### 5.9 Nút phải và nút giữa chuột cũng kéo bản đồ / chọn sao
+`handlePointerDown` không đọc `event.button`: bấm phải vẫn bắt đầu kéo trong khi trình duyệt mở menu ngữ cảnh,
+bấm giữa bật chế độ "cuộn tự động" (Windows/Chrome) rồi kéo lung tung; `handlePointerUp` cũng chọn sao bằng nút phải.
+**Sửa:** chỉ nhận `button === 0` khi `pointerType === "mouse"` (chạm và ngòi bút vẫn nhận bình thường), ở cả down lẫn up.
+
+### 5.10 Canvas điều khiển được bằng bàn phím nhưng "vô danh" với trình đọc màn hình
+`<canvas tabIndex={0}>` có hẳn bộ phím tắt (←→↑↓, +/−, 0) nhưng không có tên truy cập → trình đọc màn hình chỉ báo "canvas".
+**Sửa:** thêm `role="img"` + `aria-label` mô tả cách kéo, phóng to và phím tắt.
+
+### 5.11 Rà lại mà **không** phải lỗi: cử chỉ chạm không cần `preventDefault`
+React cũng gắn `touchstart`/`touchmove` ở chế độ passive, nhưng khung canvas đã có `touch-action: none`
+(lần này thêm cho cả thẻ bao ngoài + `overscroll-contain`) nên trình duyệt không giành cử chỉ vuốt/chụm →
+không xảy ra lỗi "cuộn trang" như ở phần lăn chuột. Chỉ riêng `wheel` là bắt buộc phải dùng listener non-passive.
+
 ## 6. Bất biến mới được khoá bằng test
 
 | Bất biến | Test |
@@ -154,9 +178,13 @@ trả khung nhìn về mặc định (phím `0`) trước khi bấm chọn sao �
 | `wheelZoomFactor` đối xứng, đơn điệu theo `|delta|`, chuẩn hoá `deltaMode`, kẹp hệ số mỗi sự kiện | `test:sky` 7b |
 | Dịch chuyển khung chân trời không bao giờ vượt `HORIZON_PAN_LIMIT`, kể cả khi zoom dồn dập sát mép | `test:sky` 7b |
 | Zoom quanh con trỏ vẫn giữ nguyên điểm dưới con trỏ ở cả 2 chế độ (bất biến cũ, còn nguyên) | `test:sky` 7 |
+| Kéo chậm 1px/sự kiện vẫn phải dịch bản đồ (toạ độ dưới con trỏ đổi) | `test:ui` |
+| Kéo ở chế độ Toàn cảnh phải đổi xích kinh/xích vĩ của tâm khung (khoá công thức `mapScale`) | `test:ui` |
+| Bấm vào sao phải mở bảng thông tin **đúng tên sao đó** | `test:ui` |
+| Đọc DOM trong test phải sau khi React commit (chờ rồi mới đọc), nếu không sẽ so với giá trị cũ | `test:ui` |
 
 Kết quả sau khi sửa: `npm test` → 12 hệ nhà · ayanamsa · âm lịch · điểm ảo · biến thể · Tử Vi · nhất quán 18.522 ·
-**sky 14.963** · **ui ≈110.000 lời gọi vẽ** · ví dụ 1996 — tất cả 0 lỗi; `npm run typecheck` và `npm run build` sạch.
+**sky 14.963** · **ui ≈133.000 lời gọi vẽ** · ví dụ 1996 — tất cả 0 lỗi; `npm run typecheck` và `npm run build` sạch.
 
 ## 7. Giới hạn còn lại (có chủ ý, không phải lỗi)
 

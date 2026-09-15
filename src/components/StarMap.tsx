@@ -76,7 +76,7 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const hitsRef = useRef<SkyHit[]>([]);
-  const dragRef = useRef<{ x: number; y: number; moved: boolean; time: number } | null>(null);
+  const dragRef = useRef<{ startX: number; startY: number; x: number; y: number; moved: boolean } | null>(null);
   const pinchRef = useRef<{ distance: number; midX: number; midY: number } | null>(null);
   const spritesRef = useRef(createSpriteCache());
   const rafRef = useRef<number | null>(null);
@@ -335,9 +335,17 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
   };
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    // Chỉ nhận nút trái của chuột: nút phải để mở menu ngữ cảnh, nút giữa bật "cuộn tự động" của trình duyệt.
+    if (event.pointerType === "mouse" && event.button !== 0) return;
     event.currentTarget.focus();
     // Mốc kéo mới; nếu đang chụm hai ngón thì handlePointerMove sẽ bỏ qua kéo (xem pinchRef).
-    dragRef.current = { x: event.clientX, y: event.clientY, moved: false, time: performance.now() };
+    dragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
+      moved: false
+    };
     capturePointer(event.currentTarget, event.pointerId, true);
   };
 
@@ -361,12 +369,20 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
     // Đang chụm hai ngón thì bỏ qua kéo, nếu không bản đồ vừa phóng vừa bị giật theo một ngón.
     if (pinchRef.current) return;
 
+    if (!drag.moved) {
+      // Ngưỡng "đã kéo" phải đo từ **điểm bấm xuống**: cách cũ so từng sự kiện một nên kéo thật chậm
+      // (1–2px mỗi sự kiện) không bao giờ qua ngưỡng → bản đồ đứng im rồi bị coi là một cú bấm chọn sao.
+      if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) <= 3) return;
+      drag.moved = true;
+      // Kéo bù luôn phần dưới ngưỡng để bản đồ bám sát con trỏ, không hụt mấy điểm ảnh đầu tiên.
+      drag.x = drag.startX;
+      drag.y = drag.startY;
+    }
+
     const dx = event.clientX - drag.x;
     const dy = event.clientY - drag.y;
-    if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
     drag.x = event.clientX;
     drag.y = event.clientY;
-    if (!drag.moved) return;
 
     setView((previous) => {
       if (mode === "horizon") {
@@ -389,6 +405,7 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
     const drag = dragRef.current;
     dragRef.current = null;
     capturePointer(event.currentTarget, event.pointerId, false);
+    if (event.pointerType === "mouse" && event.button !== 0) return;
     if (!drag || drag.moved) return;
 
     const rect = event.currentTarget.getBoundingClientRect();
@@ -857,6 +874,8 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
         <canvas
           ref={canvasRef}
           tabIndex={0}
+          role="img"
+          aria-label="Bản đồ bầu trời: kéo để dịch khung nhìn, lăn chuột để phóng to quanh con trỏ, phím mũi tên để dịch, + và − để phóng to, phím 0 để căn lại"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}

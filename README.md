@@ -54,7 +54,7 @@ Các engine được kiểm chứng tự động với **Swiss Ephemeris** (`npm
 | Điểm ảo | 41 mốc 1900-2100 × 28 thiên thể | node trung bình 0,00015° · Lilith 0,115° · hành tinh giả định ≤ 0,007° · tiểu hành tinh 0,28-0,99° |
 | Lớp biến thể | 7 hệ hoàng đạo × 12 hệ nhà, dasha/varga/Tứ Trụ/Tử Vi/Maya/HD | kiểm tra tính nhất quán (cusp ↔ nhà, ayanamsa ↔ cung) |
 | Bản đồ sao (hiển thị) | 14.963 phép kiểm: khúc xạ/hấp thụ, phép chiếu & nghịch đảo, phóng to quanh con trỏ, **quy đổi lăn chuột & giới hạn dịch chuyển khung**, dựng khung 4 vĩ độ, Ngân Hà, pha Trăng, tra cứu | 0 lỗi (sai số nghịch đảo < 0,05°) |
-| Giao diện bản đồ sao | 1 lần chạy jsdom: gắn giao diện, vẽ ≈110.000 lời gọi, mô phỏng lăn (khẳng định `preventDefault` để trang không cuộn + zoom đúng hướng)/kéo/bấm sao/đổi chế độ/tra cứu/bàn phím | 0 ngoại lệ, 0 console.error |
+| Giao diện bản đồ sao | 1 lần chạy jsdom: gắn giao diện, vẽ ≈133.000 lời gọi, mô phỏng lăn (khẳng định `preventDefault` để trang không cuộn + zoom đúng hướng)/kéo/bấm sao/đổi chế độ/tra cứu/bàn phím | 0 ngoại lệ, 0 console.error |
 
 ## Chạy dự án
 

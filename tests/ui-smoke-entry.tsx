@@ -13,7 +13,7 @@ declare global {
     __skyTest?: {
       frame: ReturnType<typeof buildSkyFrame>;
       projector: ReturnType<typeof makeProjector>;
-      starAt: (x: number, y: number) => { index: number; x: number; y: number } | null;
+      starAt: () => { index: number; name: string; x: number; y: number } | null;
     };
   }
 }
@@ -46,7 +46,9 @@ window.__skyTest = {
       if (point.x < 40 || point.x > CANVAS.width - 40 || point.y < 40 || point.y > CANVAS.height - 40) return;
       if (!best || star.mag < best.mag) best = { index: STARS[index].index, x: point.x, y: point.y, mag: star.mag };
     });
-    return best ? { index: best.index, x: best.x, y: best.y } : null;
+    return best
+      ? { index: best.index, name: STARS[best.index].alternatives[0] ?? `HIP ${best.index}`, x: best.x, y: best.y }
+      : null;
   }
 };
 
