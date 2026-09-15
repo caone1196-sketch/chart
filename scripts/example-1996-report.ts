@@ -396,9 +396,9 @@ say();
 say(`- Ngũ hành cục: ${variant.chinese.ziwei.bureau.name} · Mệnh chủ ${variant.chinese.ziwei.lifeMaster} · Thân chủ ${variant.chinese.ziwei.bodyMaster}.`);
 say(`- ${variant.chinese.ziwei.note}`);
 say();
-say(`- Cung Mệnh: **${CN_STEMS[ziwei.palaces[0].stem]}${CN_BRANCHES[ziwei.lifeBranch]}** · cung Thân: ${CN_STEMS[ziwei.palaces.find((p) => p.isBody)?.index ?? 0]}${
-  CN_BRANCHES[ziwei.bodyBranch]
-} · Tứ Hóa năm sinh: ${ziwei.transformations.map((item) => `${item.star} hóa ${item.label}`).join(", ")}.`);
+say(`- Cung Mệnh: **${CN_STEMS[ziwei.palaces[0].stem]} ${CN_BRANCHES[ziwei.lifeBranch]}** · cung Thân: ${
+  CN_STEMS[ziwei.palaces.find((p) => p.isBody)?.index ?? 0]
+} ${CN_BRANCHES[ziwei.bodyBranch]} · Tứ Hóa năm sinh: ${ziwei.transformations.map((item) => `${item.star} hóa ${item.label}`).join(", ")}.`);
 say();
 say("| Cung | Can chi | Chính tinh | Cát tinh | Sát tinh | Ý nghĩa |");
 say("| --- | --- | --- | --- | --- | --- |");
@@ -409,7 +409,7 @@ for (const palace of ziwei.palaces) {
       .map((star) => `${star.name}${star.mutagen ? ` (hóa ${star.mutagen})` : ""}`)
       .join(", ") || "—";
   say(
-    `| ${palace.isLife ? "**Mệnh**" : palace.name}${palace.isBody ? " (Thân)" : ""} | ${palace.stemVi}${palace.branchVi} | ${pick("major")} | ${pick(
+    `| ${palace.isLife ? "**Mệnh**" : palace.name}${palace.isBody ? " (Thân)" : ""} | ${palace.stemVi} ${palace.branchVi} | ${pick("major")} | ${pick(
       "lucky"
     )}${palace.stars.some((s) => s.kind === "helper") ? `, ${pick("helper")}` : ""} | ${pick("malefic")} | ${palace.meaning} |`
   );

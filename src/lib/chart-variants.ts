@@ -489,7 +489,7 @@ export const variantReport = (variant: VariantChart): string => {
   lines.push(
     `- Tử Vi Đẩu Số: ${ziwei.lunarDay}/${ziwei.lunarMonth}${ziwei.leapMonth ? " nhuận" : ""} âm lịch · ${ziwei.bureau.name} · cung Mệnh ${
       CN_STEMS[ziwei.palaces[0].stem]
-    }${CN_BRANCHES[ziwei.lifeBranch]} · Mệnh chủ ${ziwei.lifeMaster}, Thân chủ ${ziwei.bodyMaster}.`
+    } ${CN_BRANCHES[ziwei.lifeBranch]} · Mệnh chủ ${ziwei.lifeMaster}, Thân chủ ${ziwei.bodyMaster}.`
   );
   lines.push(`  · Tứ Hóa: ${ziwei.transformations.map((item) => `${item.star} hóa ${item.label}`).join(", ")}.`);
   lines.push(
