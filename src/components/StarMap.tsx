@@ -28,7 +28,7 @@ type SkyFrame = {
   ecliptic: Array<{ ra: number; dec: number; alt: number; az: number }>;
   horizon: Array<{ ra: number; dec: number; alt: number; az: number }>;
   deepSky: Array<{ ra: number; dec: number; alt: number; az: number }>;
-  constellationLabels: Array<{ vi: string; latin: string; alt: number; az: number }>;
+  constellationLabels: Array<{ vi: string; latin: string; ra: number; dec: number; alt: number; az: number }>;
 };
 
 type Selected =
@@ -143,7 +143,7 @@ const buildFrame = (date: Date, latitude: number, longitude: number): SkyFrame =
   const constellationLabels = CONSTELLATION_META.map((meta) => {
     const ofDate = precessFromJ2000(meta.ra, meta.dec, date);
     const horizontal = toHorizontal(ofDate.ra, ofDate.dec, lstDeg, latitude);
-    return { vi: meta.vi, latin: meta.latin, ...horizontal };
+    return { vi: meta.vi, latin: meta.latin, ra: ofDate.ra, dec: ofDate.dec, ...horizontal };
   });
 
   const snapshot = computeSkySnapshot(date, latitude, longitude, lstDeg, obliquity);
@@ -388,7 +388,7 @@ export default function StarMap({ latitude, longitude, placeLabel, chart, onAskA
       context.textAlign = "center";
       for (const meta of frame.constellationLabels) {
         if (meta.alt < 5) continue;
-        const { x, y } = project({ ...meta, ra: 0, dec: 0 }, width, height);
+        const { x, y } = project(meta, width, height);
         if (!Number.isFinite(x) || x < 40 || x > width - 40 || y < 24 || y > height - 24) continue;
         context.font = "600 12px system-ui, sans-serif";
         context.fillStyle = "rgba(125, 211, 252, 0.58)";
