@@ -4,9 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node server/index.mjs",
+    "dev:vite": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "node server/index.mjs --prod",
+    "typecheck": "tsc --noEmit",
+    "data": "node scripts/build-data.mjs"
   },
   "dependencies": {
     "astronomy-engine": "^2.1.19",
