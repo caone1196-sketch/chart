@@ -193,6 +193,38 @@ export const drawSky = (input: SkyDrawInput): SkyDrawResult => {
   const dsoLabelQueue: DeferredLabel[] = [];
   const zodiacLabelQueue: DeferredLabel[] = [];
   const constellationLabelQueue: DeferredLabel[] = [];
+  /** Đặt nhãn quanh một điểm, thử lần lượt vài vị trí để không đè lên nhãn đã có. */
+  const placeLabel = (
+    text: string,
+    x: number,
+    y: number,
+    radius: number,
+    style: { font: string; color: string; shadow?: string }
+  ) => {
+    ctx.font = style.font;
+    const width = ctx.measureText(text).width;
+    const candidates: Array<{ dx: number; dy: number; align: CanvasTextAlign }> = [
+      { dx: radius + 4, dy: 3.5, align: "left" },
+      { dx: -(radius + 4), dy: 3.5, align: "right" },
+      { dx: 0, dy: radius + 13, align: "center" },
+      { dx: 0, dy: -(radius + 7), align: "center" }
+    ];
+    for (const candidate of candidates) {
+      const centerX =
+        candidate.align === "left"
+          ? x + candidate.dx + width / 2
+          : candidate.align === "right"
+            ? x + candidate.dx - width / 2
+            : x + candidate.dx;
+      const box = labelBox(centerX, y + candidate.dy - 4, width + 10, 15);
+      if (box.x0 < 0 || box.x1 > width || box.y0 < 0 || box.y1 > height) continue;
+      if (labelBoxes.some((placed) => boxesOverlap(placed, box))) continue;
+      labelBoxes.push(box);
+      drawText(ctx, text, x + candidate.dx, y + candidate.dy, { ...style, align: candidate.align });
+      return;
+    }
+  };
+
   const flushLabels = (queue: DeferredLabel[]) => {
     for (const entry of queue) {
       if (entry.box.x0 < 0 || entry.box.x1 > width || entry.box.y0 < 0 || entry.box.y1 > height) continue;
@@ -667,12 +699,9 @@ export const drawSky = (input: SkyDrawInput): SkyDrawResult => {
       ctx.lineWidth = isSelected ? 2.4 : 1;
       ctx.stroke();
 
-      ctx.font = "600 11px system-ui, sans-serif";
-      labelBoxes.push(labelBox(x + radius + 4 + ctx.measureText(planet.label).width / 2, y + 3.5, ctx.measureText(planet.label).width + 8, 15));
-      drawText(ctx, planet.label, x + radius + 4, y + 3.5, {
+      placeLabel(planet.label, x, y, radius, {
         font: "600 11px system-ui, sans-serif",
         color: "rgba(241, 245, 249, 0.95)",
-        align: "left",
         shadow: "rgba(2, 6, 23, 0.8)"
       });
       hits.push({ kind: "planet", key: planet.key, x, y, radius: 15 });
@@ -698,6 +727,11 @@ export const drawSky = (input: SkyDrawInput): SkyDrawResult => {
       ctx.fillStyle = "#fffbe8";
       ctx.arc(x, y, radius, 0, Math.PI * 2);
       ctx.fill();
+      placeLabel("Mặt Trời", x, y, radius, {
+        font: "600 11px system-ui, sans-serif",
+        color: "rgba(255, 247, 214, 0.95)",
+        shadow: "rgba(2, 6, 23, 0.85)"
+      });
       hits.push({ kind: "planet", key: "sun", x, y, radius: 18 });
     }
   }
@@ -739,6 +773,11 @@ export const drawSky = (input: SkyDrawInput): SkyDrawResult => {
         ctx.fillStyle = surface;
         ctx.fill();
       }
+      placeLabel("Mặt Trăng", x, y, radius, {
+        font: "600 11px system-ui, sans-serif",
+        color: "rgba(235, 240, 255, 0.95)",
+        shadow: "rgba(2, 6, 23, 0.85)"
+      });
       hits.push({ kind: "planet", key: "moon", x, y, radius: 16 });
     }
   }

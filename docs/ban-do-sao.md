@@ -20,9 +20,9 @@ sâu) và mọi tính năng cũ (chạy thời gian, chọn đối tượng, h�
 | Hấp thụ | không có | khối khí quyển Kasten–Young (1989), suy giảm 0,2 mag/khối; sao gần chân trời mờ và đỏ hơn; ban ngày mất tới 4,6 mag nên gần như không còn sao |
 | Ngân Hà | 2 nét vẽ dày, đồng nhất | 1.670 đám mây sao + hạt sao phân giải được, có trung tâm sáng (Nhân Mã), nhánh phình Thiên Nga, rãnh tối (Great Rift), mờ dần về phía chân trời |
 | Sao | điểm phẳng | lõi sáng theo hàm cấp sao + **quầng sáng (bloom)** + **tia nhiễu xạ** cho sao sáng, giữ đúng màu B-V |
-| Mặt Trăng | đĩa tròn + quầng | **đúng pha**: hình khuyết theo góc ly giác với Mặt Trời, quầng sáng tỉ lệ phần được chiếu sáng |
+| Mặt Trăng | đĩa tròn + quầng, không ghi tên | **đúng pha**: hình khuyết theo góc ly giác với Mặt Trời, quầng sáng tỉ lệ phần được chiếu sáng, **có nhãn "Mặt Trăng"/"Mặt Trời"** |
 | Mặt đất | vòng chân trời, không có đất | **ba dải núi khuất dần** + nền đất theo phối cảnh khí quyển; vật thể bị núi che không được vẽ; vòng chân trời có 8 hướng (B/ĐB/Đ/…/TB) |
-| Nhãn | vẽ theo thứ tự, hay đè nhau | xếp hàng theo ưu tiên (sao sáng → thiên thể sâu → hoàng đạo → chòm sao) và **tự bỏ nhãn nếu đè**; chỉ hiện chòm sao lớn khi thu nhỏ |
+| Nhãn | vẽ theo thứ tự, hay đè nhau | xếp hàng theo ưu tiên (sao sáng → thiên thể sâu → hoàng đạo → chòm sao) và **tự bỏ nhãn nếu đè**; hành tinh/Mặt Trời/Mặt Trăng tự thử 4 vị trí quanh ký hiệu để không đè nhau; chỉ hiện chòm sao lớn khi thu nhỏ |
 | Zoom | luôn ở tâm khung | **zoom quanh con trỏ**, giới hạn theo chế độ (0,6–22× mặt đất · 1–24× bản đồ) |
 | Kéo bản đồ | đổi tâm khung | kéo ngang = đổi xích kinh, kéo dọc = đổi xích vĩ, có kẹp −89,5°…+89,5° |
 | Đi tới đối tượng | không có | ô tra cứu (1.084 mục): sao, chòm sao, thiên thể sâu, hành tinh, tâm Ngân Hà, thiên đỉnh; gõ **không dấu** vẫn ra |
