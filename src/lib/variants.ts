@@ -48,7 +48,8 @@ export const toDraconic = (chart: ChartData, northNodeLongitude: number): Derive
 
 /** Bản đồ Nhật tâm: kinh độ hoàng đạo nhìn từ Mặt Trời (không có Mặt Trăng, không có AC/MC). */
 export const toHeliocentric = (date: Date): DerivedPoint[] =>
-  PLANETS.filter((planet) => planet.key !== "moon").map((planet) => {
+  // Mặt Trời là gốc toạ độ (vector rỗng) và Mặt Trăng quay quanh Trái Đất nên không có vị trí nhật tâm.
+  PLANETS.filter((planet) => planet.key !== "moon" && planet.key !== "sun").map((planet) => {
     const vector = HelioVector(planet.body, MakeTime(date));
     const spherical = SphereFromVector(vector);
     return {
@@ -87,9 +88,9 @@ export type ReturnChart = {
 
 /** Tìm thời điểm Mặt Trời trở về đúng kinh độ natal (sinh nhật chiêm tinh). */
 export const solarReturn = (natalSunLongitude: number, reference: Date): ReturnChart => {
-  const start = new Date(Date.UTC(reference.getUTCFullYear(), reference.getUTCMonth(), reference.getUTCDate() - 10));
-  const found = SearchSunLongitude(natalSunLongitude, MakeTime(start), 25);
-  const moment = found?.date ?? new Date(Date.UTC(reference.getUTCFullYear(), 0, 1));
+  // Mặt Trời trở về đúng kinh độ natal mỗi ~365,24 ngày: tìm lần kế tiếp trong vòng một năm.
+  const found = SearchSunLongitude(natalSunLongitude, MakeTime(reference), 370);
+  const moment = found?.date ?? new Date(Date.UTC(reference.getUTCFullYear() + 1, 0, 1));
 
   return {
     kind: "solar",

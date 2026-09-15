@@ -14,6 +14,9 @@ import {
 } from "@/lib/knowledge";
 import type { FixedStarHit, SkySnapshot } from "@/lib/sky";
 import { compass, signPositionOf } from "@/lib/sky";
+import type { VariantChart } from "@/lib/chart-variants";
+import { compareHouseSystems, compareZodiacFrames } from "@/lib/chart-variants";
+import { VARIANT_CARDS, VARIANT_GROUPS, findVariants, variantAnswer, variantGroupSummary } from "@/lib/variants-knowledge";
 
 export type LocalAnswerInput = {
   question: string;
@@ -23,6 +26,7 @@ export type LocalAnswerInput = {
   sky: SkySnapshot;
   transits: TransitHit[];
   fixedStars: FixedStarHit[];
+  variant?: VariantChart;
   riseSet: { sunRise: string; sunSet: string; moonRise: string; moonSet: string; timeZoneLabel: string };
 };
 
@@ -279,6 +283,91 @@ const recommendations = (intents: Intent[], chart: ChartData, transits: TransitH
   return suggestions.map((item) => `- ${item}`).join("\n");
 };
 
+/** Phần trả lời cho nhóm câu hỏi về biến thể bản đồ sao. */
+const variantSection = (input: LocalAnswerInput, normalized: string): string => {
+  const variant = input.variant;
+  const parts: string[] = [];
+
+  const matches = findVariants(normalized, 3);
+  const askingList = /bien the|nhung cach|toan bo|co nhung gi|liet ke|cac loai|cac he nha|cac he hoang dao/.test(normalized);
+
+  if (askingList) {
+    parts.push(
+      `**Toàn bộ biến thể bản đồ sao đang có trong hệ thống (${VARIANT_CARDS.length} mục, ${VARIANT_GROUPS.length} nhóm)**`,
+      ...variantGroupSummary().map((group) => `- *${group.group}* (${group.count}): ${group.items.join(", ")}`)
+    );
+  }
+
+  for (const card of matches) {
+    parts.push(variantAnswer(card));
+  }
+
+  if (variant) {
+    const comparison = compareHouseSystems(input.chart);
+    const frames = compareZodiacFrames(input.chart);
+    const moved = input.chart.planets
+      .map((planet) => {
+        const houses = comparison.map((entry) => entry.houses[planet.key]).filter((house) => house !== undefined);
+        const unique = [...new Set(houses)];
+        return unique.length > 1 ? `${planet.label}: nhà ${unique.join(" / ")} tuỳ hệ` : "";
+      })
+      .filter(Boolean);
+
+    parts.push(
+      [
+        `**Bản đồ của bạn đang dùng biến thể nào**`,
+        `- Hệ nhà: ${variant.houseSystemLabel} — cung 1 tại ${displayAngle(variant.cusps[0])}.`,
+        variant.zodiacFrame === "tropical"
+          ? "- Hệ hoàng đạo: nhiệt đới (tropical). Bật hệ sidereal để xem theo Vệ Đà/ sao cố định."
+          : `- Hệ hoàng đạo: ${variant.zodiacFrame}, ayanamsa ${variant.ayanamsaValue.toFixed(4)}°; cung Mọc sidereal ${displayAngle(variant.sidereal.ascendant)}.`,
+        `- Hình dạng: ${variant.shape.label}. ${variant.shape.meaning}`,
+        variant.patterns.length
+          ? `- Hình mẫu góc chiếu: ${variant.patterns.map((pattern) => `${pattern.label} (${pattern.members.join(", ")})`).join("; ")}.`
+          : "- Hình mẫu góc chiếu: không có cấu hình lớn.",
+        `- Phái bản đồ: ${variant.hellenistic.sect === "day" ? "ban ngày" : "ban đêm"}; Lots tiêu biểu: ${variant.hellenistic.lots
+          .slice(0, 3)
+          .map((lot) => `${lot.vi} ${displayAngle(lot.longitude)} (nhà ${lot.house})`)
+          .join(", ")}.`,
+        `- Vệ Đà: Mặt Trăng ở ${variant.vedic.janmaRashi}, nakshatra ${variant.vedic.moonNakshatra} (pada ${variant.vedic.moonPada}); dasha ${variant.vedic.currentMahadasha}/${variant.vedic.currentAntardasha}.`,
+        `- Tứ Trụ: ${variant.chinese.bazi.pillars.map((pillar) => `${pillar.label} ${pillar.stemVi} ${pillar.branchVi}`).join(" · ")} — Nhật chủ ${variant.chinese.bazi.dayMaster.vi}.`,
+        `- Tử Vi (ước lượng): ${variant.chinese.ziwei.bureau.name}, Mệnh chủ ${variant.chinese.ziwei.lifeMaster}.`,
+        `- Maya: ${variant.chinese.mayan.tzolkin.full} · ${variant.chinese.mayan.haab.full}.`,
+        `- Human Design: ${variant.design.typeVi}, thẩm quyền ${variant.design.authority}, hồ sơ ${variant.design.profile}.`,
+        `- Hồi quy Mặt Trời năm nay: ${variant.derived.solarReturn.moment.toISOString().slice(0, 10)}; tiến triển/Solar arc: ${variant.derived.solarArc.arc.toFixed(2)}°.`
+      ].join("\n")
+    );
+
+    if (matches.some((card) => card.group === "Hệ nhà") || /bien the|he nha|house/.test(normalized)) {
+      parts.push(
+        [
+          `**Hành tinh đổi nhà thế nào giữa 12 hệ chia nhà**`,
+          ...(moved.length ? moved.map((line) => `- ${line}`) : ["- Bản đồ này ổn định: các hành tinh giữ nguyên nhà ở cả 12 hệ (thường gặp khi giờ sinh rõ ràng và vĩ độ thấp)."]),
+          `- Chi tiết từng hệ: ${comparison
+            .map((entry) => `${entry.label}: cung 1 ${displayAngle(entry.cusp1)}`)
+            .slice(0, 6)
+            .join(" | ")}…`
+        ].join("\n")
+      );
+    }
+
+    if (matches.some((card) => card.group === "Hệ hoàng đạo") || /ayanamsa|sidereal|tropical|ve da|hoang dao/.test(normalized)) {
+      parts.push(
+        [
+          `**Cung theo từng hệ hoàng đạo (Mặt Trời / Mặt Trăng / Cung Mọc)**`,
+          ...frames.map(
+            (frame) =>
+              `- ${frame.label} (ayanamsa ${frame.ayanamsa.toFixed(3)}°): ${frame.sun} / ${frame.moon} / ${frame.ascendant}`
+          )
+        ].join("\n")
+      );
+    }
+  } else {
+    parts.push("Bạn hãy lập bản đồ sao trước, sau đó tôi sẽ nói rõ biến thể nào đang áp dụng cho chính bản đồ của bạn.");
+  }
+
+  return parts.join("\n\n");
+};
+
 const sourceNote = (input: LocalAnswerInput) => {
   const { chart } = input;
   return (
@@ -313,6 +402,11 @@ export const answerLocally = (input: LocalAnswerInput): string => {
   sections.push(intro.join("\n\n"));
 
   const has = (intent: Intent) => intents.includes(intent);
+  const normalizedQuestion = normalizeVietnamese(input.question);
+
+  if (has("variant") || /bien the|he nha|ayanamsa|sidereal|jyotish|nakshatra|dasha|varga|panchang|tu tru|bazi|tu vi|maya|human design|chiron|lilith|tieu hanh tinh|hamburg|urani|midpoint|harmonic|draconic|nhat tam|hinh dang|grand trine|t-square|yod|stellium|synastry|composite|overlay|solar return|hoi quy|tien trien|solar arc|profection|firdaria|horary|electional|dignity|sect/.test(normalizedQuestion)) {
+    sections.push(variantSection(input, normalizedQuestion));
+  }
 
   if (has("overview") || has("personality")) {
     const mercury = chart.planets.find((planet) => planet.key === "mercury")!;
@@ -578,5 +672,11 @@ export const suggestionChips = [
   "Vận hạn 12 tháng tới theo transit?",
   "Sao cố định nào đang chiếu vào Mặt Trời của tôi?",
   "Tối nay tôi thấy được hành tinh nào trên bầu trời?",
-  "Nhà 7 của tôi nói gì về hôn nhân?"
+  "Nhà 7 của tôi nói gì về hôn nhân?",
+  "Có những biến thể bản đồ sao nào?",
+  "Vì sao cùng một hành tinh lại ở nhà khác nhau giữa các hệ nhà?",
+  "Lá số Vệ Đà của tôi nói gì?",
+  "Tứ Trụ và Tử Vi của tôi thế nào?",
+  "Human Design của tôi là kiểu người gì?",
+  "Điểm ảo Chiron, Lilith, tiểu hành tinh nghĩa là gì?"
 ];

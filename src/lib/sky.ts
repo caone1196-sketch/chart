@@ -3,6 +3,9 @@ import constellationSource from "@/data/constellations.json";
 import deepSkySource from "@/data/deepsky.json";
 import starSource from "@/data/stars.json";
 import { PLANETS, ZODIAC_SIGNS, getOffsetHours, getSignBreakdown, normalizeDegree, signedSeparation } from "@/lib/astro";
+import { julianDay } from "@/lib/mathx";
+
+export { julianDay };
 
 /* ------------------------------------------------------------------ catalog */
 
@@ -80,8 +83,6 @@ export const BRIGHT_NAMED_STARS = STARS.filter((star) => star.mag <= 3.1 && star
 
 const DEG = Math.PI / 180;
 const J2000 = 2451545.0;
-
-export const julianDay = (date: Date) => date.getTime() / 86400000 + 2440587.5;
 
 const precessionAngles = (date: Date) => {
   const T = (julianDay(date) - J2000) / 36525;

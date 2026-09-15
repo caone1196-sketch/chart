@@ -1,4 +1,9 @@
 import { Body, PairLongitude, SiderealTime, SunPosition } from "astronomy-engine";
+import { armcToMc, computeHouses, houseOfLongitude, type HouseSystemId } from "@/lib/houses";
+import { ayanamsa, type ZodiacFrameId } from "@/lib/zodiac";
+import { calcObliquity, normalizeDegree, signedSeparation } from "@/lib/mathx";
+
+export { calcObliquity, normalizeDegree, signedSeparation };
 
 export type PlanetPosition = {
   key: string;
@@ -51,6 +56,15 @@ export type ChartData = {
   aspects: Aspect[];
   elements: BalanceMap;
   modalities: ModalityMap;
+  /** Hệ thống chia nhà đang dùng. */
+  houseSystem: HouseSystemId;
+  /** Hệ hoàng đạo đang dùng (tropical hoặc sidereal). */
+  zodiacFrame: ZodiacFrameId;
+  /** Ayanamsa đã trừ (0 nếu dùng hệ nhiệt đới). */
+  ayanamsa: number;
+  /** Các điểm ảo cơ bản của hệ nhà đang dùng. */
+  vertex: number;
+  eastPoint: number;
 };
 
 export type BalanceMap = {
@@ -128,12 +142,6 @@ export const ASPECTS = [
   { type: "Opposition", label: "Đối đỉnh (180°)", angle: 180, orb: 8, color: "#f97316" }
 ];
 
-export const normalizeDegree = (value: number) => {
-  const normalized = value % 360;
-  return normalized < 0 ? normalized + 360 : normalized;
-};
-
-export const signedSeparation = (a: number, b: number) => ((b - a + 540) % 360) - 180;
 
 export const formatLocalDate = (date: Date) => {
   const y = date.getFullYear();
@@ -259,12 +267,6 @@ export const moonPhaseFromPair = (moonRelativeSun: number) => {
   return "Trăng lưỡi liềm cuối tháng";
 };
 
-export const calcObliquity = (date: Date) => {
-  const julianDay = date.getTime() / 86400000 + 2440587.5;
-  const T = (julianDay - 2451545) / 36525;
-  return 23 + 26 / 60 + 21.448 / 3600 - (46.815 * T + 0.00059 * T * T - 0.001813 * T * T * T) / 3600;
-};
-
 export const localSiderealDegrees = (date: Date, longitude: number) =>
   normalizeDegree(SiderealTime(date) * 15 + longitude);
 
@@ -278,7 +280,8 @@ export const calcAngles = (utcDate: Date, latitude: number, longitude: number) =
     (Math.atan2(Math.cos(lst), -(Math.sin(lst) * Math.cos(epsilon) + Math.tan(lat) * Math.sin(epsilon))) * 180) / Math.PI
   );
 
-  const midheaven = normalizeDegree((Math.atan2(Math.sin(lst) * Math.cos(epsilon), Math.cos(lst)) * 180) / Math.PI);
+  // MC là điểm trên hoàng đạo có xích kinh đúng bằng ARMC: tan(MC) = tan(ARMC) / cos ε (khớp Swiss Ephemeris).
+  const midheaven = armcToMc(lstDegrees, calcObliquity(utcDate));
 
   return {
     ascendant,
@@ -330,15 +333,26 @@ const elementBalanceOf = (longitudes: number[], ascendant: number): { elements: 
   return { elements, modalities };
 };
 
+export type ChartOptions = {
+  houseSystem?: HouseSystemId;
+  zodiacFrame?: ZodiacFrameId;
+};
+
 export const calculateChart = (
   utcDate: Date,
   latitude: number,
   longitude: number,
   locationLabel: string,
   timezoneId: string | null,
-  timezoneOffset: number
+  timezoneOffset: number,
+  options: ChartOptions = {}
 ): ChartData => {
+  const houseSystem = options.houseSystem ?? "wholeSign";
+  const zodiacFrame = options.zodiacFrame ?? "tropical";
   const angles = calcAngles(utcDate, latitude, longitude);
+  const houseSet = computeHouses(houseSystem, angles.localSiderealDegrees, latitude, calcObliquity(utcDate));
+  const cusps = houseSet.cusps;
+  const ayan = zodiacFrame === "tropical" ? 0 : ayanamsa(zodiacFrame, utcDate);
   const nextDate = new Date(utcDate.getTime() + 24 * 60 * 60 * 1000);
   const current = new Map(computePlanetLongitudes(utcDate).map((item) => [item.key, item.longitude]));
   const next = new Map(computePlanetLongitudes(nextDate).map((item) => [item.key, item.longitude]));
@@ -347,15 +361,14 @@ export const calculateChart = (
     const longitudeNow = current.get(planet.key) ?? 0;
     const longitudeNext = next.get(planet.key) ?? longitudeNow;
     const step = signedSeparation(longitudeNow, longitudeNext);
-    const signIndex = getSignBreakdown(longitudeNow).signIndex;
-    const ascSignIndex = getSignBreakdown(angles.ascendant).signIndex;
+    const shown = normalizeDegree(longitudeNow - ayan);
 
     return {
       ...planet,
-      longitude: longitudeNow,
+      longitude: shown,
       retrograde: step < 0,
       speed: step,
-      house: ((signIndex - ascSignIndex + 12) % 12) + 1
+      house: houseOfLongitude(longitudeNow, cusps)
     };
   });
 
@@ -399,6 +412,12 @@ export const calculateChart = (
     angles.ascendant
   );
 
+  const houses: House[] = cusps.map((cusp, index) => ({
+    house: index + 1,
+    cusp: normalizeDegree(cusp - ayan),
+    signName: ZODIAC_SIGNS[Math.floor(normalizeDegree(cusp - ayan) / 30)].name
+  }));
+
   return {
     utcDate,
     timezoneId,
@@ -408,15 +427,20 @@ export const calculateChart = (
     longitude,
     moonPhase: moonPhaseFromPair(moonPhaseAngle),
     moonPhaseAngle,
-    ascendant: angles.ascendant,
-    descendant: angles.descendant,
-    midheaven: angles.midheaven,
-    imumCoeli: angles.imumCoeli,
-    houses: buildWholeSignHouses(angles.ascendant),
+    ascendant: normalizeDegree(angles.ascendant - ayan),
+    descendant: normalizeDegree(angles.descendant - ayan),
+    midheaven: normalizeDegree(angles.midheaven - ayan),
+    imumCoeli: normalizeDegree(angles.imumCoeli - ayan),
+    houses,
     planets,
     aspects: aspects.sort((a, b) => a.orb - b.orb),
     elements,
-    modalities
+    modalities,
+    houseSystem,
+    zodiacFrame,
+    ayanamsa: ayan,
+    vertex: normalizeDegree(houseSet.vertex - ayan),
+    eastPoint: normalizeDegree(houseSet.eastPoint - ayan)
   };
 };
 

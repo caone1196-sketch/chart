@@ -9,6 +9,7 @@ export type BirthFormValues = {
   latitude: string;
   longitude: string;
   timeZoneId: string;
+  gender: "nam" | "nữ";
 };
 
 const fieldClass =
@@ -196,6 +197,14 @@ export default function BirthForm({
           required
         />
         <p className="text-xs text-slate-400">Chỉ dùng khi không có Timezone IANA hợp lệ.</p>
+      </label>
+
+      <label className="space-y-2">
+        <span className={labelClass}>Giới tính (dùng cho Tứ Trụ / Đại vận)</span>
+        <select value={values.gender} onChange={(event) => update("gender", event.target.value as BirthFormValues["gender"])} className={fieldClass}>
+          <option value="nam">Nam</option>
+          <option value="nữ">Nữ</option>
+        </select>
       </label>
 
       <div className="md:col-span-2">

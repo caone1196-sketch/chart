@@ -1,6 +1,5 @@
 import { Body, PairLongitude, SunPosition } from "astronomy-engine";
-import { calcObliquity, normalizeDegree, signedSeparation } from "@/lib/astro";
-import { julianDay } from "@/lib/sky";
+import { calcObliquity, julianDay, normalizeDegree, signedSeparation } from "@/lib/mathx";
 
 /* --------------------------------------------------------------- toán ma trận */
 

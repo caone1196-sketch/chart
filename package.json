@@ -12,8 +12,9 @@
     "data": "node scripts/build-data.mjs",
     "test:houses": "esbuild tests/houses.check.ts --bundle --platform=node --format=esm --outfile=.cache/houses.check.mjs --log-level=error && node .cache/houses.check.mjs",
     "test:ayanamsa": "esbuild tests/ayanamsa.check.ts --bundle --platform=node --format=esm --outfile=.cache/ayanamsa.check.mjs --log-level=error && node .cache/ayanamsa.check.mjs",
-    "test": "npm run test:houses && npm run test:ayanamsa && npm run test:points",
-    "test:points": "esbuild tests/points.check.ts --bundle --platform=node --format=esm --outfile=.cache/points.check.mjs --log-level=error && node .cache/points.check.mjs"
+    "test": "npm run test:houses && npm run test:ayanamsa && npm run test:points && npm run test:variants",
+    "test:points": "esbuild tests/points.check.ts --bundle --platform=node --format=esm --outfile=.cache/points.check.mjs --log-level=error && node .cache/points.check.mjs",
+    "test:variants": "esbuild tests/variants.check.ts --bundle --platform=node --format=esm --outfile=.cache/variants.check.mjs --log-level=error && node .cache/variants.check.mjs"
   },
   "dependencies": {
     "astronomy-engine": "^2.1.19",
