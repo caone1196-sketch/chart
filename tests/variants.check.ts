@@ -6,7 +6,8 @@ import { calculateChart } from "../src/lib/astro.ts";
 import { buildVariantChart, compareHouseSystems, compareZodiacFrames, variantReport } from "../src/lib/chart-variants.ts";
 import { answerLocally } from "../src/lib/interpret.ts";
 import { computeSkySnapshot, findFixedStarHits, riseSetForDay } from "../src/lib/sky.ts";
-import { HOUSE_SYSTEMS } from "../src/lib/houses.ts";
+import { HOUSE_SYSTEMS, computeHouses } from "../src/lib/houses.ts";
+import { calcObliquity, localSiderealDegrees } from "../src/lib/astro.ts";
 import type { ZodiacFrameId } from "../src/lib/zodiac.ts";
 
 const problems: string[] = [];
@@ -25,6 +26,7 @@ const utcDate = new Date(Date.UTC(1995, 2, 8, 7, 30));
 const latitude = 21.0285;
 const longitude = 105.8542;
 const localDate = new Date(utcDate.getTime() + 7 * 3600 * 1000);
+const localSidereal = (date: Date, longitude: number) => localSiderealDegrees(date, longitude);
 
 for (const frame of ["tropical", "lahiri", "faganBradley", "raman", "krishnamurti", "deLuce", "galactic"] as ZodiacFrameId[]) {
   const chart = calculateChart(utcDate, latitude, longitude, "Hà Nội", "Asia/Ho_Chi_Minh", 7, {
@@ -155,6 +157,27 @@ for (const frame of ["tropical", "lahiri", "faganBradley", "raman", "krishnamurt
     check(variant.houseSystemLabel.length > 0, `${system.id}: thiếu nhãn hệ nhà`);
     check(variant.cusps.length === 12, `${system.id}: phải có 12 cusp`);
   }
+}
+
+// --- MC của calcAngles phải khớp công thức SE (tan MC = tan ARMC / cos ε)
+{
+  let worst = 0;
+  let worstAt = "";
+  for (let year = 1900; year <= 2100; year += 25) {
+    for (const lat of [-45, -10, 0, 21, 35, 60]) {
+      for (const hour of [0, 6, 12, 18]) {
+        const date = new Date(Date.UTC(year, 4, 10, hour));
+        const chartAt = calculateChart(date, lat, 105, "test", null, 7, { houseSystem: "placidus", zodiacFrame: "tropical" });
+        const set = computeHouses("placidus", localSidereal(date, 105), lat, calcObliquity(date));
+        const diff = angDiff(chartAt.midheaven, set.midheaven);
+        if (diff > worst) {
+          worst = diff;
+          worstAt = `${year}-05-10T${hour}Z lat ${lat}`;
+        }
+      }
+    }
+  }
+  check(worst < 1e-6, `MC của calcAngles lệch công thức Swiss Ephemeris ${worst.toFixed(6)}° (${worstAt})`);
 }
 
 // --- bộ trả lời nội bộ cho câu hỏi biến thể
