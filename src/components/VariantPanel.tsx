@@ -407,9 +407,10 @@ export default function VariantPanel({
             </div>
           </div>
           <div className={card}>
-            <h3 className="text-lg font-semibold">Tử Vi Đẩu Số (ước lượng)</h3>
+            <h3 className="text-lg font-semibold">Tử Vi Đẩu Số</h3>
             <p className="mt-2 text-sm text-slate-300">
-              {variant.chinese.ziwei.bureau.name} · Mệnh chủ {variant.chinese.ziwei.lifeMaster} · Thân chủ {variant.chinese.ziwei.bodyMaster}
+              Ngày {variant.chinese.ziwei.lunarDay} tháng {variant.chinese.ziwei.lunarMonth} âm lịch · {variant.chinese.ziwei.bureau.name} · Mệnh chủ{" "}
+              {variant.chinese.ziwei.lifeMaster} · Thân chủ {variant.chinese.ziwei.bodyMaster}
             </p>
             <p className="mt-1 text-xs text-slate-400">{variant.chinese.ziwei.note}</p>
             <div className="mt-3 grid grid-cols-2 gap-2">

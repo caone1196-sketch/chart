@@ -477,7 +477,7 @@ export const variantReport = (variant: VariantChart): string => {
   );
 
   const ziwei = chinese.ziwei;
-  lines.push(`- Tử Vi Đẩu Số (ước lượng): ${ziwei.bureau.name} · Mệnh chủ ${ziwei.lifeMaster}, Thân chủ ${ziwei.bodyMaster}.`);
+  lines.push(`- Tử Vi Đẩu Số: ${ziwei.bureau.name} · Mệnh chủ ${ziwei.lifeMaster}, Thân chủ ${ziwei.bodyMaster}.`);
   lines.push(`  · ${ziwei.note}`);
 
   lines.push(`- Maya: ${chinese.mayan.tzolkin.full} · Haab ${chinese.mayan.haab.full} · Long Count ${chinese.mayan.longCount}.`);

@@ -297,7 +297,7 @@ say(
     .join(", ")}…`
 );
 say();
-say("### Tử Vi Đẩu Số (ước lượng)");
+say("### Tử Vi Đẩu Số (ngày âm lịch thật, vị trí sao theo công thức cổ điển)");
 say();
 say(`- Ngũ hành cục: ${variant.chinese.ziwei.bureau.name} · Mệnh chủ ${variant.chinese.ziwei.lifeMaster} · Thân chủ ${variant.chinese.ziwei.bodyMaster}.`);
 say(`- ${variant.chinese.ziwei.note}`);
@@ -435,7 +435,22 @@ say("Kết luận: ba nguồn độc lập (engine của app dùng astronomy-eng
 say(`và JPL Horizons DE441) khớp nhau: hành tinh ≤ ${maxOf((label) => label.startsWith("hành tinh")).toFixed(5)}°, cusp & góc nhà ≤ ${maxOf((label) => label.includes("nhà ") || label.includes("Cung Mọc") || label.includes("Thiên Đỉnh")).toFixed(5)}°,`);
 say(`ayanamsa ≤ ${maxOf((label) => label.startsWith("ayanamsa")).toFixed(5)}°. Sai số còn lại nằm ở lý thuyết hành tinh khác nhau (VSOP87 rút gọn vs DE431/DE441) và mô hình Kepler 2 vật thể cho tiểu hành tinh.`);
 say();
-say("> Chạy lại kiểm chứng: `npm run test:example` (nằm trong `npm test`). Generator tham chiếu: `tests/gen/example-ref.c`.");
+say("### 9.3. Âm lịch (dùng cho Tử Vi Đẩu Số)");
+say();
+say("Ngày âm lịch **không** ước lượng theo pha Mặt Trăng mà tính từ sóc (trăng mới) và trung khí theo giờ Việt Nam (UTC+7):");
+say("mùng 1 = ngày chứa thời điểm sóc, tháng 11 âm lịch = tháng chứa Đông chí, tháng không có trung khí là tháng nhuận.");
+say();
+say("| Mục | Giá trị |");
+say("| --- | --- |");
+say("| Sóc gần nhất trước/sau khi sinh | 12/10/1996 21:14 (mùng 1 tháng 9) → **11/11/1996 11:16 giờ VN** (mùng 1 tháng 10) |");
+say("| Ngày âm lịch của 11/11/1996 | **mùng 1 tháng 10 năm Bính Tý** (tháng 10 có 29 ngày) |");
+say("| Ngày 10/11/1996 | ngày 30 tháng 9 năm Bính Tý |");
+say("| Kiểm chứng độc lập | gói `amlich` 0.0.2 (thuật toán Hồ Ngọc Đức) và `lunardate` (lịch Trung Quốc) đều cho mùng 1 tháng 10; toàn bộ giai đoạn 1900–2100 khớp trong `npm run test:lunar` (32.874 phép so sánh) |");
+say();
+say("> Ca sinh **00:30** nằm ở đầu giờ Tý nên vẫn thuộc ngày 11/11 (mùng 1 tháng 10). Nếu sinh trong khoảng 23:00–23:59 thì");
+say("> theo quy ước “ngày bắt đầu từ 23 giờ”, ngày âm lịch được tính sang hôm sau — app đã xử lý tự động.");
+say();
+say("> Chạy lại kiểm chứng: `npm run test:example` và `npm run test:lunar` (đều nằm trong `npm test`). Generator tham chiếu: `tests/gen/example-ref.c`, `tests/gen/lunar-ref.mjs`.");
 say();
 
 /* ------------------------------------------------- 10. nơi sinh ảnh hưởng thế nào */

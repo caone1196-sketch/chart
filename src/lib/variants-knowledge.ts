@@ -532,12 +532,13 @@ export const VARIANT_CARDS: VariantCard[] = [
     id: "chinese-ziwei",
     group: "Trung Hoa & Maya",
     name: "Tử Vi Đẩu Số (紫微斗數)",
-    short: "12 cung với 14 chính tinh — lá số dựng theo năm-tháng-ngày-giờ âm lịch.",
+    short: "12 cung với 14 chính tinh — lá số dựng theo năm-tháng-ngày-giờ âm lịch (âm lịch tính từ sóc + trung khí).",
     origin: "Truyền thống Trung Hoa (thời Tống - Minh), phổ biến ở Việt Nam và Đài Loan.",
     method: "Từ năm âm lịch, tháng âm lịch và giờ sinh xác định Can-Cung Mệnh, Ngũ Hành Cục (Thủy nhị, Mộc tam, Kim tứ, Thổ ngũ, Hỏa lục), rồi xếp 14 chính tinh + phụ tinh.",
     reading: "Cung Mệnh (bản chất), Thân (hành động), Quan Lộc (sự nghiệp), Tài Bạch (tiền tài), Phu Thê (hôn nhân)…; mỗi cung có các sao chiếu vào tạo tính chất.",
     bestFor: "Luận về từng chủ đề của cuộc đời theo 12 cung, và vận hạn theo Đại Hạn/Tiểu Hạn.",
-    caution: "Có nhiều phái khác nhau về xử lý tháng nhuận và Tiết khí; kết quả từ công thức ước lượng cần đối chiếu phần mềm chuyên dụng.",
+    caution:
+      "Ngày và tháng âm lịch được tính từ sóc (trăng mới) và trung khí theo giờ Việt Nam (UTC+7) — không còn ước lượng theo pha Mặt Trăng. Vị trí sao dùng công thức cổ điển; các phái khác nhau ở cách đặt tháng nhuận nên vẫn nên đối chiếu phần mềm chuyên dụng.",
     keywords: ["tu vi", "ziwei", "dau so", "12 cung", "chinh tinh"]
   },
   {

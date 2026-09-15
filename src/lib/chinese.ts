@@ -8,6 +8,7 @@
 import { SunPosition } from "astronomy-engine";
 import { normalizeDegree } from "@/lib/astro";
 import { julianDay } from "@/lib/sky";
+import { ZI_HOUR_START, lunarForBirth } from "@/lib/lunar";
 
 export const STEMS = ["Giáp", "Ất", "Bính", "Đinh", "Mậu", "Kỷ", "Canh", "Tân", "Nhâm", "Quý"];
 export const STEMS_HAN = ["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸"];
@@ -168,8 +169,10 @@ export const buildBazi = (
   const monthBranch = (2 + monthIndex) % 12;
   const monthStem = ((yearStem % 5) * 2 + 2 + monthIndex) % 10;
 
-  // Trụ ngày: theo JDN + 49 (kiểm chứng: 1900-01-01 = Giáp Tuất, 2000-01-01 = Mậu Ngọ)
-  const jdn = Math.floor(julianDay(new Date(Date.UTC(localDate.getFullYear(), localDate.getMonth(), localDate.getDate(), 12))) + 0.5);
+  // Trụ ngày: theo JDN + 49 (kiểm chứng: 1900-01-01 = Giáp Tuất, 2000-01-01 = Mậu Ngọ).
+  // Ngày can chi đổi lúc 23 giờ (giờ Tý), nên ca sinh 23:00–23:59 thuộc trụ ngày hôm sau.
+  const dayCarry = localHour >= ZI_HOUR_START ? 1 : 0;
+  const jdn = Math.floor(julianDay(new Date(Date.UTC(localDate.getFullYear(), localDate.getMonth(), localDate.getDate() + dayCarry, 12))) + 0.5);
   const dayIndex = ((jdn + 49) % 60 + 60) % 60;
   const dayStem = dayIndex % 10;
   const dayBranch = dayIndex % 12;
@@ -390,22 +393,6 @@ export type ZiweiChart = {
   note: string;
 };
 
-/** Ước lượng ngày âm lịch từ thời điểm (dựa trên pha Mặt Trăng). */
-const lunarDayEstimate = (moonLongitude: number, sunLongitude: number) => {
-  const elongation = normalizeDegree(moonLongitude - sunLongitude);
-  // Ngày âm lịch: mồng 1 khi trăng mới; cộng thêm 1 vì ngày trăng mới là mồng 1
-  const day = Math.floor(elongation / 12) + 1;
-  return day > 30 ? 30 : day;
-};
-
-const lunarMonthEstimate = (utcDate: Date, sunLongitude: number) => {
-  // Tháng âm lịch gần đúng: tháng 11 âm lịch chứa Đông chí (kinh độ Mặt Trời 270°)
-  const monthsSinceSolstice = Math.floor(normalizeDegree(sunLongitude - 270) / 30);
-  const month = ((monthsSinceSolstice + 11 - 1) % 12) + 1;
-  void utcDate;
-  return month;
-};
-
 /** Tử Vi Đẩu Số: 12 cung, Mệnh/Thân, Ngũ Hành Cục và 14 chính tinh. */
 export const buildZiwei = (
   utcDate: Date,
@@ -416,9 +403,14 @@ export const buildZiwei = (
   yearStem: number,
   yearBranch: number
 ): ZiweiChart => {
-  void localDate;
-  const lunarDay = lunarDayEstimate(moonLongitude, sunLongitude);
-  const lunarMonth = lunarMonthEstimate(utcDate, sunLongitude);
+  void utcDate;
+  void sunLongitude;
+  void moonLongitude;
+  // Ngày âm lịch thật (sóc + trung khí), không ước lượng theo pha Mặt Trăng.
+  const birthDate = localDate ?? new Date();
+  const lunar = lunarForBirth(birthDate, localHour);
+  const lunarDay = lunar.day;
+  const lunarMonth = lunar.month;
 
   // Giờ sinh theo 12 canh (Tý = 23h-1h)
   const hourBranch = Math.floor((((localHour + 1) % 24) + 24) % 24 / 2) % 12;
@@ -462,6 +454,7 @@ export const buildZiwei = (
     };
   });
 
+  const lunarLabel = `${twoDigit(lunarDay)} tháng ${twoDigit(lunarMonth)}${lunar.leap ? " nhuận" : ""} âm lịch năm ${STEMS[yearStem]} ${BRANCHES[yearBranch]}`;
   return {
     lunarMonth,
     lunarDay,
@@ -471,7 +464,9 @@ export const buildZiwei = (
     bodyMaster: BODY_MASTERS[yearBranch] ?? "—",
     bureau,
     palaces,
-    note: `Ngày ${twoDigit(lunarDay)} tháng ${twoDigit(lunarMonth)} âm lịch (ước lượng từ pha Mặt Trăng), giờ ${BRANCHES[hourBranch]}. Vị trí Tử Vi tính theo công thức cổ điển — nên đối chiếu với phần mềm Tử Vi chuyên dụng vì có nhiều trường phái chia tháng nhuận.`
+    note: `Ngày ${lunarLabel}, giờ ${BRANCHES[hourBranch]}. Ngày âm lịch tính từ sóc và trung khí (mùng 1 = ngày chứa trăng mới, tháng 11 = tháng chứa Đông chí).${
+      lunar.shiftedToNextDay ? " Ca sinh từ 23 giờ được tính sang ngày hôm sau (giờ Tý bắt đầu từ 23 giờ)." : ""
+    } Vị trí Tử Vi tính theo công thức cổ điển — nên đối chiếu với phần mềm Tử Vi chuyên dụng vì có nhiều trường phái đặt tháng nhuận.`
   };
 };
 

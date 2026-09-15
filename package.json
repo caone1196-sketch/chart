@@ -12,11 +12,13 @@
     "data": "node scripts/build-data.mjs",
     "test:houses": "esbuild tests/houses.check.ts --bundle --platform=node --format=esm --outfile=.cache/houses.check.mjs --log-level=error && node .cache/houses.check.mjs",
     "test:ayanamsa": "esbuild tests/ayanamsa.check.ts --bundle --platform=node --format=esm --outfile=.cache/ayanamsa.check.mjs --log-level=error && node .cache/ayanamsa.check.mjs",
-    "test": "npm run test:houses && npm run test:ayanamsa && npm run test:points && npm run test:variants && npm run test:example",
+    "test": "npm run test:houses && npm run test:ayanamsa && npm run test:lunar && npm run test:points && npm run test:variants && npm run test:example",
     "test:points": "esbuild tests/points.check.ts --bundle --platform=node --format=esm --outfile=.cache/points.check.mjs --log-level=error && node .cache/points.check.mjs",
     "test:variants": "esbuild tests/variants.check.ts --bundle --platform=node --format=esm --outfile=.cache/variants.check.mjs --log-level=error && node .cache/variants.check.mjs",
     "test:example": "esbuild tests/example.check.ts --bundle --platform=node --format=esm --outfile=.cache/example.check.mjs --log-level=error && node .cache/example.check.mjs",
-    "report:example": "esbuild scripts/example-1996-report.ts --bundle --platform=node --format=esm --outfile=.cache/report.mjs --alias:@=./src --log-level=error && node .cache/report.mjs"
+    "report:example": "esbuild scripts/example-1996-report.ts --bundle --platform=node --format=esm --outfile=.cache/report.mjs --alias:@=./src --log-level=error && node .cache/report.mjs",
+    "gen:lunar": "node tests/gen/lunar-ref.mjs",
+    "test:lunar": "esbuild tests/lunar.check.ts --bundle --platform=node --format=esm --outfile=.cache/lunar.check.mjs --log-level=error && node .cache/lunar.check.mjs"
   },
   "dependencies": {
     "astronomy-engine": "^2.1.19",
@@ -33,6 +35,7 @@
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "5.1.1",
+    "amlich": "^0.0.2",
     "tailwindcss": "4.1.17",
     "typescript": "5.9.3",
     "vite": "7.3.2",
