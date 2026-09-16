@@ -117,13 +117,14 @@ expect("health", healthWithMessyKey.key.hadWhitespace, true, "phát hiện kho�
 expect("health", healthWithMessyKey.key.length, KEY.length, "độ dài sau khi chuẩn hoá");
 
 /* ── 3. Chuỗi model & lỗi Google ──────────────────────────────────────── */
-expect("model", resolveModels({} as NodeJS.ProcessEnv)[0], "gemini-3.8-flash", "model mặc định");
+expect("model", resolveModels({} as NodeJS.ProcessEnv)[0], "gemini-3.6-flash", "model mặc định");
 expect(
   "model",
-  resolveModels({ GEMINI_MODEL: "gemini-2.5-flash" } as unknown as NodeJS.ProcessEnv)[0],
-  "gemini-2.5-flash",
-  "tôn trọng GEMINI_MODEL do người dùng đặt"
+  resolveModels({ GEMINI_MODEL: "gemini-9-flash" } as unknown as NodeJS.ProcessEnv)[0],
+  "gemini-9-flash",
+  "tôn trọng GEMINI_MODEL do người dùng đặt (giá trị tuỳ ý)"
 );
+expect("model", resolveModels({} as NodeJS.ProcessEnv).length, 1, "mặc định chỉ dùng đúng một model");
 ok();
 if (new Set(resolveModels({} as NodeJS.ProcessEnv)).size !== resolveModels({} as NodeJS.ProcessEnv).length) {
   fail("model", "chuỗi model bị trùng");
@@ -177,17 +178,16 @@ mockFetch([{ status: 200, body: geminiReply("Chào bạn, Mặt Trời Bọ Cạ
 const success = await callChat({ messages: [{ role: "user", content: "hỏi" }], chartReport: "dữ liệu" });
 expect("ai-chat", success.status, 200, "gọi thành công");
 expect("ai-chat", success.payload.reply, "Chào bạn, Mặt Trời Bọ Cạp.", "trả lại nội dung Gemini");
-expect("ai-chat", success.payload.model, "gemini-3.8-flash", "báo model đã dùng");
+expect("ai-chat", success.payload.model, "gemini-3.6-flash", "báo model đã dùng");
 
-// Model đầu tiên bị khai tử → tự rơi xuống model dự phòng.
+// Chỉ dùng một model duy nhất: model không tồn tại → báo lỗi rõ ràng, không thử model khác.
 mockFetch([
-  { status: 404, body: { error: { message: "models/gemini-3.8-flash is not found for API version v1beta" } } },
-  { status: 200, body: geminiReply("Trả lời từ model dự phòng") }
+  { status: 404, body: { error: { message: "models/gemini-3.6-flash is not found for API version v1beta" } } }
 ]);
-const fallbackModel = await callChat({ messages: [{ role: "user", content: "hỏi" }], chartReport: "dữ liệu" });
-expect("ai-chat", fallbackModel.status, 200, "đổi model khi model đầu không tồn tại");
-expect("ai-chat", fallbackModel.payload.model, "gemini-flash-latest", "dùng model dự phòng đầu tiên");
-expect("ai-chat", fallbackModel.payload.modelsTried.length, 2, "ghi lại các model đã thử");
+const missingModel = await callChat({ messages: [{ role: "user", content: "hỏi" }], chartReport: "dữ liệu" });
+expect("ai-chat", missingModel.status, 502, "model không tồn tại → 502");
+expect("ai-chat", missingModel.payload.code, "GEMINI_MODEL_NOT_FOUND", "mã lỗi GEMINI_MODEL_NOT_FOUND");
+expect("ai-chat", missingModel.payload.modelsTried, ["gemini-3.6-flash"], "chỉ thử đúng model đã cấu hình");
 
 // Khoá sai → báo đúng mã lỗi và KHÔNG thử thêm model (tránh nhân số lần gọi lỗi).
 const retryLog: string[] = [];
@@ -207,7 +207,7 @@ process.env.GEMINI_API_KEY = `  ${KEY}  `;
 const healthNoProbe = await callHealth();
 expect("health-route", healthNoProbe.status, 200, "health trả 200");
 expect("health-route", healthNoProbe.payload.llm, "gemini", "health thấy khoá");
-expect("health-route", healthNoProbe.payload.model, "gemini-3.8-flash", "health báo model");
+expect("health-route", healthNoProbe.payload.model, "gemini-3.6-flash", "health báo model");
 expect("health-route", healthNoProbe.payload.key.hadWhitespace, true, "health báo khoá có khoảng trắng thừa");
 
 const healthMethod = await healthHandler({ method: "POST", url: "/api/health" } as never, makeRes().res as never);
@@ -221,7 +221,6 @@ const probeOk = mockFetch([
     status: 200,
     body: {
       models: [
-        { name: "models/gemini-3.8-flash", supportedGenerationMethods: ["generateContent"] },
         { name: "models/gemini-3.6-flash", supportedGenerationMethods: ["generateContent"] },
         { name: "models/text-embedding-004", supportedGenerationMethods: ["embedContent"] }
       ]
@@ -230,16 +229,18 @@ const probeOk = mockFetch([
 ]);
 const healthProbe = await callHealth("/api/health?probe=1");
 expect("health-probe", healthProbe.payload.probe.ok, true, "probe thấy khoá dùng được");
-expect("health-probe", healthProbe.payload.probe.modelCount, 2, "đếm model gọi được generateContent");
+expect("health-probe", healthProbe.payload.probe.modelCount, 1, "đếm model gọi được generateContent");
 expect("health-probe", healthProbe.payload.probe.preferredModelAvailable, true, "model đang dùng có trong danh sách");
 expect("health-probe", probeOk.calls.length, 1, "probe chỉ gọi một lần");
 
+// Google trả về danh sách không có model đang dùng → probe gợi ý model khác có thật.
 const probeMissingModel = mockFetch([
-  { status: 200, body: { models: [{ name: "models/gemini-3.6-flash", supportedGenerationMethods: ["generateContent"] }] } }
+  { status: 200, body: { models: [{ name: "models/gemini-9-flash", supportedGenerationMethods: ["generateContent"] }] } }
 ]);
 const healthSuggestion = await callHealth("/api/health?probe=1");
-expect("health-probe", healthSuggestion.payload.probe.suggestedModel, "gemini-3.6-flash", "gợi ý model thay thế");
-expect("health-probe", healthSuggestion.payload.modelSuggestion, "gemini-3.6-flash", "đưa gợi ý lên payload");
+expect("health-probe", healthSuggestion.payload.probe.preferredModelAvailable, false, "báo model đang dùng không mở cho khoá");
+expect("health-probe", healthSuggestion.payload.probe.suggestedModel, "gemini-9-flash", "gợi ý model thay thế");
+expect("health-probe", healthSuggestion.payload.modelSuggestion, "gemini-9-flash", "đưa gợi ý lên payload");
 expect("health-probe", probeMissingModel.count(), 1, "gợi ý model chỉ sau một lần gọi");
 
 const probeBadKey = mockFetch([{ status: 400, body: { error: { message: "API key not valid. Please pass a valid API key." } } }]);

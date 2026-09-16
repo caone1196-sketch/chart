@@ -9,7 +9,7 @@
  *
  * Biến môi trường:
  *   GEMINI_API_KEY - bắt buộc để gọi mô hình Gemini (tạo miễn phí tại Google AI Studio)
- *   GEMINI_MODEL   - tuỳ chọn, mặc định "gemini-3.8-flash"
+ *   GEMINI_MODEL   - tuỳ chọn, mặc định "gemini-3.6-flash"
  *
  * Khi chưa có GEMINI_API_KEY, route trả về 501 kèm code "NO_API_KEY" để giao diện
  * tự động chuyển sang bộ luận giải nội bộ (chạy hoàn toàn trong trình duyệt).
@@ -19,11 +19,15 @@
 
 export const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta";
 
-/** Model mặc định: dòng Flash ổn định mới nhất tại thời điểm 09/2026. */
-export const DEFAULT_MODEL = "gemini-3.8-flash";
+/** Model duy nhất app sử dụng: Gemini 3.6 Flash. */
+export const DEFAULT_MODEL = "gemini-3.6-flash";
 
-/** Model dự phòng khi model đang dùng bị khai tử hoặc chưa mở cho project của khoá. */
-export const MODEL_FALLBACKS = ["gemini-flash-latest", "gemini-3.6-flash", "gemini-2.5-flash"];
+/**
+ * Không còn chuỗi model dự phòng: app chỉ gọi đúng một model (mặc định
+ * gemini-3.6-flash, hoặc GEMINI_MODEL nếu người dùng tự đặt). Mảng rỗng này
+ * được giữ lại để các hàm resolveModels / probeKey không phải đổi chữ ký.
+ */
+export const MODEL_FALLBACKS = [];
 
 const TIMEOUT_MS = 55000;
 const PROBE_TIMEOUT_MS = 12000;
@@ -206,7 +210,7 @@ export const explainGeminiError = ({ status = 0, data = {}, model = "", networkE
       code: "GEMINI_QUOTA",
       error: "Hết quota hoặc quá nhiều yêu cầu trong thời gian ngắn.",
       detail,
-      hint: "Chờ một lát rồi thử lại, hoặc đổi GEMINI_MODEL sang bản nhẹ hơn (ví dụ gemini-3.5-flash-lite)."
+      hint: "Chờ một lát rồi thử lại."
     };
   }
 
@@ -215,7 +219,7 @@ export const explainGeminiError = ({ status = 0, data = {}, model = "", networkE
       code: "GEMINI_MODEL_NOT_FOUND",
       error: `Model “${model}” không tồn tại hoặc chưa mở cho khoá này.`,
       detail,
-      hint: `Đặt GEMINI_MODEL=${DEFAULT_MODEL} hoặc gemini-flash-latest. Gọi /api/health?probe=1 để xem danh sách model khoá của bạn dùng được.`
+      hint: `App chỉ dùng model ${DEFAULT_MODEL}. Gọi /api/health?probe=1 để xem model này có mở cho khoá của bạn không.`
     };
   }
 
@@ -265,7 +269,7 @@ const callGemini = async ({ apiKey, model, contents, timeoutMs = TIMEOUT_MS }) =
   }
 };
 
-/** Gọi lần lượt các model trong chuỗi cho tới khi có câu trả lời. */
+/** Gọi model đã cấu hình (mặc định chỉ một model duy nhất: gemini-3.6-flash). */
 export const generateReply = async ({ apiKey, contents, models = resolveModels() }) => {
   const tried = [];
   let last = null;
@@ -282,7 +286,7 @@ export const generateReply = async ({ apiKey, contents, models = resolveModels()
           ok: false,
           model,
           tried: attempt,
-          failure: { code: "GEMINI_TIMEOUT", error: "Gemini phản hồi quá chậm (quá 55 giây).", hint: "Thử lại hoặc dùng model nhẹ hơn qua GEMINI_MODEL." }
+          failure: { code: "GEMINI_TIMEOUT", error: "Gemini phản hồi quá chậm (quá 55 giây).", hint: "Thử lại sau ít phút." }
         };
       }
       return { ok: false, model, tried: attempt, failure: explainGeminiError({ networkError: error, model }) };
@@ -296,7 +300,9 @@ export const generateReply = async ({ apiKey, contents, models = resolveModels()
     tried.push(model);
     last = { model, result };
 
-    // Chỉ đổi model khi lỗi thuộc về model; lỗi khoá/quota thì dừng ngay.
+    // Lỗi thuộc về model thì thử model kế tiếp trong chuỗi (mặc định chuỗi chỉ
+    // có một model nên vòng lặp kết thúc và trả lỗi bên dưới); lỗi khoá/quota
+    // thì dừng ngay.
     if (!isModelUnavailable(result.status, result.data) && result.status !== 404) {
       const emptyButOk = result.ok && !reply;
       const finishReason = result.data?.candidates?.[0]?.finishReason || "";
@@ -308,7 +314,7 @@ export const generateReply = async ({ apiKey, contents, models = resolveModels()
                 ? "Gemini trả lời nhưng bị cắt vì hết hạn mức token."
                 : "Gemini không trả về nội dung (có thể do bộ lọc an toàn).",
             detail: describeEmptyReply(result.data),
-            hint: "Thử hỏi lại ngắn gọn hơn, hoặc đổi GEMINI_MODEL."
+            hint: "Thử hỏi lại ngắn gọn hơn."
           }
         : explainGeminiError({ status: result.status, data: result.data, model });
       return { ok: false, model, tried, failure };

@@ -79,7 +79,7 @@ npm run shot:sky3d # render 16 tình huống 3D ra PNG trong .cache/shots/
 | Biến | Mặc định | Ý nghĩa |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | — | Bật lớp Gemini cho phần hỏi đáp (tạo miễn phí tại Google AI Studio) |
-| `GEMINI_MODEL` | `gemini-3.8-flash` | Tên mô hình Gemini (nếu model không mở, app tự thử `gemini-flash-latest`, `gemini-3.6-flash`, `gemini-2.5-flash`) |
+| `GEMINI_MODEL` | `gemini-3.6-flash` | Tên mô hình Gemini — app chỉ dùng đúng một model này (không còn chuỗi model dự phòng) |
 | `PORT` | `5173` | Cổng máy chủ dev/preview |
 
 Không có `GEMINI_API_KEY` thì app **vẫn hoạt động đầy đủ**: API trả mã `NO_API_KEY` và giao diện tự chuyển sang bộ luận giải nội bộ.
