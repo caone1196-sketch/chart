@@ -6,7 +6,7 @@ import { ZODIAC_FRAMES, type ZodiacFrameId } from "@/lib/zodiac";
 import { VARIANT_CARDS, VARIANT_GROUPS } from "@/lib/variants-knowledge";
 import { compareHouseSystems, compareZodiacFrames, type VariantChart } from "@/lib/chart-variants";
 
-const card = "rounded-2xl border border-slate-800 bg-slate-900/50 p-5";
+const card = "rounded-2xl border border-slate-800 bg-slate-900/50 p-4 sm:p-5";
 const sub = "text-xs uppercase tracking-wider text-slate-400";
 const row = "flex items-center justify-between gap-3 border-b border-slate-800/70 py-1.5 text-sm";
 
@@ -46,7 +46,7 @@ export default function VariantPanel({
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-semibold text-slate-100">Biến thể bản đồ sao</h2>
+          <h2 className="text-xl font-semibold text-slate-100 sm:text-2xl">Biến thể bản đồ sao</h2>
           <p className="text-sm text-slate-400">
             {variant.houseSystemLabel} ·{" "}
             {variant.zodiacFrame === "tropical"
@@ -54,11 +54,11 @@ export default function VariantPanel({
               : `${ZODIAC_FRAMES.find((frame) => frame.id === variant.zodiacFrame)?.label ?? variant.zodiacFrame} (ayanamsa ${variant.ayanamsaValue.toFixed(3)}°)`}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 text-xs">
+        <div className="grid w-full gap-2 text-xs sm:flex sm:w-auto sm:flex-wrap">
           <select
             value={variant.houseSystem}
             onChange={(event) => onHouseSystem(event.target.value as HouseSystemId)}
-            className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-200"
+            className="w-full min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-200 sm:w-auto"
           >
             {HOUSE_SYSTEMS.map((system) => (
               <option key={system.id} value={system.id}>
@@ -69,7 +69,7 @@ export default function VariantPanel({
           <select
             value={variant.zodiacFrame}
             onChange={(event) => onZodiacFrame(event.target.value as ZodiacFrameId)}
-            className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-200"
+            className="w-full min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-200 sm:w-auto"
           >
             {ZODIAC_FRAMES.map((frame) => (
               <option key={frame.id} value={frame.id}>
@@ -80,13 +80,13 @@ export default function VariantPanel({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible">
         {TABS.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => setTab(item.id)}
-            className={`rounded-full border px-3 py-1.5 text-xs transition ${
+            className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs transition ${
               tab === item.id
                 ? "border-sky-400/70 bg-sky-400/15 text-sky-200"
                 : "border-slate-700 bg-slate-900/60 text-slate-300 hover:border-slate-500"
@@ -99,13 +99,13 @@ export default function VariantPanel({
 
       {tab === "houses" && (
         <>
-        <div className={`${card} overflow-x-auto`}>
+        <div className={`${card} overflow-x-auto [-webkit-overflow-scrolling:touch]`}>
           <h3 className="text-lg font-semibold">So sánh 12 hệ chia nhà</h3>
           <p className="mt-1 text-xs text-slate-400">
             Ô đậm là nhà khác với hệ đang chọn ({variant.houseSystemLabel}). Đây là lý do cùng một hành tinh có thể được luận ở nhà 4 hoặc nhà 5
             tuỳ trường phái.
           </p>
-          <table className="mt-3 w-full min-w-[720px] border-collapse text-xs">
+          <table className="mt-3 w-full min-w-[680px] border-collapse text-[11px] sm:text-xs">
             <thead>
               <tr className="text-slate-400">
                 <th className="p-1.5 text-left">Hệ nhà</th>
@@ -384,7 +384,7 @@ export default function VariantPanel({
         <div className="grid gap-4 lg:grid-cols-2">
           <div className={card}>
             <h3 className="text-lg font-semibold">Tứ Trụ (BaZi)</h3>
-            <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+            <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
               {variant.chinese.bazi.pillars.map((pillar) => (
                 <div key={pillar.label} className="rounded-xl border border-slate-800 bg-slate-950/60 p-2">
                   <p className="text-xs text-slate-400">{pillar.label}</p>

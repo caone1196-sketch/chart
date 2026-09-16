@@ -415,7 +415,7 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
         tabIndex={0}
         onKeyDown={onKeyDown}
         aria-label="Khung ngắm bầu trời ba chiều: kéo để nhìn quanh, lăn chuột để phóng to thu nhỏ, phím mũi tên để xoay, phím cách để chạy thời gian"
-        className="relative h-[62vh] min-h-[420px] w-full overflow-hidden rounded-2xl border border-slate-800 bg-black outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+        className="relative aspect-[3/4] max-h-[78svh] min-h-[320px] w-full overflow-hidden rounded-2xl border border-slate-800 bg-black outline-none focus-visible:ring-2 focus-visible:ring-sky-500 sm:aspect-auto sm:h-[62vh] sm:min-h-[420px]"
       >
         <canvas
           ref={canvasRef}
@@ -428,7 +428,7 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
         />
 
         {/* HUD góc trái: hướng nhìn + trường nhìn */}
-        <div className="pointer-events-none absolute left-3 top-3 rounded-lg bg-slate-950/70 px-3 py-2 text-[11px] leading-5 text-slate-300 backdrop-blur">
+        <div className="pointer-events-none absolute left-2 top-2 max-w-[54%] rounded-lg bg-slate-950/70 px-2 py-1.5 text-[10px] leading-4 text-slate-300 backdrop-blur sm:left-3 sm:top-3 sm:max-w-none sm:px-3 sm:py-2 sm:text-[11px] sm:leading-5">
           <div>
             Hướng <span className="font-semibold text-sky-300">{nearestCompass(cameraHud.yaw)}</span> · {Math.round(((cameraHud.yaw % 360) + 360) % 360)}°
             · ngẩng {cameraHud.pitch.toFixed(0)}°
@@ -440,14 +440,14 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
         </div>
 
         {/* HUD góc phải: thời gian mô phỏng */}
-        <div className="pointer-events-none absolute right-3 top-3 rounded-lg bg-slate-950/70 px-3 py-2 text-right text-[11px] leading-5 text-slate-300 backdrop-blur">
+        <div className="pointer-events-none absolute right-2 top-2 max-w-[44%] rounded-lg bg-slate-950/70 px-2 py-1.5 text-right text-[10px] leading-4 text-slate-300 backdrop-blur sm:right-3 sm:top-3 sm:max-w-none sm:px-3 sm:py-2 sm:text-[11px] sm:leading-5">
           <div className="font-semibold text-slate-100">{simDate.toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" })}</div>
           <div className="text-slate-400">{live ? "theo giờ thực" : playing ? `tua ${speed >= 1 ? `${speed} phút/giây` : "thời gian thực"}` : "tạm dừng"}</div>
         </div>
 
         {/* Thẻ vật thể đang chọn */}
         {selected && selectionInfo ? (
-          <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/85 px-3 py-2 text-xs text-slate-200 backdrop-blur">
+          <div className="absolute inset-x-2 bottom-14 flex flex-wrap items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/85 px-3 py-2 text-xs text-slate-200 backdrop-blur sm:inset-x-auto sm:bottom-3 sm:left-3 sm:right-40">
             <span className="font-semibold text-amber-200">{selectionInfo.name}</span>
             <span className="text-slate-400">
               {selectionInfo.detail}
@@ -470,7 +470,7 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
 
         <button
           type="button"
-          className="chip absolute bottom-3 right-3 bg-slate-950/80"
+          className="chip absolute bottom-2 right-2 bg-slate-950/80 sm:bottom-3 sm:right-3"
           onClick={toggleFullscreen}
           title={fullscreen ? "Thoát toàn màn hình" : "Xem toàn màn hình"}
         >
@@ -479,7 +479,7 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
       </div>
 
       {/* --------------------------------------------------------- điều khiển */}
-      <div className="card flex flex-wrap items-center gap-x-3 gap-y-2 p-3 text-xs text-slate-300">
+      <div className="card flex flex-wrap items-center gap-x-2 gap-y-2 p-2.5 text-xs text-slate-300 sm:gap-x-3 sm:p-3">
         <span className="overline w-full sm:w-auto">Thời gian</span>
         <button
           type="button"
@@ -528,9 +528,9 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
             simRef.current = parsed.getTime();
             dirtyRef.current = true;
           }}
-          className="h-9 rounded-lg border border-slate-700 bg-slate-950 px-2 text-slate-200 outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 [color-scheme:dark]"
+          className="h-11 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-2 text-slate-200 outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 [color-scheme:dark] sm:h-9 sm:w-auto"
         />
-        <label className="flex items-center gap-2">
+        <label className="flex w-full items-center gap-2 sm:w-auto">
           Phóng to
           <input
             type="range"
@@ -542,14 +542,14 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
               const fov = Number(event.target.value);
               targetRef.current = clampCamera({ ...targetRef.current, fov });
             }}
-            className="w-28 accent-sky-400 md:w-36"
+            className="w-full min-w-24 flex-1 accent-sky-400 sm:w-28 sm:flex-none md:w-36"
           />
         </label>
       </div>
 
       <div className="card p-3">
         <p className="overline mb-2">Lớp hiển thị</p>
-        <div className="flex flex-wrap gap-2 text-xs text-slate-300">
+        <div className="flex flex-wrap gap-1.5 text-[11px] text-slate-300 sm:gap-2 sm:text-xs">
         {toggle("lines", "Chòm sao")}
         {toggle("constellationNames", "Tên chòm sao")}
         {toggle("starNames", "Tên sao")}

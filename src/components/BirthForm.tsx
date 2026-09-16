@@ -13,7 +13,7 @@ export type BirthFormValues = {
 };
 
 const fieldClass =
-  "w-full rounded-lg border border-slate-600/80 bg-slate-950/90 px-3 py-2.5 text-slate-100 outline-none ring-sky-300 transition placeholder:text-slate-500 focus:border-sky-300 focus:ring";
+  "w-full rounded-lg border border-slate-600/80 bg-slate-950/90 px-3 py-2.5 text-slate-100 outline-none ring-sky-300 transition placeholder:text-slate-500 focus:border-sky-300 focus:ring [color-scheme:dark]";
 const labelClass = "text-xs font-medium uppercase tracking-[0.08em] text-slate-300";
 
 export const CITY_PRESETS = [
@@ -53,11 +53,11 @@ export default function BirthForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="grid gap-5 rounded-2xl border border-slate-700/80 bg-slate-900/65 p-6 shadow-[0_20px_80px_-40px_rgba(56,189,248,0.35)] md:grid-cols-2 md:p-8"
+      className="grid gap-4 rounded-2xl border border-slate-700/80 bg-slate-900/65 p-4 shadow-[0_20px_80px_-40px_rgba(56,189,248,0.35)] sm:gap-5 sm:p-6 md:grid-cols-2 md:p-8"
     >
       <label className="space-y-2 md:col-span-2">
         <span className={labelClass}>Nơi sinh (tìm toạ độ tự động)</span>
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:gap-3">
           <input
             type="text"
             value={values.birthPlace}
@@ -70,7 +70,7 @@ export default function BirthForm({
             type="button"
             onClick={onResolvePlace}
             disabled={isGeocoding}
-            className="inline-flex shrink-0 items-center justify-center rounded-lg border border-sky-300/60 px-4 py-2.5 text-sm font-semibold text-sky-200 transition hover:border-sky-200 hover:text-sky-100 disabled:opacity-60"
+            className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg border border-sky-300/60 px-4 py-2.5 text-sm font-semibold text-sky-200 transition hover:border-sky-200 hover:text-sky-100 disabled:opacity-60"
           >
             {isGeocoding ? "Đang tìm…" : "Tìm toạ độ"}
           </button>
@@ -92,7 +92,7 @@ export default function BirthForm({
                 { timeout: 8000 }
               );
             }}
-            className="inline-flex shrink-0 items-center justify-center rounded-lg border border-slate-600 px-4 py-2.5 text-sm text-slate-200 transition hover:border-sky-300 hover:text-sky-100"
+            className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg border border-slate-600 px-4 py-2.5 text-sm text-slate-200 transition hover:border-sky-300 hover:text-sky-100"
           >
             Vị trí của tôi
           </button>
@@ -102,12 +102,12 @@ export default function BirthForm({
 
       <label className="space-y-2 md:col-span-2">
         <span className={labelClass}>Chọn nhanh thành phố</span>
-        <div className="flex flex-wrap gap-2">
+        <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible">
           {CITY_PRESETS.map((city, index) => (
             <button
               key={`${city.name}-${index}`}
               type="button"
-              className="chip"
+              className="chip shrink-0 whitespace-nowrap"
               onClick={() =>
                 setValues((previous) => ({
                   ...previous,
@@ -212,7 +212,7 @@ export default function BirthForm({
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           type="submit"
-          className="inline-flex rounded-lg bg-violet-400 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-violet-300"
+          className="inline-flex w-full items-center justify-center rounded-lg bg-violet-400 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-violet-300 sm:w-auto"
         >
           Tạo bản đồ sao
         </motion.button>
