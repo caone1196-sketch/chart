@@ -12,7 +12,7 @@
     "data": "node scripts/build-data.mjs",
     "test:houses": "esbuild tests/houses.check.ts --bundle --platform=node --format=esm --outfile=.cache/houses.check.mjs --log-level=error && node .cache/houses.check.mjs",
     "test:ayanamsa": "esbuild tests/ayanamsa.check.ts --bundle --platform=node --format=esm --outfile=.cache/ayanamsa.check.mjs --log-level=error && node .cache/ayanamsa.check.mjs",
-    "test": "npm run test:houses && npm run test:ayanamsa && npm run test:lunar && npm run test:points && npm run test:variants && npm run test:tuvi && npm run test:consistency && npm run test:sky && npm run test:ui && npm run test:example",
+    "test": "npm run test:houses && npm run test:ayanamsa && npm run test:lunar && npm run test:points && npm run test:variants && npm run test:tuvi && npm run test:consistency && npm run test:sky && npm run test:sky3d && npm run test:ui && npm run test:example",
     "test:points": "esbuild tests/points.check.ts --bundle --platform=node --format=esm --outfile=.cache/points.check.mjs --log-level=error && node .cache/points.check.mjs",
     "test:variants": "esbuild tests/variants.check.ts --bundle --platform=node --format=esm --outfile=.cache/variants.check.mjs --log-level=error && node .cache/variants.check.mjs",
     "test:example": "esbuild tests/example.check.ts --bundle --platform=node --format=esm --outfile=.cache/example.check.mjs --log-level=error && node .cache/example.check.mjs",
@@ -23,6 +23,8 @@
     "test:tuvi": "esbuild tests/tuvi.check.ts --bundle --platform=node --format=esm --outfile=.cache/tuvi.check.mjs --log-level=error && node .cache/tuvi.check.mjs",
     "test:consistency": "esbuild tests/consistency.check.ts --bundle --platform=node --format=esm --outfile=.cache/consistency.check.mjs --log-level=error && node .cache/consistency.check.mjs",
     "test:sky": "esbuild tests/sky.check.ts --bundle --platform=node --format=esm --external:@napi-rs/canvas --external:react --external:react-dom --outfile=.cache/sky.check.mjs --log-level=error && node .cache/sky.check.mjs",
+    "test:sky3d": "esbuild tests/sky3d.check.ts --bundle --platform=node --format=esm --external:@napi-rs/canvas --outfile=.cache/sky3d.check.mjs --log-level=error && node .cache/sky3d.check.mjs",
+    "shot:sky3d": "esbuild scripts/sky3d-shot.ts --bundle --platform=node --format=esm --external:@napi-rs/canvas --outfile=.cache/sky3d-shot.mjs --alias:@=./src --log-level=error && node .cache/sky3d-shot.mjs",
     "shot:sky": "esbuild scripts/skymap-shot.ts --bundle --platform=node --format=esm --external:@napi-rs/canvas --outfile=.cache/skymap-shot.mjs --alias:@=./src --log-level=error && node .cache/skymap-shot.mjs",
     "test:ui": "esbuild tests/ui-smoke-entry.tsx --bundle --platform=browser --format=iife --jsx=automatic --loader:.css=empty --define:process.env.NODE_ENV='\"development\"' --outfile=.cache/ui-smoke.js --alias:@=./src --log-level=error && node tests/ui-smoke.mjs"
   },

@@ -23,11 +23,18 @@ Web app tiếng Việt: **lập bản đồ sao (natal chart) → xem bản đ�
    - Bấm vào sao/hành tinh/thiên thể để xem toạ độ (cả J2000 và hệ của ngày), độ cao, phương vị, vị trí hoàng đạo, **đưa đối tượng vào giữa khung** và **hỏi AI về riêng đối tượng đó**.
    - Thẻ phụ: hành tinh đang thấy được, giờ mọc/lặn Mặt Trời - Mặt Trăng, hành tinh theo cung.
 
-3. **Hỏi AI**
+3. **Ngắm bầu trời 3D (khung nhìn phối cảnh)** — mục riêng, xem chi tiết trong `docs/ban-do-3d.md`
+   - Chiếu thiên cầu qua **ống kính phối cảnh thật** (pinhole trên canvas 2D): chân trời là đường thẳng, vòng độ cao cong đúng thấu kính, kéo để nhìn quanh, lăn chuột phóng to quanh con trỏ, toàn màn hình.
+   - **Mặt Trời/Mặt Trăng có bán kính góc thật** (≈0,26°) nên phóng to thì to ra như ống nhòm; Mặt Trăng đúng pha và đúng hướng sáng.
+   - **Mặt đất phối cảnh**: lưới khoảng cách 3→900 m hội tụ về chân trời (mắt cao 1,65 m), ba lớp núi mờ dần theo chiều sâu che khuất bầu trời thấp.
+   - **Khí quyển & ánh sáng**: màu trời theo độ cao Mặt Trời, ráng chiều, khúc xạ + hấp thụ gần chân trời, sao **nhấp nháy** mạnh dần khi xuống thấp.
+   - **Thời gian mượt**: sao quay liên tục bằng ma trận ΔLST (không dựng lại catalogue mỗi khung hình); tua nhanh để thấy **vệt sao** như ảnh phơi sáng; tốc độ từ thời gian thực tới 6 giờ/giây.
+
+4. **Hỏi AI**
    - Hai lớp: gọi mô hình ngôn ngữ lớn qua `/api/ai-chat` nếu máy chủ có `OPENAI_API_KEY`, nếu không thì dùng **bộ luận giải nội bộ** chạy hoàn toàn trên trình duyệt (đọc đúng vị trí hành tinh, nhà, góc chiếu, sao cố định, transit, pha Mặt Trăng, giờ mọc/lặn).
    - Nhận diện ý định câu hỏi (tính cách, sự nghiệp, tình cảm, tài chính, sức khỏe, gia đình, học tập, di chuyển, vận hạn, tương hợp, sao cố định, bầu trời, giải thích khái niệm…), trả lời có dẫn chứng dữ liệu và phần gợi ý hành động kèm khuyến cáo.
 
-4. **Biến thể bản đồ sao (mục 3b)**
+5. **Biến thể bản đồ sao (mục 3b)**
    - **Hệ nhà**: bảng 12 cusp cho từng hệ, so sánh 12 hệ cạnh nhau (ô sáng là nhà đổi so với hệ đang chọn), Vertex/East Point.
    - **Hệ hoàng đạo**: cung Mặt Trời - Mặt Trăng - Cung Mọc theo cả 7 hệ, ayanamsa hiển thị tới 4 chữ số thập phân.
    - **Điểm ảo**: 21 điểm (node, Lilith, tiểu hành tinh, TNO, hành tinh giả định) kèm ý nghĩa và nhà.
@@ -39,7 +46,7 @@ Web app tiếng Việt: **lập bản đồ sao (natal chart) → xem bản đ�
    - **Human Design**: 13 cổng Tính cách + 13 cổng Thiết kế, kênh, 9 trung tâm, kiểu người, thẩm quyền, hồ sơ, bóng tối/phần thưởng.
    - **Kiến thức biến thể**: 47 thẻ tra cứu theo 11 nhóm (Hệ nhà, Hệ hoàng đạo, Điểm & thiên thể, Hình mẫu, Cổ điển Hy Lạp, Dự báo, Quan hệ Synastry/Composite/Overlay, Vệ Đà, Trung Hoa & Maya, Hiện đại, Phái sinh) — mỗi thẻ có nguồn gốc, cách tính, cách đọc, dùng khi nào và lưu ý.
 
-5. **Hỏi đáp về biến thể**
+6. **Hỏi đáp về biến thể**
    - Bộ luận giải nội bộ nhận diện thêm nhóm ý định "biến thể bản đồ sao": hỏi theo tên biến thể (Placidus, ayanamsa, nakshatra, dasha, Tứ Trụ, Tử Vi, Human Design, Chiron, Grand Trine, synastry, tiến triển, hồi quy…) sẽ nhận giải thích kèm số liệu **của chính bản đồ bạn**: bảng nhà theo 12 hệ, cung theo 7 hệ hoàng đạo, dasha hiện tại, Tứ Trụ/Tử Vi, hình dạng bản đồ.
    - Báo cáo gửi mô hình ngôn ngữ lớn được mở rộng thêm toàn bộ phần biến thể, nên câu trả lời của LLM cũng dùng đúng dữ liệu này.
 
@@ -54,6 +61,7 @@ Các engine được kiểm chứng tự động với **Swiss Ephemeris** (`npm
 | Điểm ảo | 41 mốc 1900-2100 × 28 thiên thể | node trung bình 0,00015° · Lilith 0,115° · hành tinh giả định ≤ 0,007° · tiểu hành tinh 0,28-0,99° |
 | Lớp biến thể | 7 hệ hoàng đạo × 12 hệ nhà, dasha/varga/Tứ Trụ/Tử Vi/Maya/HD | kiểm tra tính nhất quán (cusp ↔ nhà, ayanamsa ↔ cung) |
 | Bản đồ sao (hiển thị) | 14.963 phép kiểm: khúc xạ/hấp thụ, phép chiếu & nghịch đảo, phóng to quanh con trỏ, **quy đổi lăn chuột & giới hạn dịch chuyển khung**, dựng khung 4 vĩ độ, Ngân Hà, pha Trăng, tra cứu | 0 lỗi (sai số nghịch đảo < 0,05°) |
+| Bầu trời 3D | 1.498 phép kiểm: hình học camera phối cảnh (chân trời thẳng, nghịch đảo < 1e-6 px), zoom quanh con trỏ nghiệm kín, quay ΔLST khớp khung dựng lại ≤ vài phần triệu độ, cắt mặt phẳng gần, lưới mặt đất, vệt sao; kèm **vẽ thật trên canvas** và so sánh điểm ảnh (tất định từng byte) | 0 lỗi |
 | Giao diện bản đồ sao | 1 lần chạy jsdom: gắn giao diện, vẽ ≈133.000 lời gọi, mô phỏng lăn (khẳng định `preventDefault` để trang không cuộn + zoom đúng hướng)/kéo/bấm sao/đổi chế độ/tra cứu/bàn phím | 0 ngoại lệ, 0 console.error |
 
 ## Chạy dự án
@@ -69,6 +77,8 @@ npm test           # toàn bộ kiểm chứng số liệu + bản đồ sao + g
 npm run test:sky   # mô hình hiển thị bầu trời (khúc xạ, phép chiếu, Ngân Hà, pha Trăng, tra cứu)
 npm run test:ui    # chạy giao diện bản đồ sao trong jsdom và mô phỏng thao tác
 npm run shot:sky   # render thử bản đồ ra PNG trong .cache/shots/ (cần @napi-rs/canvas)
+npm run test:sky3d # hình học + bộ vẽ của khung ngắm 3D (kèm vẽ thật trên canvas Node)
+npm run shot:sky3d # render 13 tình huống 3D ra PNG trong .cache/shots/
 ```
 
 ### Biến môi trường (tuỳ chọn)
@@ -101,11 +111,13 @@ src/
   lib/sky.ts         danh mục sao + toán thiên văn: precession J2000→ngày, alt/az, hoàng đạo, toạ độ thiên hà, sao cố định, mọc/lặn
   lib/sky-visual.ts  mô hình hiển thị: khí quyển (khúc xạ, hấp thụ, màu trời), cấp sao → quầng sáng, mây sao Ngân Hà, địa hình, pha Trăng, hai phép chiếu + nghịch đảo, danh mục tra cứu
   lib/sky-render.ts  bộ vẽ canvas cho cả hai chế độ: nền trời, Ngân Hà, lưới, chòm sao, thiên thể sâu, sao, hành tinh - Trăng - Trời, mặt đất - núi, nhãn chống chồng, danh sách vật thể bấm được
+  lib/sky3d.ts       toán 3D: vector ENU, camera pinhole + nghịch đảo, cắt mặt phẳng gần, zoom quanh con trỏ (nghiệm kín), ma trận quay ΔLST, lưới mặt đất, nhấp nháy & vệt sao
+  lib/sky3d-render.ts bộ vẽ phối cảnh: dải màu trời theo độ cao, sao/hành tinh kích thước góc thật, mặt đất + lưới khoảng cách + 3 lớp núi, vòng ngắm chọn
   lib/knowledge.ts   bảng tri thức tiếng Việt (hành tinh, cung, nhà, góc chiếu, nguyên tố, pha trăng, từ khoá ý định)
   lib/interpret.ts   bộ luận giải nội bộ (rule-based) theo ý định câu hỏi
   lib/ai.ts          gọi /api/ai-chat và cơ chế dự phòng
   lib/geocode.ts     tra toạ độ (Nominatim → Open-Meteo)
-  components/        BirthForm, ChartWheel, ChartPanel, VariantPanel, StarMap (canvas), ChatPanel
+  components/        BirthForm, ChartWheel, ChartPanel, VariantPanel, StarMap (canvas), Sky3D (khung ngắm phối cảnh), ChatPanel
   data/              stars.json, constellations.json, deepsky.json (sinh bởi scripts/build-data.mjs)
 api/
   _handler.js        xử lý dùng chung (Vercel Serverless + máy chủ dev)
