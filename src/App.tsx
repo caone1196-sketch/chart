@@ -5,7 +5,6 @@ import BirthForm, { type BirthFormValues } from "@/components/BirthForm";
 import ChartPanel from "@/components/ChartPanel";
 import ChartWheel from "@/components/ChartWheel";
 import ChatPanel from "@/components/ChatPanel";
-import StarMap from "@/components/StarMap";
 import Sky3D from "@/components/Sky3D";
 import VariantPanel from "@/components/VariantPanel";
 import { buildVariantChart, variantReport } from "@/lib/chart-variants";
@@ -99,7 +98,7 @@ export default function App() {
   const [status, setStatus] = useState("");
   const [engine, setEngine] = useState<ChatEngine | null>(null);
   const [engineLabel, setEngineLabel] = useState("");
-  const [serverLlm, setServerLlm] = useState<"checking" | "openai" | "local">("checking");
+  const [serverLlm, setServerLlm] = useState<"checking" | "gemini" | "local">("checking");
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -112,7 +111,7 @@ export default function App() {
     fetch("/api/health")
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("no health"))))
       .then((payload: { llm?: string }) => {
-        if (!cancelled) setServerLlm(payload.llm === "openai" ? "openai" : "local");
+        if (!cancelled) setServerLlm(payload.llm === "gemini" ? "gemini" : "local");
       })
       .catch(() => {
         if (!cancelled) setServerLlm("local");
@@ -314,7 +313,7 @@ export default function App() {
     });
 
     if ("reply" in result && result.reply) {
-      setEngine("openai");
+      setEngine("gemini");
       setEngineLabel(result.model || "mô hình lớn");
       setChatMessages((previous) => [...previous, { role: "assistant", content: result.reply }]);
     } else {
@@ -340,10 +339,7 @@ export default function App() {
               Lập bản đồ sao
             </a>
             <a href="#ban-do-sao" className="transition hover:text-sky-200">
-              Bầu trời thực tế
-            </a>
-            <a href="#ban-do-3d" className="transition hover:text-sky-200">
-              Ngắm trời 3D
+              Bản đồ sao 3D
             </a>
             <a href="#ket-qua" className="transition hover:text-sky-200">
               Kết quả natal
@@ -464,17 +460,18 @@ export default function App() {
       </section>
 
       <section id="ban-do-sao" className="mx-auto w-full max-w-7xl px-6 pb-16 md:px-10">
-        <h2 className="text-3xl font-semibold">2. Bản đồ sao thực tế &amp; bầu trời hôm nay</h2>
+        <h2 className="text-3xl font-semibold">2. Bản đồ sao 3D &amp; bầu trời hôm nay</h2>
         <p className="mt-3 max-w-3xl text-slate-300">
-          Đây là bầu trời thật tại vị trí của bạn: vị trí sao, chòm sao, hành tinh, Mặt Trăng và dải Ngân Hà được tính từ catalogue
-          Hipparcos và astronomy-engine. Bạn có thể chạy thời gian để xem bầu trời ở bất kỳ giờ nào.
+          Bầu trời thật tại vị trí của bạn — sao, chòm sao, hành tinh, Mặt Trăng, Ngân Hà tính từ catalogue Hipparcos và
+          astronomy-engine — chiếu qua ống kính phối cảnh 3D: chân trời thẳng, vòng độ cao cong, hành tinh là khối cầu có
+          pha thật, mặt đất có chiều sâu và ba lớp núi. Kéo để nhìn quanh, lăn chuột phóng to quanh con trỏ, tua thời gian
+          để thấy vòm trời xoay cùng lưới xích đạo và vệt sao cung tròn.
         </p>
         <div className="mt-8">
-          <StarMap
+          <Sky3D
             latitude={Number.isFinite(lat) ? lat : 21.0285}
             longitude={Number.isFinite(lon) ? lon : 105.8542}
             placeLabel={form.birthPlace || "Hà Nội, Việt Nam"}
-            chart={chart}
             onAskAbout={(value) => {
               void ask(value);
             }}
@@ -533,28 +530,8 @@ export default function App() {
         ) : null}
       </section>
 
-      <section id="ban-do-3d" className="mx-auto w-full max-w-7xl px-6 pb-16 md:px-10">
-        <h2 className="text-3xl font-semibold">3. Ngắm bầu trời 3D (khung nhìn phối cảnh)</h2>
-        <p className="mt-3 max-w-3xl text-slate-300">
-          Cùng dữ liệu thiên văn như bản 2D nhưng chiếu qua một ống kính phối cảnh thật: chân trời thẳng, vòng độ cao
-          cong đúng thấu kính, Mặt Trời và Mặt Trăng to dần khi phóng to như nhìn qua ống nhòm, mặt đất có lưới khoảng
-          cách và ba lớp núi mờ dần theo chiều sâu. Kéo để nhìn quanh, lăn chuột để phóng to quanh con trỏ, tua thời
-          gian để thấy bầu trời xoay và sao để lại vệt cung như ảnh phơi sáng.
-        </p>
-        <div className="mt-8">
-          <Sky3D
-            latitude={Number.isFinite(lat) ? lat : 21.0285}
-            longitude={Number.isFinite(lon) ? lon : 105.8542}
-            placeLabel={form.birthPlace || "Hà Nội, Việt Nam"}
-            onAskAbout={(value) => {
-              void ask(value);
-            }}
-          />
-        </div>
-      </section>
-
       <section id="ket-qua" className="mx-auto w-full max-w-7xl px-6 pb-16 md:px-10">
-        <h2 className="text-3xl font-semibold">4. Kết quả bản đồ sao natal</h2>
+        <h2 className="text-3xl font-semibold">3. Kết quả bản đồ sao natal</h2>
         <AnimatePresence mode="wait">
           {chart ? (
             <motion.div key="result" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.45 }}>
@@ -607,7 +584,7 @@ export default function App() {
 
       <section id="hoi-ai" className="mx-auto w-full max-w-7xl px-6 pb-24 md:px-10">
         <div className="border-t border-slate-800 pt-12">
-          <h2 className="text-3xl font-semibold">5. Đặt câu hỏi cho AI trả lời</h2>
+          <h2 className="text-3xl font-semibold">4. Đặt câu hỏi cho AI trả lời</h2>
           <p className="mt-3 max-w-3xl text-slate-300">
             Hỏi tự nhiên bằng tiếng Việt. Câu hỏi được gửi kèm toàn bộ dữ liệu bản đồ sao, transit hiện tại, sao cố định và tình trạng bầu
             trời tại nơi bạn ở. Nếu máy chủ chưa có <code className="text-sky-200">OPENAI_API_KEY</code>, hệ thống vẫn trả lời bằng bộ luận

@@ -63,7 +63,7 @@ export type ChatPanelProps = {
   status: string;
   engine: ChatEngine | null;
   engineLabel: string;
-  serverLlm: "checking" | "openai" | "local";
+  serverLlm: "checking" | "gemini" | "local";
   senderName: string;
   setSenderName: (value: string) => void;
   hasChart: boolean;
@@ -114,7 +114,7 @@ export default function ChatPanel({
         <div className="rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-3 text-xs text-slate-300">
           <p className="font-semibold text-slate-200">Trợ lý trả lời bằng 2 lớp</p>
           <p className="mt-1">
-            1. Nếu máy chủ có <code className="text-sky-200">OPENAI_API_KEY</code>, câu hỏi được gửi tới mô hình ngôn ngữ lớn kèm toàn bộ
+            1. Nếu máy chủ có <code className="text-sky-200">GEMINI_API_KEY</code>, câu hỏi được gửi tới Gemini kèm toàn bộ
             dữ liệu chart.
           </p>
           <p className="mt-1">
@@ -123,8 +123,8 @@ export default function ChatPanel({
           </p>
           <p className="mt-2 text-slate-400">
             Trạng thái máy chủ:{" "}
-            <span className={serverLlm === "openai" ? "text-emerald-300" : "text-amber-200"}>
-              {serverLlm === "checking" ? "đang kiểm tra…" : serverLlm === "openai" ? "đã cấu hình mô hình lớn" : "chưa có key — dùng bộ nội bộ"}
+            <span className={serverLlm === "gemini" ? "text-emerald-300" : "text-amber-200"}>
+              {serverLlm === "checking" ? "đang kiểm tra…" : serverLlm === "gemini" ? "Gemini đã sẵn sàng" : "chưa có key — dùng bộ nội bộ"}
             </span>
           </p>
         </div>
@@ -149,8 +149,8 @@ export default function ChatPanel({
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-lg font-semibold">Trò chuyện với AI luận giải</h3>
           {engine ? (
-            <span className={engine === "openai" ? "chip chip-active" : "chip"}>
-              {engine === "openai" ? `Mô hình: ${engineLabel}` : "Bộ luận giải nội bộ"}
+            <span className={engine === "gemini" ? "chip chip-active" : "chip"}>
+              {engine === "gemini" ? `Gemini: ${engineLabel}` : "Bộ luận giải nội bộ"}
             </span>
           ) : null}
         </div>

@@ -5,7 +5,7 @@ export type ChatTurn = {
   content: string;
 };
 
-export type ChatEngine = "openai" | "local";
+export type ChatEngine = "gemini" | "local";
 
 export type AskResult = {
   reply: string;
@@ -50,7 +50,7 @@ const postJson = async (url: string, body: unknown) => {
 };
 
 /**
- * Gọi mô hình ngôn ngữ lớn qua API route /api/ai-chat.
+ * Gọi Gemini qua API route /api/ai-chat.
  * Nếu máy chủ chưa cấu hình API key (hoặc lỗi mạng), trả về lỗi để lớp gọi
  * chuyển sang bộ luận giải nội bộ.
  */
@@ -62,7 +62,7 @@ export const askServerAi = async (payload: AskPayload): Promise<AskResult | { er
       return { error: data.error || `Máy chủ AI trả về mã ${status}.`, code: data.code || "SERVER_ERROR" };
     }
 
-    return { reply: data.reply, engine: "openai", model: data.model };
+    return { reply: data.reply, engine: "gemini", model: data.model };
   } catch (error) {
     const message =
       error instanceof Error && error.name === "AbortError"

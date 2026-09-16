@@ -1,6 +1,6 @@
 # Astral Chart VN
 
-Web app tiếng Việt: **lập bản đồ sao (natal chart) → xem bản đồ bầu trời thực tế → đặt câu hỏi cho AI trả lời**.
+Web app tiếng Việt: **lập bản đồ sao (natal chart) → ngắm bầu trời thật bằng khung nhìn 3D → đặt câu hỏi cho AI (Gemini) trả lời**.
 
 ## Tính năng
 
@@ -12,30 +12,21 @@ Web app tiếng Việt: **lập bản đồ sao (natal chart) → xem bản đ�
    - **Điểm ảo**: Bắc/Nam giao điểm (trung bình và thật), Lilith, Chiron, Ceres, Pallas, Juno, Vesta, Eris, Sedna, 8 hành tinh giả định Hamburg (Cupido…Poseidon), Isis-Transpluto, Selena.
    - Cân bằng nguyên tố - tính chất, pha Mặt Trăng lúc sinh, sao cố định nằm gần các điểm natal (orb 1.5°), transit hiện tại lên bản đồ (orb 4°).
 
-2. **Bản đồ sao thực tế (bầu trời)** — dựng lại theo hướng "trông như bầu trời thật" và "điều khiển dễ"
-   - 5.044 ngôi sao Hipparcos (tới cấp sao 6) với màu theo chỉ số B-V, 88 chòm sao có đường nối và **tên tiếng Việt**, 118 thiên thể sâu (Messier, NGC, Magellan, Tua Rua, Tổ Ong…), hoàng đạo 12 cung.
-   - **Khí quyển**: màu trời đổi theo độ cao Mặt Trời (đêm → chạng vạng → ngày), ráng chiều quanh phương vị Mặt Trời, khúc xạ khí quyển (Bennett 1982) nâng vật thể gần chân trời, hấp thụ làm mờ sao theo khối khí quyển (Kasten–Young 1989), ban ngày gần như không thấy sao.
-   - **Ngân Hà** vẽ bằng ~1.670 đám mây sao và hạt sao phân giải được, có trung tâm sáng (Nhân Mã), nhánh phình Thiên Nga và **rãnh tối (Great Rift)**.
-   - **Sao** có quầng sáng và tia nhiễu xạ theo cấp sao; **Mặt Trăng đúng pha** (hình dạng khuyết theo góc ly giác với Mặt Trời, quầng sáng theo độ được chiếu sáng).
-   - **Mặt đất & ba dải núi** che phần bầu trời dưới chân trời (đúng phương vị, có phối cảnh khí quyển), vòng chân trời 8 hướng, nhãn tự tránh chồng nhau theo thứ tự ưu tiên.
-   - Hai chế độ xem: bầu trời theo **độ cao - phương vị** (tâm là thiên đỉnh) và **toàn cảnh xích kinh - xích vĩ**.
-   - **Điều khiển**: lăn chuột/chụm hai ngón **phóng to ngay tại con trỏ mà trang không bị cuộn theo** (listener `wheel` non-passive, chặn cả Ctrl + lăn; tốc độ zoom chuẩn hoá cho chuột rời, bàn rê và Firefox), nháy đúp để phóng to nhanh, kéo để dịch (bản đồ: kéo ngang đổi xích kinh, kéo dọc đổi xích vĩ), thanh trượt mức phóng, nút **Căn lại**, các nút đi nhanh (Bắc/Đông/Nam/Tây/Thiên đỉnh · Dải Ngân Hà và 4 vùng xích kinh), **ô tra cứu** sao - chòm - thiên thể - hành tinh (gõ được cả tên tiếng Việt không dấu như "sao thien lang", "bac cuc", "m42"), **đọc toạ độ ngay dưới con trỏ**, phím ←→↑↓ +/−/0, chế độ **theo giờ thực** và chạy thời gian (±giờ/ngày, 1 giờ → 1 tuần mỗi nhịp).
-   - Bấm vào sao/hành tinh/thiên thể để xem toạ độ (cả J2000 và hệ của ngày), độ cao, phương vị, vị trí hoàng đạo, **đưa đối tượng vào giữa khung** và **hỏi AI về riêng đối tượng đó**.
+2. **Bản đồ sao 3D (bầu trời thật, khung nhìn phối cảnh)** — khung ngắm trời duy nhất của app (bản đồ 2D cũ đã được thay bằng bản 3D), chi tiết trong `docs/ban-do-3d.md`
+   - 5.044 sao Hipparcos (tới cấp 6) màu theo chỉ số B-V, 88 chòm sao có đường nối và **tên tiếng Việt**, 118 thiên thể sâu, hoàng đạo 12 cung, Ngân Hà ~1.670 đám mây sao kèm **rãnh tối Great Rift**.
+   - **Ống kính phối cảnh thật** (pinhole trên canvas 2D): chân trời thẳng, vòng độ cao cong đúng thấu kính, Mặt Trời/Mặt Trăng có bán kính góc thật nên phóng to thì to ra như ống nhòm; Mặt Trăng đúng pha, đúng hướng sáng.
+   - **Hành tinh là khối cầu chiếu sáng**: pha thật giải từ tam giác khoảng cách Trái Đất–Mặt Trời–hành tinh (Sao Thổ tròn đầy + vành đai trước/sau, Sao Kim lưỡi liềm khi cận địa), chi tiết bề mặt tất định, quầng ám màu riêng.
+   - **Khí quyển & địa hình**: màu trời theo độ cao Mặt Trời, ráng chiều, khúc xạ Bennett + hấp thụ Kasten–Young, sao nhấp nháy mạnh dần khi xuống thấp; mặt đất lưới khoảng cách 3→900 m và ba lớp núi theo chiều sâu; tắt khí quyển thì địa hình đổi bảng màu trung tính.
+   - **Tua giờ thấy vòm trời quay**: lưới xích đạo khoá vào khung sao + vệt sao thành cung tròn dài theo tốc độ (thời gian thực tới 6 giờ/giây); sao quay bằng ma trận ΔLST nên mượt 60 fps.
+   - **Điều khiển**: kéo nhìn quanh, lăn chuột/chụm phóng to **quanh con trỏ mà trang không cuộn**, nháy đúp đưa vật thể vào giữa, bấm vật thể → thẻ thông tin + **Hỏi AI về riêng nó**, ô tra cứu gõ được tiếng Việt không dấu, phím ←→↑↓ +/− và phím cách tua giờ, 13 nút bật/tắt lớp, toàn màn hình.
    - Thẻ phụ: hành tinh đang thấy được, giờ mọc/lặn Mặt Trời - Mặt Trăng, hành tinh theo cung.
 
-3. **Ngắm bầu trời 3D (khung nhìn phối cảnh)** — mục riêng, xem chi tiết trong `docs/ban-do-3d.md`
-   - Chiếu thiên cầu qua **ống kính phối cảnh thật** (pinhole trên canvas 2D): chân trời là đường thẳng, vòng độ cao cong đúng thấu kính, kéo để nhìn quanh, lăn chuột phóng to quanh con trỏ, toàn màn hình.
-   - **Mặt Trời/Mặt Trăng có bán kính góc thật** (≈0,26°) nên phóng to thì to ra như ống nhòm; Mặt Trăng đúng pha và đúng hướng sáng.
-   - **Mặt đất phối cảnh**: lưới khoảng cách 3→900 m hội tụ về chân trời (mắt cao 1,65 m), ba lớp núi mờ dần theo chiều sâu che khuất bầu trời thấp.
-   - **Khí quyển & ánh sáng**: màu trời theo độ cao Mặt Trời, ráng chiều, khúc xạ + hấp thụ gần chân trời, sao **nhấp nháy** mạnh dần khi xuống thấp.
-   - **Thời gian mượt**: sao quay liên tục bằng ma trận ΔLST (không dựng lại catalogue mỗi khung hình); tua nhanh để thấy **vệt sao** như ảnh phơi sáng; tốc độ từ thời gian thực tới 6 giờ/giây.
-   - **Hành tinh sống động**: đĩa có chi tiết (vân Sao Mộc + Vết Đỏ, vành đai Sao Thổ, chóp băng Sao Hỏa, xoáy mây Sao Kim…) kèm quầng màu riêng; tắt khí quyển thì địa hình đổi bảng màu trung tính để không hoá mặt phẳng trống.
+3. **Hỏi AI (Gemini)**
 
-4. **Hỏi AI**
-   - Hai lớp: gọi mô hình ngôn ngữ lớn qua `/api/ai-chat` nếu máy chủ có `OPENAI_API_KEY`, nếu không thì dùng **bộ luận giải nội bộ** chạy hoàn toàn trên trình duyệt (đọc đúng vị trí hành tinh, nhà, góc chiếu, sao cố định, transit, pha Mặt Trăng, giờ mọc/lặn).
+   - Hai lớp: gọi **Google Gemini** qua `/api/ai-chat` (Vercel Serverless hoặc máy chủ dev) nếu máy chủ có `GEMINI_API_KEY`, nếu không thì dùng **bộ luận giải nội bộ** chạy hoàn toàn trên trình duyệt (đọc đúng vị trí hành tinh, nhà, góc chiếu, sao cố định, transit, pha Mặt Trăng, giờ mọc/lặn). Khoá API chỉ nằm ở biến môi trường máy chủ, không bao giờ nhúng vào bundle.
    - Nhận diện ý định câu hỏi (tính cách, sự nghiệp, tình cảm, tài chính, sức khỏe, gia đình, học tập, di chuyển, vận hạn, tương hợp, sao cố định, bầu trời, giải thích khái niệm…), trả lời có dẫn chứng dữ liệu và phần gợi ý hành động kèm khuyến cáo.
 
-5. **Biến thể bản đồ sao (mục 3b)**
+4. **Biến thể bản đồ sao (mục 3b)**
    - **Hệ nhà**: bảng 12 cusp cho từng hệ, so sánh 12 hệ cạnh nhau (ô sáng là nhà đổi so với hệ đang chọn), Vertex/East Point.
    - **Hệ hoàng đạo**: cung Mặt Trời - Mặt Trăng - Cung Mọc theo cả 7 hệ, ayanamsa hiển thị tới 4 chữ số thập phân.
    - **Điểm ảo**: 21 điểm (node, Lilith, tiểu hành tinh, TNO, hành tinh giả định) kèm ý nghĩa và nhà.
@@ -61,9 +52,8 @@ Các engine được kiểm chứng tự động với **Swiss Ephemeris** (`npm
 | 7 hệ hoàng đạo / ayanamsa | 366 mốc 1800-2100 | Lahiri/Fagan-Bradley 0,0002° · Raman/KP 0,0004° · Ngân Hà 0,0059° |
 | Điểm ảo | 41 mốc 1900-2100 × 28 thiên thể | node trung bình 0,00015° · Lilith 0,115° · hành tinh giả định ≤ 0,007° · tiểu hành tinh 0,28-0,99° |
 | Lớp biến thể | 7 hệ hoàng đạo × 12 hệ nhà, dasha/varga/Tứ Trụ/Tử Vi/Maya/HD | kiểm tra tính nhất quán (cusp ↔ nhà, ayanamsa ↔ cung) |
-| Bản đồ sao (hiển thị) | 14.963 phép kiểm: khúc xạ/hấp thụ, phép chiếu & nghịch đảo, phóng to quanh con trỏ, **quy đổi lăn chuột & giới hạn dịch chuyển khung**, dựng khung 4 vĩ độ, Ngân Hà, pha Trăng, tra cứu | 0 lỗi (sai số nghịch đảo < 0,05°) |
+| Bản đồ sao (hiển thị) | 14.950 phép kiểm: khúc xạ/hấp thụ, phép chiếu & nghịch đảo, phóng to quanh con trỏ, **quy đổi lăn chuột & giới hạn dịch chuyển khung**, dựng khung 4 vĩ độ, Ngân Hà, pha Trăng, tra cứu | 0 lỗi (sai số nghịch đảo < 0,05°) |
 | Bầu trời 3D | 1.510 phép kiểm: hình học camera phối cảnh (chân trời thẳng, nghịch đảo < 1e-6 px), zoom quanh con trỏ nghiệm kín, quay ΔLST khớp khung dựng lại ≤ vài phần triệu độ, cắt mặt phẳng gần, lưới mặt đất, vệt sao, pha hành tinh theo tam giác khoảng cách, lưới xích đạo; kèm **vẽ thật trên canvas** và so sánh điểm ảnh (tất định từng byte) | 0 lỗi |
-| Giao diện bản đồ sao | 1 lần chạy jsdom: gắn giao diện, vẽ ≈133.000 lời gọi, mô phỏng lăn (khẳng định `preventDefault` để trang không cuộn + zoom đúng hướng)/kéo/bấm sao/đổi chế độ/tra cứu/bàn phím | 0 ngoại lệ, 0 console.error |
 | Giao diện ngắm trời 3D | 1 lần chạy jsdom: gắn Sky3D, vòng rAF vẽ thật qua context giả, mô phỏng lăn chuột (không cuộn trang + trường nhìn đổi), kéo đổi hướng, phím cách tua, bấm chọn thiên thể → Hỏi AI → bỏ chọn, bật/tắt lớp, đổi ngày giờ, về giờ thực, toàn màn hình | 0 ngoại lệ, 0 console.error |
 
 ## Chạy dự án
@@ -77,9 +67,7 @@ npm run preview    # phục vụ dist/ kèm API route
 npm run data       # sinh lại dữ liệu sao vào src/data/ từ gói npm d3-celestial
 npm test           # toàn bộ kiểm chứng số liệu + bản đồ sao + giao diện
 npm run test:sky   # mô hình hiển thị bầu trời (khúc xạ, phép chiếu, Ngân Hà, pha Trăng, tra cứu)
-npm run test:ui    # chạy giao diện bản đồ sao trong jsdom và mô phỏng thao tác
 npm run test:ui3d  # chạy giao diện ngắm trời 3D trong jsdom (lăn chuột/kéo/chọn thiên thể/đổi giờ)
-npm run shot:sky   # render thử bản đồ ra PNG trong .cache/shots/ (cần @napi-rs/canvas)
 npm run test:sky3d # hình học + bộ vẽ của khung ngắm 3D (kèm vẽ thật trên canvas Node)
 npm run shot:sky3d # render 16 tình huống 3D ra PNG trong .cache/shots/
 ```
@@ -88,12 +76,11 @@ npm run shot:sky3d # render 16 tình huống 3D ra PNG trong .cache/shots/
 
 | Biến | Mặc định | Ý nghĩa |
 | --- | --- | --- |
-| `OPENAI_API_KEY` | — | Bật lớp mô hình ngôn ngữ lớn cho phần hỏi đáp |
-| `OPENAI_MODEL` | `gpt-4o-mini` | Tên mô hình |
-| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Cho dịch vụ tương thích OpenAI |
+| `GEMINI_API_KEY` | — | Bật lớp Gemini cho phần hỏi đáp (tạo miễn phí tại Google AI Studio) |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Tên mô hình Gemini |
 | `PORT` | `5173` | Cổng máy chủ dev/preview |
 
-Không có `OPENAI_API_KEY` thì app **vẫn hoạt động đầy đủ**: API trả mã `NO_API_KEY` và giao diện tự chuyển sang bộ luận giải nội bộ.
+Không có `GEMINI_API_KEY` thì app **vẫn hoạt động đầy đủ**: API trả mã `NO_API_KEY` và giao diện tự chuyển sang bộ luận giải nội bộ.
 
 ## Cấu trúc
 
@@ -113,21 +100,37 @@ src/
   lib/variants-knowledge.ts 47 thẻ tri thức biến thể (nguồn gốc, cách tính, cách đọc, lưu ý)
   lib/sky.ts         danh mục sao + toán thiên văn: precession J2000→ngày, alt/az, hoàng đạo, toạ độ thiên hà, sao cố định, mọc/lặn
   lib/sky-visual.ts  mô hình hiển thị: khí quyển (khúc xạ, hấp thụ, màu trời), cấp sao → quầng sáng, mây sao Ngân Hà, địa hình, pha Trăng, hai phép chiếu + nghịch đảo, danh mục tra cứu
-  lib/sky-render.ts  bộ vẽ canvas cho cả hai chế độ: nền trời, Ngân Hà, lưới, chòm sao, thiên thể sâu, sao, hành tinh - Trăng - Trời, mặt đất - núi, nhãn chống chồng, danh sách vật thể bấm được
+  lib/sky-render.ts  trợ thủ vẽ canvas dùng chung cho bộ vẽ 3D: sprite sao, dải màu, nhãn chống chồng, danh sách vật thể bấm được
   lib/sky3d.ts       toán 3D: vector ENU, camera pinhole + nghịch đảo, cắt mặt phẳng gần, zoom quanh con trỏ (nghiệm kín), ma trận quay ΔLST, lưới mặt đất, nhấp nháy & vệt sao
   lib/sky3d-render.ts bộ vẽ phối cảnh: dải màu trời theo độ cao, sao/hành tinh kích thước góc thật, mặt đất + lưới khoảng cách + 3 lớp núi, vòng ngắm chọn
   lib/knowledge.ts   bảng tri thức tiếng Việt (hành tinh, cung, nhà, góc chiếu, nguyên tố, pha trăng, từ khoá ý định)
   lib/interpret.ts   bộ luận giải nội bộ (rule-based) theo ý định câu hỏi
   lib/ai.ts          gọi /api/ai-chat và cơ chế dự phòng
   lib/geocode.ts     tra toạ độ (Nominatim → Open-Meteo)
-  components/        BirthForm, ChartWheel, ChartPanel, VariantPanel, StarMap (canvas), Sky3D (khung ngắm phối cảnh), ChatPanel
+  components/        BirthForm, ChartWheel, ChartPanel, VariantPanel, Sky3D (bản đồ sao 3D), ChatPanel
   data/              stars.json, constellations.json, deepsky.json (sinh bởi scripts/build-data.mjs)
 api/
-  _handler.js        xử lý dùng chung (Vercel Serverless + máy chủ dev)
+  _handler.js        xử lý Gemini dùng chung (Vercel Serverless + máy chủ dev)
   ai-chat.js         route /api/ai-chat
+vercel.json          cấu hình Vercel: framework Vite, dist/, rewrite SPA, function ai-chat
 server/index.mjs     máy chủ dev (Vite middleware) và chế độ --prod
 scripts/build-data.mjs  sinh dữ liệu sao từ npm package d3-celestial
 ```
+
+## Deploy lên Vercel
+
+Repo đã sẵn sàng cho Vercel (tĩnh + một serverless function):
+
+1. Đẩy repo lên GitHub (nhánh hiện tại đã có `vercel.json`).
+2. Trên [vercel.com](https://vercel.com): **Add New… → Project** → chọn repo → Vercel tự nhận framework Vite
+   (build `npm run build`, output `dist/`, rewrite SPA và function `api/ai-chat.js` theo `vercel.json`).
+3. Trong **Settings → Environment Variables** thêm `GEMINI_API_KEY` (lấy ở Google AI Studio),
+   tuỳ chọn `GEMINI_MODEL`. Không thêm thì phần Hỏi AI tự dùng bộ luận giải nội bộ.
+4. **Deploy** — trang tĩnh phục vụ từ `dist/`, còn `/api/ai-chat` chạy dưới dạng Vercel Function
+   (khoá API chỉ tồn tại phía server, không lộ xuống client).
+
+Cách khác bằng CLI: `npx vercel login` rồi `npx vercel --prod` tại thư mục repo (chọn framework Vite,
+thêm biến môi trường bằng `npx vercel env add GEMINI_API_KEY`).
 
 ## Nguồn dữ liệu & giấy phép
 

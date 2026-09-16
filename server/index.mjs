@@ -1,7 +1,7 @@
 /**
  * Máy chủ cho Astral Chart VN.
  *
- *   node server/index.mjs            # chế độ dev: Vite middleware + /api/ai-chat
+ *   node server/index.mjs            # chế độ dev: Vite middleware + /api/ai-chat (Gemini)
  *   node server/index.mjs --prod     # chế độ production: phục vụ thư mục dist/ (sau khi npm run build)
  *
  * Lắng nghe trên 0.0.0.0 để chạy được trong môi trường preview/container.
@@ -99,7 +99,7 @@ const server = http.createServer(async (req, res) => {
       JSON.stringify({
         ok: true,
         mode: isProd ? "production" : "development",
-        llm: process.env.OPENAI_API_KEY ? "openai" : "local-fallback"
+        llm: process.env.GEMINI_API_KEY ? "gemini" : "local-fallback"
       })
     );
     return;
@@ -132,7 +132,7 @@ if (!isProd) {
 
 server.listen(port, host, () => {
   const mode = isProd ? "production (dist/)" : "development (Vite HMR)";
-  const llm = process.env.OPENAI_API_KEY ? "OpenAI" : "bộ luận giải nội bộ (chưa có OPENAI_API_KEY)";
+  const llm = process.env.GEMINI_API_KEY ? "Gemini" : "bộ luận giải nội bộ (chưa có GEMINI_API_KEY)";
   console.log(`✦ Astral Chart VN đang chạy: http://${host}:${port} — ${mode}`);
   console.log(`  Trợ lý AI: ${llm}`);
 });

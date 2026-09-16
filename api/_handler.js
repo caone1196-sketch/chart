@@ -1,15 +1,17 @@
 /**
- * Bộ xử lý cho API route /api/ai-chat.
+ * Bộ xử lý cho API route /api/ai-chat — dùng Google Gemini.
  * Dùng chung cho Vercel Serverless (api/ai-chat.js) và máy chủ dev (server/index.mjs).
  *
  * Biến môi trường:
- *   OPENAI_API_KEY   - bắt buộc để dùng mô hình ngôn ngữ lớn
- *   OPENAI_MODEL     - tuỳ chọn, mặc định "gpt-4o-mini"
- *   OPENAI_BASE_URL  - tuỳ chọn, cho các dịch vụ tương thích OpenAI
+ *   GEMINI_API_KEY - bắt buộc để gọi mô hình Gemini (tạo miễn phí tại Google AI Studio)
+ *   GEMINI_MODEL   - tuỳ chọn, mặc định "gemini-2.5-flash"
  *
- * Khi chưa có OPENAI_API_KEY, route trả về 501 kèm code "NO_API_KEY" để giao diện
+ * Khi chưa có GEMINI_API_KEY, route trả về 501 kèm code "NO_API_KEY" để giao diện
  * tự động chuyển sang bộ luận giải nội bộ (chạy hoàn toàn trong trình duyệt).
+ * Khoá không bao giờ được gửi xuống client: chỉ máy chủ (hoặc Vercel function) đọc nó.
  */
+
+const DEFAULT_MODEL = "gemini-2.5-flash";
 
 const SYSTEM_PROMPT = `Bạn là chuyên gia chiêm tinh phương Tây và quan sát bầu trời, đang trả lời bằng tiếng Việt có dấu cho người dùng Việt Nam.
 
@@ -44,25 +46,24 @@ const readBody = async (req) => {
   }
 };
 
+const sendJson = (res, status, payload) => {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.end(JSON.stringify(payload));
+};
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    res.statusCode = 405;
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.end(JSON.stringify({ error: "Chỉ hỗ trợ phương thức POST.", code: "METHOD_NOT_ALLOWED" }));
+    sendJson(res, 405, { error: "Chỉ hỗ trợ phương thức POST.", code: "METHOD_NOT_ALLOWED" });
     return;
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    res.statusCode = 501;
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.end(
-      JSON.stringify({
-        error:
-          "Máy chủ chưa cấu hình OPENAI_API_KEY. Giao diện sẽ dùng bộ luận giải nội bộ trên trình duyệt.",
-        code: "NO_API_KEY"
-      })
-    );
+    sendJson(res, 501, {
+      error: "Máy chủ chưa cấu hình GEMINI_API_KEY. Giao diện sẽ dùng bộ luận giải nội bộ trên trình duyệt.",
+      code: "NO_API_KEY"
+    });
     return;
   }
 
@@ -79,49 +80,55 @@ export default async function handler(req, res) {
       .slice(-12)
       .map((item) => ({ role: item.role, content: item.content.trim().slice(0, 6000) }));
 
-    const baseUrl = (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
-    const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+    // Gemini gọi vai trợ lý là "model"; hệ thống đi qua systemInstruction riêng.
+    const contents = [
+      { role: "user", parts: [{ text: `Dữ liệu bản đồ sao của người hỏi:\n${chartReport.slice(0, 9000)}` }] },
+      ...cleaned.map((item) => ({
+        role: item.role === "assistant" ? "model" : "user",
+        parts: [{ text: item.content }]
+      }))
+    ];
 
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.7,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "system", content: `Dữ liệu bản đồ sao và bầu trời hiện tại:\n${chartReport}` },
-          ...cleaned
-        ]
-      })
-    });
+    const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 55000);
 
-    const data = await response.json().catch(() => ({}));
+    let data = {};
+    let ok = false;
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents,
+          generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+        }),
+        signal: controller.signal
+      });
+      ok = response.ok;
+      data = await response.json().catch(() => ({}));
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
-    if (!response.ok) {
-      const message = data?.error?.message || `Yêu cầu tới mô hình thất bại (HTTP ${response.status}).`;
-      res.statusCode = response.status;
-      res.setHeader("Content-Type", "application/json; charset=utf-8");
-      res.end(JSON.stringify({ error: message, code: "UPSTREAM_ERROR" }));
+    const reply = (data?.candidates?.[0]?.content?.parts || [])
+      .map((part) => (typeof part.text === "string" ? part.text : ""))
+      .join("")
+      .trim();
+
+    if (!ok || !reply) {
+      const reason =
+        data?.error?.message ||
+        (data?.promptFeedback?.blockReason ? `Nội dung bị chặn: ${data.promptFeedback.blockReason}` : "") ||
+        "Gemini không trả về nội dung.";
+      sendJson(res, 502, { error: reason, code: "GEMINI_ERROR" });
       return;
     }
 
-    const reply = data?.choices?.[0]?.message?.content?.trim();
-    res.statusCode = 200;
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.end(
-      JSON.stringify({
-        reply: reply || "Mô hình chưa trả về nội dung.",
-        model: data?.model || model
-      })
-    );
+    sendJson(res, 200, { reply, model });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Lỗi không xác định ở máy chủ.";
-    res.statusCode = 500;
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.end(JSON.stringify({ error: message, code: "SERVER_ERROR" }));
+    const message = error instanceof Error && error.name === "AbortError" ? "Gemini phản hồi quá chậm." : "Lỗi khi gọi Gemini.";
+    sendJson(res, 502, { error: message, code: "GEMINI_NETWORK" });
   }
 }

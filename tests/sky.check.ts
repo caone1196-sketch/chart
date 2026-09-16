@@ -19,10 +19,7 @@
  *
  * Không cần DOM: @napi-rs/canvas chỉ là devDependency và chỉ dùng để render thử.
  */
-import { createElement } from "react";
-import { renderToString } from "react-dom/server";
 import { createCanvas } from "@napi-rs/canvas";
-import StarMap from "../src/components/StarMap.tsx";
 import {
   HORIZON_PAN_LIMIT,
   HORIZON_ZOOM,
@@ -670,41 +667,6 @@ const CASES: Array<{ name: string; lat: number; lon: number; utc: Date }> = [
   // Tuế sai: J2000 → J2000 không đổi.
   const fixed = precessFromJ2000(83.82, -5.39, new Date(Date.UTC(2000, 0, 1, 12)));
   if (!near(fixed.ra, 83.82, 0.02) || !near(fixed.dec, -5.39, 0.02)) fail("phụ trợ", "precessFromJ2000 không giữ nguyên ở J2000");
-  ok();
-}
-
-/* --------------------------------------------------- 14. dựng giao diện (render) */
-{
-  const html = renderToString(
-    createElement(StarMap, {
-      latitude: 21.0285,
-      longitude: 105.8542,
-      placeLabel: "Hà Nội, Việt Nam",
-      chart: null,
-      onAskAbout: () => {}
-    })
-  );
-
-  const required = [
-    "Bản đồ sao thực tế",
-    "Bầu trời (độ cao – phương vị)",
-    "Toàn cảnh (xích kinh – xích vĩ)",
-    "Khí quyển &amp; ánh sáng nền",
-    "Mặt đất &amp; núi",
-    "Tìm sao, chòm sao, thiên thể…",
-    "⟲ Căn lại",
-    "Bấm vào một ngôi sao, thiên thể sâu hoặc hành tinh",
-    "Ngân Hà",
-    "Thiên đỉnh",
-    "giờ sao địa phương",
-    "5.044 sao (Hipparcos tới cấp 6)"
-  ];
-  for (const text of required) {
-    if (!html.includes(text)) fail("giao diện", `thiếu thành phần "${text}"`);
-    ok();
-  }
-
-  if (html.includes("undefined") || html.includes("NaN")) fail("giao diện", "HTML có giá trị undefined/NaN");
   ok();
 }
 

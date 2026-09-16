@@ -1,6 +1,10 @@
 # Dựng lại "Bản đồ sao thực tế" — trông thực tế hơn, điều khiển dễ hơn
 
-Phạm vi: `src/components/StarMap.tsx` (viết lại), hai mô-đun mới `src/lib/sky-visual.ts` (mô hình hiển thị)
+> **Lưu ý (16/09/2026):** giao diện bản đồ sao 2D (`StarMap.tsx`) đã được **thay thế bằng khung ngắm 3D**
+> (`Sky3D.tsx`, xem `docs/ban-do-3d.md`). Tài liệu này giữ lại làm hồ sơ thiết kế cho lớp mô hình hiển thị
+> `sky-visual.ts` (khí quyển, phép chiếu, Ngân Hà, pha Trăng…) vẫn đang được dùng chung.
+
+Phạm vi: `src/components/StarMap.tsx` (viết lại, nay đã gỡ), hai mô-đun mới `src/lib/sky-visual.ts` (mô hình hiển thị)
 và `src/lib/sky-render.ts` (bộ vẽ canvas). Danh mục dữ liệu (5.044 sao Hipparcos, 88 chòm sao, 118 thiên thể
 sâu) và mọi tính năng cũ (chạy thời gian, chọn đối tượng, hỏi AI) được giữ nguyên.
 
