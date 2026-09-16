@@ -213,7 +213,7 @@ export default function ChatPanel({
           ) : null}
         </div>
 
-        <div ref={scrollRef} className="mt-4 h-[60svh] max-h-[26rem] min-h-[18rem] overflow-y-auto overscroll-contain rounded-xl border border-slate-700 bg-slate-950/80 p-3 md:h-[28rem] md:max-h-none md:p-4">
+        <div ref={scrollRef} className="chat-scroll mt-4 max-h-[26rem] min-h-[18rem] overflow-y-auto overscroll-contain rounded-xl border border-slate-700 bg-slate-950/80 p-3 md:max-h-none md:p-4">
           <div className="space-y-3">
             {messages.map((message, index) => (
               <div
@@ -245,6 +245,7 @@ export default function ChatPanel({
             onKeyDown={handleKeyDown}
             placeholder="Ví dụ: Năm tới tôi có nên đổi việc không? Hoặc: Tối nay ở Hà Nội thấy được hành tinh nào?"
             rows={3}
+            enterKeyHint="send"
             className="w-full rounded-lg border border-slate-600/80 bg-slate-950/90 px-3 py-2.5 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-sky-300"
           />
           <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3">

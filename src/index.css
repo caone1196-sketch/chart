@@ -13,7 +13,8 @@ html,
 body {
   max-width: 100%;
   overflow-x: hidden;
-  overscroll-behavior-y: none;
+  /* Chỉ chặn overscroll ngang: giữ pull-to-refresh dọc của Chrome Android. */
+  overscroll-behavior-x: none;
 }
 
 /* Không cho chữ dài / mã / URL đẩy layout rộng ra */
@@ -40,6 +41,66 @@ body {
     radial-gradient(1100px 520px at 82% -12%, rgb(56 89 199 / 0.16), transparent 62%),
     radial-gradient(900px 460px at 6% 4%, rgb(56 189 248 / 0.08), transparent 58%),
     rgb(2 6 23);
+}
+
+@layer base {
+  /* Bỏ vệt xám khi chạm trên Chrome Android + bỏ độ trễ double-tap-zoom. */
+  a,
+  button,
+  summary,
+  select,
+  input,
+  textarea,
+  label,
+  canvas {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button,
+  a,
+  summary,
+  select {
+    touch-action: manipulation;
+  }
+}
+
+/* Fallback cho trình duyệt Android cũ chưa hiểu đơn vị svh (Chrome < 108):
+   khai báo vh trước, svh sau — máy mới dùng svh (không nhảy layout khi thanh
+   địa chỉ co giãn), máy cũ rớt về vh. Không viết bằng 2 class Tailwind vì thứ
+   tự thắng thua giữa chúng không được đảm bảo. */
+.hero-min-h {
+  min-height: 72vh;
+  min-height: 72svh;
+}
+
+@media (min-width: 640px) {
+  .hero-min-h {
+    min-height: 80vh;
+  }
+}
+
+.sky-frame {
+  max-height: 78vh;
+  max-height: 78svh;
+}
+
+.chat-scroll {
+  height: 60vh;
+  height: 60svh;
+}
+
+@media (min-width: 768px) {
+  .chat-scroll {
+    height: 28rem;
+  }
+}
+
+/* Canvas bầu trời: vuốt dọc 1 ngón để cuộn trang (xem Sky3D), chặn menu
+   long-press và bôi đen khi kéo trên Android. */
+.sky-canvas {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .no-scrollbar {
@@ -102,6 +163,10 @@ body {
 }
 
 /* Vùng an toàn cho máy có tai thỏ / thanh gesture */
+.safe-t {
+  padding-top: env(safe-area-inset-top);
+}
+
 .safe-x {
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);

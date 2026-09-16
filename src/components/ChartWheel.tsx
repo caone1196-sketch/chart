@@ -57,7 +57,8 @@ export default function ChartWheel({
   const icOuter = anglePoint(imumCoeli, 232);
 
   return (
-    <svg viewBox="0 0 500 500" className="mx-auto block h-auto w-full max-w-[560px] touch-pan-y">
+    <svg viewBox="0 0 500 500" role="img" aria-label="Vòng bản đồ sao: 12 cung hoàng đạo, 12 nhà và vị trí các hành tinh" className="mx-auto block h-auto w-full max-w-[560px] touch-pan-y">
+      <title>Vòng bản đồ sao natal</title>
       <defs>
         <radialGradient id="wheel-glow" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#0b1224" />
@@ -77,7 +78,7 @@ export default function ChartWheel({
         return (
           <g key={sign.name}>
             <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke="#1e293b" strokeWidth="1" />
-            <text x={mid.x} y={mid.y} textAnchor="middle" dominantBaseline="middle" fill="#cbd5e1" fontSize="14">
+            <text x={mid.x} y={mid.y} textAnchor="middle" dominantBaseline="middle" fill="#cbd5e1" fontSize="16">
               {sign.symbol}
             </text>
           </g>
@@ -91,7 +92,7 @@ export default function ChartWheel({
         return (
           <g key={`house-${house.house}`}>
             <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#1e293b" strokeWidth="1" />
-            <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" fill="#64748b" fontSize="11">
+            <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" fill="#64748b" fontSize="12">
               {house.house}
             </text>
           </g>
@@ -129,7 +130,7 @@ export default function ChartWheel({
         { point: mcOuter, label: "MC", color: "#f59e0b" },
         { point: icOuter, label: "IC", color: "#f59e0b" }
       ].map((item) => (
-        <text key={item.label} x={item.point.x} y={item.point.y - 12} textAnchor="middle" fill={item.color} fontSize="11" fontWeight="700">
+        <text key={item.label} x={item.point.x} y={item.point.y - 13} textAnchor="middle" fill={item.color} fontSize="12" fontWeight="700">
           {item.label}
         </text>
       ))}
@@ -150,20 +151,20 @@ export default function ChartWheel({
               strokeOpacity="0.35"
               strokeWidth="1"
             />
-            <circle cx={point.x} cy={point.y} r={highlighted ? 14 : 12} fill="#0f172a" stroke={planet.color} strokeWidth={highlighted ? 2.4 : 1.2} />
+            <circle cx={point.x} cy={point.y} r={highlighted ? 15 : 13} fill="#0f172a" stroke={planet.color} strokeWidth={highlighted ? 2.4 : 1.2} />
             <text
               x={point.x}
               y={point.y}
               textAnchor="middle"
               dominantBaseline="middle"
               fill={planet.color}
-              fontSize="10"
+              fontSize="11"
               fontWeight="700"
             >
               {planet.symbol}
             </text>
             {planet.retrograde ? (
-              <text x={point.x + 13} y={point.y - 9} textAnchor="middle" fill="#fca5a5" fontSize="9" fontWeight="700">
+              <text x={point.x + 14} y={point.y - 10} textAnchor="middle" fill="#fca5a5" fontSize="10" fontWeight="700">
                 R
               </text>
             ) : null}
