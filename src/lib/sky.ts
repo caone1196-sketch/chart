@@ -1,4 +1,4 @@
-import { Body, Equator, MakeTime, Observer, SearchRiseSet } from "astronomy-engine";
+import { Body, Equator, GeoVector, HelioVector, MakeTime, Observer, SearchRiseSet } from "astronomy-engine";
 import constellationSource from "@/data/constellations.json";
 import deepSkySource from "@/data/deepsky.json";
 import starSource from "@/data/stars.json";
@@ -327,6 +327,10 @@ export type PlanetSky = {
   az: number;
   retrograde: boolean;
   magnitude?: number;
+  /** Khoảng cách địa tâm (AU) — dùng tính góc pha thật của hành tinh. */
+  distanceAu: number;
+  /** Khoảng cách nhật tâm (AU). */
+  sunDistanceAu: number;
 };
 
 export type SkySnapshot = {
@@ -363,6 +367,10 @@ export const computeSkySnapshot = (date: Date, latitude: number, longitude: numb
     const { alt, az } = toHorizontal(equator.ra * 15, equator.dec, lstDeg, latitude);
     const lon = toEcliptic(equator.ra * 15, equator.dec, obliquityDeg).lon;
     const nextLon = toEcliptic(nextEquator.ra * 15, nextEquator.dec, obliquityDeg).lon;
+    // Khoảng cách thật (AU) để suy ra góc pha: hành tinh ngoài luôn gần tròn đầy,
+    // Sao Kim/Sao Thủy khuyết rõ khi nằm giữa Trái Đất và Mặt Trời.
+    const geoVector = GeoVector(planet.body, time, true);
+    const helioVector = HelioVector(planet.body, time);
 
     return {
       key: planet.key,
@@ -374,7 +382,9 @@ export const computeSkySnapshot = (date: Date, latitude: number, longitude: numb
       lon,
       alt,
       az,
-      retrograde: signedSeparation(lon, nextLon) < 0
+      retrograde: signedSeparation(lon, nextLon) < 0,
+      distanceAu: geoVector.Length(),
+      sunDistanceAu: helioVector.Length()
     };
   });
 

@@ -34,6 +34,7 @@ import {
   starTintIndex,
   terrainHeightDeg,
   moonGeometry,
+  type MoonGeometry,
   type Rgb,
   type SkyFrame,
   type SkyTone
@@ -41,6 +42,7 @@ import {
 import {
   COMPASS_8,
   GROUND_RINGS_M,
+  angularSeparationDeg,
   PROJECT_NEAR,
   altAzOf,
   applyMatrix3,
@@ -48,14 +50,17 @@ import {
   directionOf,
   dot3,
   groundAltitudeAt,
+  length3,
   groundRingPath,
   makeCamera3D,
+  normalize3,
   projectPath,
   refractDirection,
   scintillation,
   skyRotationMatrix,
   slerp3,
   splitPath,
+  yawDelta,
   type Camera3D,
   type Camera3DProjector,
   type ScreenPoint,
@@ -72,6 +77,8 @@ import {
 } from "./sky-render";
 
 export type Sky3DToggles = SkyDrawToggles & {
+  /** Lưới xích đạo trời (xích vĩ / xích kinh) — quay theo sao nên thấy rõ vòm trời quay khi tua. */
+  equatorial: boolean;
   /** Nhấp nháy khí quyển. */
   twinkle: boolean;
   /** Vệt sao khi tua thời gian. */
@@ -89,6 +96,7 @@ export const SKY_3D_TOGGLES: Sky3DToggles = {
   ecliptic: true,
   planets: true,
   grid: true,
+  equatorial: true,
   atmosphere: true,
   ground: true,
   twinkle: true,
@@ -122,6 +130,8 @@ export type Sky3DDrawResult = {
   visibleStars: number;
   camera: Camera3D;
 };
+
+const DEG = Math.PI / 180;
 
 type LabelBox = { x0: number; y0: number; x1: number; y1: number };
 
@@ -199,12 +209,23 @@ const PLANET_BODY: Record<string, { radius: number }> = {
  * xoáy mây Sao Kim, hố va chạm Sao Thủy, đốm tối Sao Hải Vương… Tất cả tất định (không ngẫu nhiên)
  * để ảnh chụp màn hình tái lập được. Bán kính < 4 px thì chỉ tô màu cầu cho gọn.
  */
-const drawPlanetBody = (ctx: CanvasRenderingContext2D, key: string, x: number, y: number, radius: number, tint: Rgb) => {
+const drawPlanetBody = (
+  ctx: CanvasRenderingContext2D,
+  key: string,
+  x: number,
+  y: number,
+  radius: number,
+  tint: Rgb,
+  lightAngle = -Math.PI / 3
+) => {
   const disc = () => {
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
   };
-  const base = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.35, radius * 0.15, x, y, radius);
+  // Nguồn sáng lệch về phía Mặt Trời: tâm gradient dịch theo hướng sáng nên đĩa trông như quả cầu.
+  const lightX = x + Math.cos(lightAngle) * radius * 0.38;
+  const lightY = y + Math.sin(lightAngle) * radius * 0.38;
+  const base = ctx.createRadialGradient(lightX, lightY, radius * 0.12, x, y, radius * 1.05);
   base.addColorStop(0, rgbCss(mixColor(tint, [255, 255, 255], 0.42)));
   base.addColorStop(0.65, rgbCss(tint));
   base.addColorStop(1, rgbCss(mixColor(tint, [10, 10, 16], 0.5)));
@@ -260,16 +281,72 @@ const drawPlanetBody = (ctx: CanvasRenderingContext2D, key: string, x: number, y
     band(-0.2, 0.24, "rgba(255,255,255,0.16)");
     blob(-0.18, 0.15, 0.3, 0.17, "rgba(18,28,84,0.65)");
   }
-  // Tối viền (limb darkening) cho đĩa trông hình cầu thay vì hình tròn dẹt.
+  // Tối viền (limb darkening) đồng tâm — lưu ý: gradient hai tâm cắt nhau làm skia (napi-rs) panic.
   const limb = ctx.createRadialGradient(x, y, radius * 0.55, x, y, radius);
   limb.addColorStop(0, "rgba(0,0,0,0)");
   limb.addColorStop(1, "rgba(4,6,12,0.5)");
   ctx.fillStyle = limb;
   ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  // Phía khuất sáng chìm dần sang tối: gradient tuyến tính dọc trục sáng → cảm giác khối cầu.
+  const shade = ctx.createLinearGradient(
+    x + Math.cos(lightAngle) * radius,
+    y + Math.sin(lightAngle) * radius,
+    x - Math.cos(lightAngle) * radius,
+    y - Math.sin(lightAngle) * radius
+  );
+  shade.addColorStop(0, "rgba(0,0,0,0)");
+  shade.addColorStop(0.55, "rgba(0,0,0,0.08)");
+  shade.addColorStop(1, "rgba(3,5,10,0.55)");
+  ctx.fillStyle = shade;
+  ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
   ctx.restore();
 };
 
+/** Bán kính quỹ đạo trung bình (AU) — đủ chính xác để suy ra góc pha hành tinh. */
+const ORBIT_RADIUS_AU: Record<string, number> = {
+  mercury: 0.387,
+  venus: 0.723,
+  mars: 1.524,
+  jupiter: 5.203,
+  saturn: 9.537,
+  uranus: 19.19,
+  neptune: 30.07
+};
+
+/**
+ * Pha hành tinh theo góc ly giác Mặt Trời–hành tinh (góc tại Trái Đất).
+ *
+ * Khác Mặt Trăng (góc pha ≈ góc ly giác), hành tinh ngoài có góc pha RẤT nhỏ nên luôn gần tròn
+ * đầy; Sao Kim/Sao Thủy mới khuyết rõ. Giải tam giác Trái Đất–Mặt Trời–hành tinh với quỹ đạo
+ * tròn: Δ = cos e + √(r² − sin² e) rồi cos α = (r² + Δ² − 1) / (2 r Δ), α là góc pha tại hành tinh.
+ */
+export const planetPhase = (
+  key: string,
+  elongationDeg: number,
+  distances?: { sunToPlanetAu?: number; earthToPlanetAu?: number; earthToSunAu?: number }
+): MoonGeometry & { cosPhase: number } => {
+  const orbit = distances?.sunToPlanetAu ?? ORBIT_RADIUS_AU[key];
+  const delta = distances?.earthToPlanetAu;
+  const earthSun = distances?.earthToSunAu ?? 1;
+  if (orbit && delta && delta > 1e-6) {
+    // Nghiệm chính xác từ tam giác Trái Đất–Mặt Trời–hành tinh (cosin định lý tại hành tinh).
+    const cosPhase = clamp((orbit * orbit + delta * delta - earthSun * earthSun) / (2 * orbit * delta), -1, 1);
+    return { illumination: (1 + cosPhase) / 2, terminatorRatio: Math.abs(cosPhase), cosPhase };
+  }
+  if (!orbit) {
+    const geometry = moonGeometry(elongationDeg);
+    return { ...geometry, cosPhase: -Math.cos((clamp(elongationDeg, 0, 180) * Math.PI) / 180) };
+  }
+  // Dự phòng quỹ đạo tròn khi thiếu khoảng cách thật.
+  const e = clamp(elongationDeg, 0, 180) * DEG;
+  const sinE = Math.min(Math.sin(e), orbit / earthSun);
+  const approxDelta = Math.cos(e) + Math.sqrt(Math.max(0, orbit * orbit - sinE * sinE));
+  const cosPhase = approxDelta > 1e-9 ? clamp((orbit * orbit + approxDelta * approxDelta - 1) / (2 * orbit * approxDelta), -1, 1) : -1;
+  return { illumination: (1 + cosPhase) / 2, terminatorRatio: Math.abs(cosPhase), cosPhase };
+};
+
 /** Vành đai Sao Thổ: nửa sau vẽ trước đĩa, nửa trước vẽ đè lên sau đĩa. */
+
 const drawSaturnRings = (ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, from: number, to: number) => {
   ctx.save();
   ctx.translate(x, y);
@@ -376,6 +453,9 @@ export const drawSky3D = (input: Sky3DDrawInput): Sky3DDrawResult => {
       entry.draw();
     }
   };
+
+  /** Chênh phương vị so với hướng nhìn đã quấn về [-180, 180] — dùng chọn chỗ đặt nhãn. */
+  const yawTowards = (azDeg: number) => yawDelta(camera.yaw, azDeg);
 
   /** Vẽ một dải (alt, az) đã cắt theo camera. */
   const strokePath = (points: Array<{ alt: number; az: number }>, style: string, lineWidth: number, dash?: number[], stepDeg = 2) => {
@@ -589,6 +669,49 @@ export const drawSky3D = (input: Sky3DDrawInput): Sky3DDrawResult => {
         undefined,
         3
       );
+    }
+  }
+
+  /* ------------------------------------------ lưới xích đạo (quay theo vòm trời) */
+  if (toggles.equatorial) {
+    // Lưới này gắn hệ toạ độ xích đạo (của ngày) nên quay cùng sao: khi tua thời gian người xem
+    // thấy cả "vòm" xoay quanh thiên cực chứ không chỉ vài ngôi sao trượt ngang.
+    const eqAlpha = (atmosphere ? clamp01(0.3 + 0.7 * tone.starFactor) : 0.95) * 0.9;
+    const equatorialPoint = (raDeg: number, decDeg: number) => {
+      const horizontal = toHorizontal(raDeg, decDeg, frame.lstDeg, latitude);
+      return altAzOf(applyMatrix3(rotation, directionOf(horizontal.alt, horizontal.az)));
+    };
+    let equatorLabel: ScreenPoint | null = null;
+    for (const dec of [-60, -30, 0, 30, 60]) {
+      const points: Array<{ alt: number; az: number }> = [];
+      for (let ra = 0; ra <= 360; ra += 4) {
+        const point = equatorialPoint(ra, dec);
+        points.push(point);
+        if (dec === 0 && !equatorLabel) {
+          const delta = Math.abs(yawTowards(point.az));
+          if (delta < 2) equatorLabel = projector.projectVector(directionOf(point.alt, point.az));
+        }
+      }
+      strokePath(
+        points,
+        dec === 0 ? `rgba(250,204,21,${(0.4 * eqAlpha).toFixed(3)})` : `rgba(167,139,250,${(0.24 * eqAlpha).toFixed(3)})`,
+        dec === 0 ? 1.3 : 1,
+        dec === 0 ? [9, 6] : undefined,
+        2
+      );
+    }
+    for (let ra = 0; ra < 360; ra += 30) {
+      const points: Array<{ alt: number; az: number }> = [];
+      for (let dec = -75; dec <= 75; dec += 3) points.push(equatorialPoint(ra, dec));
+      strokePath(points, `rgba(167,139,250,${(0.17 * eqAlpha).toFixed(3)})`, 1, undefined, 3);
+    }
+    if (equatorLabel && equatorLabel.x > 40 && equatorLabel.x < width - 40 && equatorLabel.y > 16 && equatorLabel.y < height - 16) {
+      drawText(ctx, "xích đạo trời", equatorLabel.x + 8, equatorLabel.y - 5, {
+        font: "9px system-ui, sans-serif",
+        color: `rgba(250,204,21,${(0.75 * eqAlpha).toFixed(3)})`,
+        align: "left",
+        shadow: "rgba(2,6,23,0.75)"
+      });
     }
   }
 
@@ -977,7 +1100,62 @@ export const drawSky3D = (input: Sky3DDrawInput): Sky3DDrawResult => {
     ctx.globalCompositeOperation = "source-over";
 
     if (planet.key === "saturn") drawSaturnRings(ctx, projected.x, projected.y, radius, Math.PI, Math.PI * 2);
-    drawPlanetBody(ctx, planet.key, projected.x, projected.y, radius, tint);
+
+    // Hành tinh là quả cầu được Mặt Trời chiếu: tính góc ly giác Mặt Trời–hành tinh để suy ra
+    // phần được chiếu sáng và terminator (giống pha Mặt Trăng) — Sao Kim sẽ khuyết thật khi nằm gần Trời.
+    const sunBody = frame.planets.find((item) => item.key === "sun");
+    const sunVector = sunBody ? spin(sunBody.alt, sunBody.az) : null;
+    const planetVector = directionOf(spun.alt, spun.az);
+    const elongation = sunVector ? clamp(angularSeparationDeg(sunVector, planetVector), 0, 180) : 180;
+    const phase = planetPhase(planet.key, elongation, {
+      sunToPlanetAu: planet.sunDistanceAu,
+      earthToPlanetAu: planet.distanceAu,
+      earthToSunAu: sunBody?.distanceAu
+    });
+    // Hướng sáng trên màn hình: chiếu tiếp tuyến đường tròn lớn từ hành tinh về Mặt Trời lên
+    // hai trục màn hình. Không dùng toạ độ chiếu của Mặt Trời vì khi nó nằm SAU camera thì
+    // phép chiếu trả về NaN (và NaN truyền vào ctx.ellipse làm skia của napi-rs abort).
+    let lightAngle = -Math.PI / 3;
+    if (sunVector) {
+      const along = dot3(sunVector, planetVector);
+      const tangent = {
+        x: sunVector.x - planetVector.x * along,
+        y: sunVector.y - planetVector.y * along,
+        z: sunVector.z - planetVector.z * along
+      };
+      if (length3(tangent) > 1e-9) {
+        const unit = normalize3(tangent);
+        lightAngle = Math.atan2(-dot3(unit, projector.up), dot3(unit, projector.right));
+      }
+    }
+    const cosPhase = phase.cosPhase;
+
+    // Mặt khuất: đĩa tối màu hành tinh pha đen.
+    ctx.beginPath();
+    ctx.arc(projected.x, projected.y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = rgbCss(mixColor(tint, [8, 10, 16], 0.85));
+    ctx.fill();
+
+    if (phase.illumination > 0.012) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(projected.x, projected.y, radius, lightAngle - Math.PI / 2, lightAngle + Math.PI / 2, false);
+      ctx.ellipse(
+        projected.x,
+        projected.y,
+        phase.terminatorRatio * radius,
+        radius,
+        lightAngle,
+        Math.PI / 2,
+        -Math.PI / 2,
+        cosPhase < 0
+      );
+      ctx.closePath();
+      ctx.clip();
+      drawPlanetBody(ctx, planet.key, projected.x, projected.y, radius, tint, lightAngle);
+      ctx.restore();
+    }
+
     if (planet.key === "saturn") drawSaturnRings(ctx, projected.x, projected.y, radius, 0, Math.PI);
     ctx.strokeStyle = isSelected ? "#fde68a" : "rgba(8,12,24,0.85)";
     ctx.lineWidth = isSelected ? 2.4 : 1;

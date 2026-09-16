@@ -61,7 +61,7 @@ import {
 } from "../src/lib/sky3d.ts";
 import { buildSkyFrame, refractedAltitude, wrap180 } from "../src/lib/sky-visual.ts";
 import { createSpriteCache } from "../src/lib/sky-render.ts";
-import { SKY_3D_TOGGLES, drawSky3D, magnitudeLimitFor, skyColorAtAltitude, type Sky3DToggles } from "../src/lib/sky3d-render.ts";
+import { SKY_3D_TOGGLES, drawSky3D, magnitudeLimitFor, planetPhase, skyColorAtAltitude, type Sky3DToggles } from "../src/lib/sky3d-render.ts";
 import { skyTone } from "../src/lib/sky-visual.ts";
 
 let checks = 0;
@@ -722,16 +722,21 @@ for (const deltaMinutes of [0.5, 5, 45, 180]) {
   else {
     const px = withJupiter.canvas
       .getContext("2d")
-      .getImageData(Math.round(jupiterHit.x) - 2, Math.round(jupiterHit.y) - 2, 5, 5).data;
+      .getImageData(Math.round(jupiterHit.x) - 7, Math.round(jupiterHit.y) - 7, 15, 15).data;
+    let best = -1;
     let r = 0;
     let g = 0;
     let b = 0;
     for (let i = 0; i < px.length; i += 4) {
-      r += px[i];
-      g += px[i + 1];
-      b += px[i + 2];
+      const lum = px[i] + px[i + 1] + px[i + 2];
+      if (lum > best) {
+        best = lum;
+        r = px[i];
+        g = px[i + 1];
+        b = px[i + 2];
+      }
     }
-    if (!(r > b + 20 && r > 90)) fail("hành tinh 3D", `tâm Sao Mộc không ám màu gỉ sắt sáng (rgb=${(r / 25).toFixed(0)},${(g / 25).toFixed(0)},${(b / 25).toFixed(0)})`);
+    if (!(r > b + 20 && r > 90)) fail("hành tinh 3D", `đĩa Sao Mộc không ám màu gỉ sắt sáng (rgb=${r},${g},${b})`);
     ok();
   }
 
@@ -745,6 +750,35 @@ for (const deltaMinutes of [0.5, 5, 45, 180]) {
   } else {
     fail("hành tinh 3D", "không thấy Sao Thổ trong khung để kiểm tra vành đai");
   }
+
+  // Pha hành tinh: góc pha từ tam giác khoảng cách thật — hành tinh ngoài gần tròn đầy,
+  // Sao Kim gần hạ giao điểm phải khuyết rõ (điều mà công thức "pha = ly giác" cũ làm sai).
+  const saturnPhase = planetPhase("saturn", 60, { sunToPlanetAu: 9.537, earthToPlanetAu: 10.0, earthToSunAu: 1 });
+  if (saturnPhase.illumination < 0.98) fail("pha hành tinh", `Sao Thổ phải gần tròn đầy, nhận ${saturnPhase.illumination.toFixed(3)}`);
+  ok();
+  const venusCrescent = planetPhase("venus", 40, { sunToPlanetAu: 0.727, earthToPlanetAu: 0.362, earthToSunAu: 1 });
+  if (venusCrescent.illumination > 0.3) fail("pha hành tinh", `Sao Kim cận Trái Đất phải khuyết, nhận ${venusCrescent.illumination.toFixed(3)}`);
+  ok();
+  const venusFull = planetPhase("venus", 10, { sunToPlanetAu: 0.727, earthToPlanetAu: 1.7, earthToSunAu: 1 });
+  if (venusFull.illumination < 0.9) fail("pha hành tinh", `Sao Kim phía sau Mặt Trời phải gần đầy, nhận ${venusFull.illumination.toFixed(3)}`);
+  ok();
+  for (const phase of [saturnPhase, venusCrescent, venusFull]) {
+    if (Math.abs(phase.illumination - (1 + phase.cosPhase) / 2) > 1e-12) fail("pha hành tinh", "illumination không khớp cosPhase");
+    if (Math.abs(phase.terminatorRatio - Math.abs(phase.cosPhase)) > 1e-12) fail("pha hành tinh", "terminatorRatio không khớp cosPhase");
+  }
+  ok();
+
+  // Lưới xích đạo: bật/tắt phải đổi ảnh và không sinh toạ độ rác.
+  const eqOn = render({ iso: "1996-11-10T17:30:00Z", camera: { yaw: 180, pitch: 30, fov: 70 } });
+  const eqOff = render({ iso: "1996-11-10T17:30:00Z", camera: { yaw: 180, pitch: 30, fov: 70 }, toggles: { equatorial: false } });
+  if (Buffer.compare(eqOn.canvas.toBuffer("image/png"), eqOff.canvas.toBuffer("image/png")) === 0) {
+    fail("lưới xích đạo 3D", "bật/tắt lưới xích đạo mà ảnh không đổi");
+  }
+  ok();
+  for (const hit of eqOn.result.hits) {
+    if (!Number.isFinite(hit.x) || !Number.isFinite(hit.y)) fail("lưới xích đạo 3D", "toạ độ vật thể không hữu hạn khi bật lưới");
+  }
+  ok();
 
   // Hiệu năng: một khung hình trong Node phải dưới 1,5 giây (trình duyệt còn nhanh hơn nhiều).
   const warm = render({ iso: "1996-11-10T17:30:00Z", camera: { yaw: 180, pitch: 12, fov: 64 } });

@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent a
 import { DEEP_SKY, STARS } from "@/lib/sky";
 import { createSpriteCache, type SkyHit, type SkySelection } from "@/lib/sky-render";
 import { SKY_3D_TOGGLES, drawSky3D, type Sky3DToggles } from "@/lib/sky3d-render";
-import { buildSkyFrame, phaseName } from "@/lib/sky-visual";
+import { buildSkyFrame, clamp, phaseName } from "@/lib/sky-visual";
 import { localSiderealDegrees } from "@/lib/astro";
 import {
   CAMERA_FOV,
@@ -189,7 +189,7 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
           return offscreen;
         },
         timeMs: now,
-        trailDegrees: playing ? starTrailDegrees(speed) : 0
+        trailDegrees: playing ? starTrailDegrees(clamp(speed * 2, 0.5, 160) * 60) : 0
       });
       hitsRef.current = result.hits;
 
@@ -554,6 +554,7 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
         {toggle("deepSky", "Thiên thể sâu")}
         {toggle("ecliptic", "Hoàng đạo")}
         {toggle("grid", "Lưới độ cao")}
+        {toggle("equatorial", "Lưới xích đạo")}
         {toggle("groundGrid", "Lưới mặt đất")}
         {toggle("atmosphere", "Khí quyển")}
         {toggle("ground", "Mặt đất")}

@@ -14,7 +14,8 @@ và chiếu qua ống kính pinhole.
 | Chiều sâu mặt đất | Mắt cao 1,65 m: vòng tròn bán kính `D` mét nằm ở độ cao `−atan(1,65/D)` → lưới 9 vòng (3→900 m) hội tụ về chân trời, kèm nan phương vị và cọc mốc "12 m / 96 m / 900 m". |
 | Ba lớp núi che khuất | `terrainHeightDeg(az, lớp)` lấy mẫu 1°/bước, khối núi **đóng xuống đúng đường chân trời** nên không đè lưới mặt đất; lớp xa hoà vào màu trời (phối cảnh khí quyển), lớp gần sẫm nhất. |
 | Khí quyển | Khúc xạ Bennett (chỉ hướng < 25°), hấp thụ Kasten–Young theo độ cao, màu trời theo độ cao Mặt Trời, ráng chiều và quầng sáng quanh phương vị Mặt Trời, mù tán xạ sát chân trời. |
-| Hành tinh "sống động" | Mỗi hành tinh là một đĩa có chi tiết tất định: Sao Mộc năm dải mây + Vết Đỏ Lớn, Sao Thổ vành đai ba vòng (nửa sau vẽ trước đĩa, nửa trước đè lên sau), Sao Hỏa chóp băng + vùng tối, Sao Kim xoáy mây, Sao Thủy hố va chạm, Thiên Vương/Hải Vương dải mây và đốm tối; kèm quầng sáng ám màu riêng và tối viền (limb darkening) cho cảm giác hình cầu. Mặt Trời có nhật hoa tia mảnh xoay chậm theo thời gian. |
+| Hành tinh là **khối cầu được chiếu sáng** | Mỗi hành tinh vẽ như mô hình 3D: đĩa nền tối (phần đêm) → miền sáng cắt bằng `arc + terminator ellipse` theo **góc pha thật** (giải tam giác Trái Đất–Mặt Trời–hành tinh bằng khoảng cách AU thật từ astronomy-engine, nên Sao Thổ/Sao Mộc gần tròn đầy còn Sao Kim cận Trái Đất khuyết lưỡi liềm) → gradient gốc đặt lệch về phía Mặt Trời + tối viền đồng tâm + dải bóng tuyến tính dọc trục sáng → chi tiết bề mặt (Sao Mộc năm dải mây + Vết Đỏ Lớn, Sao Hỏa chóp băng, Sao Kim xoáy mây…) kẹp trong miền sáng; hướng sáng suy từ **tiếp tuyến 3D** của vector Mặt Trời (không chiếu toạ độ màn hình, tránh NaN). Sao Thổ thêm vành đai ba vòng (nửa sau vẽ trước đĩa, nửa trước đè lên sau). Mặt Trời có nhật hoa tia mảnh xoay chậm theo thời gian. |
+| Tua giờ thấy **vòm trời quay** | Hai lớp gợi ý vòm: (1) *lưới xích đạo* (bật được) — vòng xích thiên + các vòng xích vĩ ±30°/±60° và nan xích kinh mỗi 30°, vẽ bằng toạ độ xích đạo → khoá cứng vào khung sao nên quay tròn quanh thiên cực đúng như sao; (2) khi tua, vệt sao dài theo tốc độ (`clamp(speed·2, 0.5, 160)°`) thành **cung tròn đồng tâm** quanh cực thay vì vệt ngắn, đọc như vòm cầu đang xoay chứ không phải mặt phẳng trượt. |
 | Tắt khí quyển vẫn có địa hình | Khi tắt lớp khí quyển, mặt đất và ba lớp núi chuyển sang bảng màu trung tính (xám-xanh cố định, sống núi viền sáng) thay vì chìm vào trời đen — khung nhìn thành "trời vũ trụ + đất liền" chứ không hoá mặt phẳng trống; dải mù chân trời cũng tắt theo vì nó là hiệu ứng khí quyển. |
 | Nhấp nháy & vệt sao | `scintillation(seed, t, alt)` nhiễu tất định mạnh dần khi sao xuống thấp; khi tua thời gian mỗi sao vẽ **cung tròn lớn** từ vị trí cũ tới vị trí mới (nội suy slerp) như ảnh phơi sáng. |
 | Chuyển động mượt | Khung sao chỉ dựng lại mỗi ~4 phút mô phỏng; giữa hai lần dựng, toàn bộ sao quay bằng **ma trận Rodrigues quanh trục thiên cực theo ΔLST** — chính xác tuyệt đối và rẻ (~5.000 phép nhân), nên tua nhanh vẫn mượt 60 fps. Camera được *easing* mũ về đích (kéo/thả không giật). |
@@ -29,8 +30,8 @@ và chiếu qua ống kính pinhole.
   Trăng) + nút **Hỏi AI** riêng cho đối tượng.
 - **Bàn phím** (khung đang focus): ← → ↑ ↓ nhìn quanh, `+`/`−` phóng to/thu nhỏ, phím cách tua thời gian.
 - **Thanh điều khiển**: Tua thời gian (thời gian thực → 6 giờ/giây), Về hiện tại, ô ngày giờ,
-  thanh trượt trường nhìn (5°–110°), 12 nút bật/tắt lớp (chòm sao, Ngân Hà, hoàng đạo, lưới độ cao,
-  lưới mặt đất, khí quyển, mặt đất, nhấp nháy, vệt sao…), nút **Toàn màn hình**.
+  thanh trượt trường nhìn (5°–110°), 13 nút bật/tắt lớp (chòm sao, Ngân Hà, hoàng đạo, lưới độ cao,
+  lưới mặt đất, khí quyển, mặt đất, nhấp nháy, vệt sao, **lưới xích đạo**…), nút **Toàn màn hình**.
 - HUD: hướng la bàn + góc ngẩng + trường nhìn + số sao trong khung; giờ mô phỏng.
 
 ## Toán đáng chú ý (`src/lib/sky3d.ts`)
@@ -58,7 +59,8 @@ và chiếu qua ống kính pinhole.
 ## Thứ tự vẽ (`src/lib/sky3d-render.ts`)
 
 nền trời theo dải độ cao (mỗi dải một đa giác ghép hai vòng độ cao cùng chỉ số phương vị, màu
-gradient dọc) → quầng sáng Mặt Trời → Ngân Hà → lưới độ cao/phương vị → nét chòm sao (cắt phần
+gradient dọc) → quầng sáng Mặt Trời → Ngân Hà → lưới độ cao/phương vị → lưới xích đạo (xích thiên
+vàng, nan xích kinh tím, khoá vào khung sao) → nét chòm sao (cắt phần
 khuất sau núi) → hoàng đạo + nhãn 12 cung → tên chòm sao → thiên thể sâu → **sao** (vệt → quầng →
 lõi → tia nhiễu xạ) → hành tinh / Mặt Trăng / Mặt Trời → mặt đất (nửa dưới `horizonY`) → lưới
 khoảng cách → ba lớp núi → mù chân trời → vạch chân trời + la bàn 8 hướng → nhãn chống chồng
@@ -76,16 +78,18 @@ khoảng cách → ba lớp núi → mù chân trời → vạch chân trời + 
 ## Kiểm chứng & ảnh chụp
 
 ```bash
-npm run test:sky3d   # ~1.500 phép kiểm: hình học camera, cắt tia, quay ΔLST, mặt đất, vẽ thật trên canvas
+npm run test:sky3d   # ~1.510 phép kiểm: hình học camera, cắt tia, quay ΔLST, mặt đất, vẽ thật trên canvas
 npm run test:ui3d    # gắn Sky3D vào jsdom: lăn chuột/kéo/phím cách/chọn thiên thể/đổi giờ/toàn màn hình
-npm run shot:sky3d   # 15 tình huống PNG trong .cache/shots/ (đêm, rạng, ngày, ngẩng cao, cúi, vệt sao, Sao Mộc, Sao Thổ…)
+npm run shot:sky3d   # 16 tình huống PNG trong .cache/shots/ (đêm, rạng, ngày, ngẩng cao, cúi, vệt sao, lưới xích đạo, Sao Mộc, Sao Thổ tròn đầy, Sao Kim lưỡi liềm…)
 ```
 
 Nhóm "vẽ thật" trong `tests/sky3d.check.ts` khẳng định bằng điểm ảnh: trời ngày sáng hơn trời
 đêm, mặt đất tối hơn trời, vạch chân trời sáng nằm ngang, ảnh **tất định** (hai lần vẽ trùng
 từng byte), nhấp nháy đổi ảnh theo thời gian còn tắt thì không, vệt sao không làm mất sao,
 tắt khí quyển thì sống núi vẫn tách khỏi trời và mặt đất vẫn đọc được, đĩa hành tinh phủ đủ
-điểm ảnh với Sao Mộc ám màu gỉ sắt / Sao Thổ lộ vành đai, và các góc nhìn biên
+điểm ảnh với Sao Mộc ám màu gỉ sắt / Sao Thổ lộ vành đai, pha hành tinh khớp nghiệm tam giác
+(Sao Thổ > 0,98 sáng, Sao Kim cận địa < 0,3), bật/tắt lưới xích đạo đổi ảnh mà không sinh toạ độ
+rác, và các góc nhìn biên
 (fov 5°/110°, ngẩng 89°, cúi −42°, Nam bán cầu) không sinh toạ độ rác.
 
 ## Giới hạn đã biết
