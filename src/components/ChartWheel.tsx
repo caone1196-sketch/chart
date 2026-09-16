@@ -57,7 +57,7 @@ export default function ChartWheel({
   const icOuter = anglePoint(imumCoeli, 232);
 
   return (
-    <svg viewBox="0 0 500 500" className="mx-auto w-full max-w-[560px]">
+    <svg viewBox="0 0 500 500" className="mx-auto block h-auto w-full max-w-[560px] touch-pan-y">
       <defs>
         <radialGradient id="wheel-glow" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#0b1224" />
@@ -77,7 +77,7 @@ export default function ChartWheel({
         return (
           <g key={sign.name}>
             <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke="#1e293b" strokeWidth="1" />
-            <text x={mid.x} y={mid.y} textAnchor="middle" dominantBaseline="middle" fill="#cbd5e1" fontSize="12">
+            <text x={mid.x} y={mid.y} textAnchor="middle" dominantBaseline="middle" fill="#cbd5e1" fontSize="14">
               {sign.symbol}
             </text>
           </g>
@@ -91,7 +91,7 @@ export default function ChartWheel({
         return (
           <g key={`house-${house.house}`}>
             <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#1e293b" strokeWidth="1" />
-            <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" fill="#475569" fontSize="10">
+            <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" fill="#64748b" fontSize="11">
               {house.house}
             </text>
           </g>
@@ -157,7 +157,7 @@ export default function ChartWheel({
               textAnchor="middle"
               dominantBaseline="middle"
               fill={planet.color}
-              fontSize="8.5"
+              fontSize="10"
               fontWeight="700"
             >
               {planet.symbol}

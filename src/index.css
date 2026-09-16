@@ -3,7 +3,29 @@
 html {
   scroll-behavior: smooth;
   /* neo cuộn dừng dưới header dính */
-  scroll-padding-top: 4.5rem;
+  scroll-padding-top: 7rem;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Chặn tràn ngang trên điện thoại (bảng rộng, quầng sáng tuyệt đối…) */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
+}
+
+/* Không cho chữ dài / mã / URL đẩy layout rộng ra */
+body {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+@media (min-width: 640px) {
+  html {
+    scroll-padding-top: 5rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -57,8 +79,11 @@ html {
 /* Mục tiêu cảm ứng: ô nhập, chọn, checkbox và thanh trượt đủ cỡ ngón tay */
 @media (pointer: coarse) {
   input:not([type="checkbox"]):not([type="range"]),
-  select {
+  select,
+  textarea {
     min-height: 2.75rem;
+    /* iOS Safari tự phóng to trang khi focus ô có cỡ chữ < 16px */
+    font-size: 16px;
   }
 
   input[type="checkbox"] {
@@ -73,6 +98,23 @@ html {
   button,
   .chip {
     min-height: 2.5rem;
+  }
+}
+
+/* Vùng an toàn cho máy có tai thỏ / thanh gesture */
+.safe-x {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.safe-b {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@media (max-width: 640px) {
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
   }
 }
 

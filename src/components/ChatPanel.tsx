@@ -121,8 +121,8 @@ export default function ChatPanel({
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
-      <div className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 lg:col-span-1">
+    <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
+      <div className="order-2 space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5 lg:order-1 lg:col-span-1">
         <label className="block space-y-2">
           <span className="text-xs font-medium uppercase tracking-[0.08em] text-slate-300">Tên người hỏi</span>
           <input
@@ -191,7 +191,7 @@ export default function ChatPanel({
           <p className="text-xs font-medium uppercase tracking-[0.08em] text-slate-400">Câu hỏi gợi ý</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {suggestionChips.map((chip) => (
-              <button key={chip} type="button" className="chip text-left" onClick={() => onSend(chip)} disabled={!hasChart || isAsking}>
+              <button key={chip} type="button" className="chip w-full justify-start text-left sm:w-auto" onClick={() => onSend(chip)} disabled={!hasChart || isAsking}>
                 {chip}
               </button>
             ))}
@@ -203,7 +203,7 @@ export default function ChatPanel({
         </button>
       </div>
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 lg:col-span-2">
+      <div className="order-1 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5 lg:order-2 lg:col-span-2">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-lg font-semibold">Trò chuyện với AI luận giải</h3>
           {engine ? (
@@ -213,15 +213,15 @@ export default function ChatPanel({
           ) : null}
         </div>
 
-        <div ref={scrollRef} className="mt-4 h-[24rem] overflow-y-auto rounded-xl border border-slate-700 bg-slate-950/80 p-3 md:h-[28rem] md:p-4">
+        <div ref={scrollRef} className="mt-4 h-[60svh] max-h-[26rem] min-h-[18rem] overflow-y-auto overscroll-contain rounded-xl border border-slate-700 bg-slate-950/80 p-3 md:h-[28rem] md:max-h-none md:p-4">
           <div className="space-y-3">
             {messages.map((message, index) => (
               <div
                 key={`${message.role}-${index}`}
                 className={`rounded-xl px-3 py-2.5 ${
                   message.role === "user"
-                    ? "ml-auto max-w-[88%] border border-sky-300/30 bg-sky-400/15 text-sky-50"
-                    : "mr-auto max-w-[92%] border border-slate-700 bg-slate-900/90 text-slate-100"
+                    ? "ml-auto max-w-[92%] sm:max-w-[88%] border border-sky-300/30 bg-sky-400/15 text-sky-50"
+                    : "mr-auto max-w-[95%] sm:max-w-[92%] border border-slate-700 bg-slate-900/90 text-slate-100"
                 }`}
               >
                 {message.role === "user" ? <p className="text-sm leading-relaxed">{message.content}</p> : <MarkdownLite content={message.content} />}
@@ -247,16 +247,16 @@ export default function ChatPanel({
             rows={3}
             className="w-full rounded-lg border border-slate-600/80 bg-slate-950/90 px-3 py-2.5 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-sky-300"
           />
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3">
             <button
               type="button"
               onClick={() => onSend()}
               disabled={isAsking || !hasChart}
-              className="inline-flex items-center justify-center rounded-lg bg-sky-400 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-sky-400 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-sky-300 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
               {isAsking ? "Đang gửi…" : "Gửi câu hỏi"}
             </button>
-            <span className="text-xs text-slate-500">Enter để gửi · Shift + Enter xuống dòng</span>
+            <span className="hidden text-xs text-slate-500 sm:inline">Enter để gửi · Shift + Enter xuống dòng</span>
           </div>
           {!hasChart ? <p className="text-xs text-amber-200">Hãy tạo bản đồ sao ở phía trên trước khi hỏi AI.</p> : null}
         </div>

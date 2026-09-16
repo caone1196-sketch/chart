@@ -338,11 +338,11 @@ export default function App() {
   return (
     <main className="app-bg min-h-screen text-slate-100 antialiased">
       <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-xl">
-        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-3.5 md:px-10">
-          <p className="inline-flex items-center gap-2 rounded-md border border-sky-300/35 bg-sky-300/10 px-3 py-1 text-xs font-semibold tracking-[0.16em] text-sky-200">
+        <div className="safe-x mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2.5 sm:gap-3 sm:py-3 sm:px-6 md:px-10">
+          <p className="inline-flex items-center gap-2 rounded-md border border-sky-300/35 bg-sky-300/10 px-2.5 py-1 text-[11px] font-semibold tracking-[0.12em] text-sky-200 sm:px-3 sm:text-xs sm:tracking-[0.16em]">
             ✦ ASTRAL CHART VN
           </p>
-          <nav className="no-scrollbar -mx-1 flex items-center gap-4 overflow-x-auto px-1 text-sm text-slate-300 md:gap-5">
+          <nav className="no-scrollbar -mx-1 flex w-full items-center gap-3 overflow-x-auto px-1 text-[13px] text-slate-300 sm:w-auto sm:gap-4 sm:text-sm md:gap-5">
             <a href="#lap-chart" className="whitespace-nowrap transition hover:text-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 rounded-md px-1 py-0.5">
               Lập bản đồ sao
             </a>
@@ -360,7 +360,7 @@ export default function App() {
       </header>
 
       <section
-        className="relative flex min-h-[80vh] items-center overflow-hidden"
+        className="relative flex min-h-[72svh] items-center overflow-hidden sm:min-h-[80vh]"
         style={{
           backgroundImage: "linear-gradient(rgba(2,6,23,0.72), rgba(2,6,23,0.92)), url('/images/astro-night.jpg')",
           backgroundSize: "cover",
@@ -378,12 +378,12 @@ export default function App() {
           <div className="absolute inset-20 rounded-full border border-slate-300/20" />
         </motion.div>
 
-        <div className="relative mx-auto w-full max-w-7xl px-6 py-20 md:px-10">
+        <div className="relative mx-auto w-full max-w-7xl px-4 py-14 sm:px-6 sm:py-20 md:px-10">
           <motion.p
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7 }}
-            className="text-sm font-semibold tracking-[0.3em] text-sky-300"
+            className="text-[11px] font-semibold tracking-[0.18em] text-sky-300 sm:text-sm sm:tracking-[0.3em]"
           >
             BẢN ĐỒ SAO · BẦU TRỜI THỰC TẾ · AI LUẬN GIẢI
           </motion.p>
@@ -392,7 +392,7 @@ export default function App() {
             initial={{ opacity: 0, y: 28 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.1 }}
-            className="mt-4 max-w-4xl text-4xl font-semibold leading-tight sm:text-5xl md:text-6xl"
+            className="mt-4 max-w-4xl text-[1.75rem] font-semibold leading-tight sm:text-5xl md:text-6xl"
           >
             Lập bản đồ sao, xem bầu trời thật và đặt câu hỏi cho AI trả lời
           </motion.h1>
@@ -401,7 +401,7 @@ export default function App() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2 }}
-            className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-100/90"
+            className="mt-5 max-w-2xl text-base leading-relaxed text-slate-100/90 sm:mt-6 sm:text-lg"
           >
             Nhập ngày - giờ - nơi sinh để dựng bản đồ sao natal (Mặt Trời, Mặt Trăng, cung Mọc, 12 nhà, góc chiếu, sao cố định). Sau đó mở
             bản đồ sao thực tế với 5.044 ngôi sao Hipparcos, 88 chòm sao và 118 thiên thể sâu, rồi hỏi trợ lý AI bất cứ điều gì.
@@ -411,17 +411,17 @@ export default function App() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.3 }}
-            className="mt-9 flex flex-wrap gap-4"
+            className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4"
           >
             <a
               href="#lap-chart"
-              className="inline-flex items-center justify-center rounded-lg bg-sky-400 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-300"
+              className="inline-flex w-full items-center justify-center rounded-lg bg-sky-400 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-300 sm:w-auto"
             >
               Lập bản đồ sao ngay
             </a>
             <a
               href="#hoi-ai"
-              className="inline-flex items-center justify-center rounded-lg border border-slate-300/50 px-6 py-3 text-sm font-semibold text-slate-100 transition hover:border-sky-300 hover:text-sky-200"
+              className="inline-flex w-full items-center justify-center rounded-lg border border-slate-300/50 px-6 py-3 text-sm font-semibold text-slate-100 transition hover:border-sky-300 hover:text-sky-200 sm:w-auto"
             >
               Hỏi AI luận giải
             </a>
@@ -431,7 +431,7 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1, delay: 0.5 }}
-            className="mt-12 grid max-w-3xl grid-cols-2 gap-4 text-sm sm:grid-cols-4"
+            className="mt-10 grid max-w-3xl grid-cols-2 gap-3 text-sm sm:mt-12 sm:gap-4 sm:grid-cols-4"
           >
             {[
               ["5.044", "ngôi sao Hipparcos"],
@@ -439,7 +439,7 @@ export default function App() {
               ["118", "thiên thể sâu"],
               ["2 lớp AI", "mô hình lớn + nội bộ"]
             ].map(([value, label]) => (
-              <div key={label} className="rounded-xl border border-slate-700/70 bg-slate-950/60 px-4 py-3">
+              <div key={label} className="rounded-xl border border-slate-700/70 bg-slate-950/60 px-3 py-3 sm:px-4">
                 <dt className="text-lg font-semibold text-sky-200">{value}</dt>
                 <dd className="text-xs text-slate-400">{label}</dd>
               </div>
@@ -450,9 +450,9 @@ export default function App() {
 
       <section className="relative overflow-hidden border-b border-slate-800/70">
         <div className="pointer-events-none absolute inset-x-0 -top-24 h-64 bg-[radial-gradient(600px_220px_at_50%_0%,rgb(56_189_248/0.14),transparent_70%)]" />
-        <div className="mx-auto w-full max-w-7xl px-6 py-16 md:px-10 md:py-24">
+        <div className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 sm:py-16 md:px-10 md:py-24">
           <p className="overline">Bản đồ sao · Bầu trời thật 3D · Luận giải AI</p>
-          <h1 className="mt-4 max-w-3xl text-4xl font-semibold leading-tight tracking-tight md:text-5xl">
+          <h1 className="mt-4 max-w-3xl text-[1.6rem] font-semibold leading-tight tracking-tight sm:text-4xl md:text-5xl">
             Ngắm bầu trời của bạn{" "}
             <span className="bg-gradient-to-r from-sky-300 via-indigo-300 to-amber-200 bg-clip-text text-transparent">
               như đang đứng dưới sao
@@ -463,7 +463,7 @@ export default function App() {
             hành tinh là khối cầu với pha thật, và vòm trời xoay khi bạn tua thời gian. Cần luận giải? Hỏi AI từng câu hoặc
             hỏi riêng một thiên thể.
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
+          <div className="mt-7 grid gap-2.5 sm:flex sm:flex-wrap sm:gap-3">
             <a href="#lap-chart" className="btn-primary">Lập bản đồ sao</a>
             <a href="#ban-do-sao" className="btn-ghost">Ngắm bầu trời 3D</a>
             <a href="#hoi-ai" className="btn-ghost">Hỏi AI</a>
@@ -484,7 +484,7 @@ export default function App() {
         </div>
       </section>
 
-      <section id="lap-chart" className="mx-auto w-full max-w-7xl px-6 py-16 md:px-10">
+      <section id="lap-chart" className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 sm:py-16 md:px-10">
         <p className="overline">Mục 1</p>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">Nhập dữ liệu sinh</h2>
         <p className="mt-3 max-w-3xl text-slate-300">
@@ -504,7 +504,7 @@ export default function App() {
         </div>
       </section>
 
-      <section id="ban-do-sao" className="mx-auto w-full max-w-7xl px-6 pb-16 md:px-10">
+      <section id="ban-do-sao" className="mx-auto w-full max-w-7xl px-4 pb-12 sm:px-6 sm:pb-16 md:px-10">
         <p className="overline">Mục 2</p>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">Bản đồ sao 3D &amp; bầu trời hôm nay</h2>
         <p className="mt-3 max-w-3xl text-slate-300">
@@ -576,7 +576,7 @@ export default function App() {
         ) : null}
       </section>
 
-      <section id="ket-qua" className="mx-auto w-full max-w-7xl px-6 pb-16 md:px-10">
+      <section id="ket-qua" className="mx-auto w-full max-w-7xl px-4 pb-12 sm:px-6 sm:pb-16 md:px-10">
         <p className="overline">Mục 3</p>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">Kết quả bản đồ sao natal</h2>
         <AnimatePresence mode="wait">
@@ -587,8 +587,8 @@ export default function App() {
                 {chart.timezoneId ?? "múi giờ thủ công"} · giờ sinh quy đổi {chart.utcDate.toUTCString()}
               </p>
 
-              <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-                <div className="card p-4 md:p-6">
+              <div className="mt-6 grid items-start gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+                <div className="card p-3 sm:p-4 md:p-6">
                   <ChartWheel
                     planets={chart.planets}
                     aspects={chart.aspects}
@@ -629,7 +629,7 @@ export default function App() {
         </AnimatePresence>
       </section>
 
-      <section id="hoi-ai" className="mx-auto w-full max-w-7xl px-6 pb-24 md:px-10">
+      <section id="hoi-ai" className="mx-auto w-full max-w-7xl px-4 pb-20 sm:px-6 sm:pb-24 md:px-10">
         <div className="border-t border-slate-800 pt-12">
           <p className="overline">Mục 4</p>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">Đặt câu hỏi cho AI trả lời</h2>
@@ -671,7 +671,7 @@ export default function App() {
       </section>
 
       <footer className="border-t border-slate-800 bg-slate-950/80">
-        <div className="mx-auto w-full max-w-7xl px-6 py-10 text-sm text-slate-400 md:px-10">
+        <div className="safe-b safe-x mx-auto w-full max-w-7xl px-4 py-10 text-sm text-slate-400 sm:px-6 md:px-10">
           <p>
             Dữ liệu sao: d3-celestial (Olaf Frohn, MIT) — catalogue Hipparcos, 88 chòm sao, Messier. Tính toán thiên văn: astronomy-engine
             (Don Cross, MIT). Tra toạ độ: OpenStreetMap Nominatim / Open-Meteo.

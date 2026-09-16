@@ -41,7 +41,7 @@ export default function ChartPanel({
   ];
 
   return (
-    <div className="card flex min-h-0 flex-col p-4 md:p-5">
+    <div className="card flex min-h-0 flex-col p-3 sm:p-4 md:p-5">
       <div className="no-scrollbar -mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1" role="tablist" aria-label="Nội dung kết quả bản đồ sao">
         {tabs.map((item) => (
           <button
@@ -61,7 +61,7 @@ export default function ChartPanel({
         ))}
       </div>
 
-      <div className="mt-2 max-h-[24rem] min-h-0 flex-1 overflow-y-auto pr-1 lg:max-h-[32rem]">
+      <div className="mt-2 max-h-[22rem] min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 sm:max-h-[24rem] lg:max-h-[32rem]">
         {tab === "overview" ? (
           <div className="space-y-4">
             <div>
