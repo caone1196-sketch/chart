@@ -25,13 +25,16 @@ import {
   type ChartData,
   type TransitHit
 } from "@/lib/astro";
-import { askServerAi, type ChatEngine, type ChatTurn } from "@/lib/ai";
+import { askServerAi, checkServerHealth, type ChatEngine, type ChatTurn, type ServerHealth } from "@/lib/ai";
 import { geocodePlace } from "@/lib/geocode";
 import { answerLocally } from "@/lib/interpret";
 import { computeSkySnapshot, findFixedStarHits, riseSetForDay, type FixedStarHit } from "@/lib/sky";
 
 const STORAGE_FORM = "astral-chart-vn:form";
 const STORAGE_CHAT = "astral-chart-vn:chat";
+
+/** Trạng thái lớp AI phía máy chủ hiển thị trên giao diện. */
+type ServerLlmState = "checking" | "gemini" | "local" | "unreachable";
 
 const defaultForm = (): BirthFormValues => {
   const now = new Date();
@@ -98,7 +101,9 @@ export default function App() {
   const [status, setStatus] = useState("");
   const [engine, setEngine] = useState<ChatEngine | null>(null);
   const [engineLabel, setEngineLabel] = useState("");
-  const [serverLlm, setServerLlm] = useState<"checking" | "gemini" | "local">("checking");
+  const [serverLlm, setServerLlm] = useState<ServerLlmState>("checking");
+  const [serverHealth, setServerHealth] = useState<ServerHealth | null>(null);
+  const [isCheckingServer, setIsCheckingServer] = useState(false);
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -106,19 +111,19 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, []);
 
+  /** Hỏi /api/health: phân biệt rõ "chưa có khoá", "có khoá" và "không gọi được route". */
+  const refreshServerHealth = async (probe = false) => {
+    setIsCheckingServer(true);
+    const health = await checkServerHealth(probe);
+    setServerHealth(health);
+    setServerLlm(!health.reachable ? "unreachable" : health.llm === "gemini" ? "gemini" : "local");
+    setIsCheckingServer(false);
+    return health;
+  };
+
   useEffect(() => {
-    let cancelled = false;
-    fetch("/api/health")
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("no health"))))
-      .then((payload: { llm?: string }) => {
-        if (!cancelled) setServerLlm(payload.llm === "gemini" ? "gemini" : "local");
-      })
-      .catch(() => {
-        if (!cancelled) setServerLlm("local");
-      });
-    return () => {
-      cancelled = true;
-    };
+    void refreshServerHealth(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -315,11 +320,14 @@ export default function App() {
     if ("reply" in result && result.reply) {
       setEngine("gemini");
       setEngineLabel(result.model || "mô hình lớn");
+      setServerLlm("gemini");
+      void refreshServerHealth(false);
       setChatMessages((previous) => [...previous, { role: "assistant", content: result.reply }]);
     } else {
       const message = "error" in result ? result.error : "Không gọi được mô hình lớn.";
       setEngine("local");
       setEngineLabel("bộ luận giải nội bộ");
+      if ("code" in result && result.code === "NO_API_KEY") setServerLlm("local");
       setStatus(`Mô hình lớn chưa sẵn sàng (${message}) — đã trả lời bằng bộ luận giải nội bộ chạy trong trình duyệt.`);
       setChatMessages((previous) => [...previous, { role: "assistant", content: fallback() }]);
     }
@@ -650,6 +658,11 @@ export default function App() {
             engine={engine}
             engineLabel={engineLabel}
             serverLlm={serverLlm}
+            serverHealth={serverHealth}
+            isCheckingServer={isCheckingServer}
+            onCheckServer={() => {
+              void refreshServerHealth(true);
+            }}
             senderName={senderName}
             setSenderName={setSenderName}
             hasChart={Boolean(chart)}

@@ -66,7 +66,8 @@ npm run typecheck  # kiểm tra TypeScript
 npm run build      # build ra dist/index.html (một tệp duy nhất)
 npm run preview    # phục vụ dist/ kèm API route
 npm run data       # sinh lại dữ liệu sao vào src/data/ từ gói npm d3-celestial
-npm test           # toàn bộ kiểm chứng số liệu + bản đồ sao + giao diện
+npm test           # toàn bộ kiểm chứng số liệu + bản đồ sao + giao diện + lớp API Gemini
+npm run check:ai   # chẩn đoán cấu hình Gemini (khoá có dùng được không, model nào đang mở)
 npm run test:sky   # mô hình hiển thị bầu trời (khúc xạ, phép chiếu, Ngân Hà, pha Trăng, tra cứu)
 npm run test:ui3d  # chạy giao diện ngắm trời 3D trong jsdom (lăn chuột/kéo/chọn thiên thể/đổi giờ)
 npm run test:sky3d # hình học + bộ vẽ của khung ngắm 3D (kèm vẽ thật trên canvas Node)
@@ -78,10 +79,21 @@ npm run shot:sky3d # render 16 tình huống 3D ra PNG trong .cache/shots/
 | Biến | Mặc định | Ý nghĩa |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | — | Bật lớp Gemini cho phần hỏi đáp (tạo miễn phí tại Google AI Studio) |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Tên mô hình Gemini |
+| `GEMINI_MODEL` | `gemini-3.8-flash` | Tên mô hình Gemini (nếu model không mở, app tự thử `gemini-flash-latest`, `gemini-3.6-flash`, `gemini-2.5-flash`) |
 | `PORT` | `5173` | Cổng máy chủ dev/preview |
 
 Không có `GEMINI_API_KEY` thì app **vẫn hoạt động đầy đủ**: API trả mã `NO_API_KEY` và giao diện tự chuyển sang bộ luận giải nội bộ.
+
+Máy chủ dev tự nạp `.env` (không cần thư viện ngoài), nên chạy local chỉ cần tạo tệp `.env`:
+
+```bash
+echo 'GEMINI_API_KEY=dán_khoá_của_bạn' > .env
+npm run check:ai   # chẩn đoán: khoá có dùng được không, model nào đang mở
+```
+
+`npm run check:ai` gọi thẳng Google để biết khoá **thực sự** hoạt động, in ra model nên đặt, và
+phân biệt rõ ba tình huống rất khác nhau: máy chủ không nhận được biến, khoá bị Google từ chối,
+hay tên model không tồn tại.
 
 ## Cấu trúc
 
@@ -111,11 +123,14 @@ src/
   components/        BirthForm, ChartWheel, ChartPanel, VariantPanel, Sky3D (bản đồ sao 3D), ChatPanel
   data/              stars.json, constellations.json, deepsky.json (sinh bởi scripts/build-data.mjs)
 api/
-  _handler.js        xử lý Gemini dùng chung (Vercel Serverless + máy chủ dev)
-  ai-chat.js         route /api/ai-chat
+  _handler.js        xử lý Gemini + chẩn đoán dùng chung (Vercel Serverless + máy chủ dev)
+  ai-chat.js         route POST /api/ai-chat
+  health.js          route GET /api/health (đã có khoá chưa, model nào, ?probe=1 để gọi thử Google)
 vercel.json          cấu hình Vercel: framework Vite, dist/, rewrite SPA, function ai-chat
 server/index.mjs     máy chủ dev (Vite middleware) và chế độ --prod
 scripts/build-data.mjs  sinh dữ liệu sao từ npm package d3-celestial
+scripts/check-ai.mjs    chẩn đoán GEMINI_API_KEY / GEMINI_MODEL (`npm run check:ai`)
+tests/ai-api.check.ts   kiểm chứng lớp API: chuẩn hoá khoá, mã lỗi, đổi model dự phòng, /api/health
 ```
 
 ## Deploy lên Vercel
@@ -132,6 +147,45 @@ Repo đã sẵn sàng cho Vercel (tĩnh + một serverless function):
 
 Cách khác bằng CLI: `npx vercel login` rồi `npx vercel --prod` tại thư mục repo (chọn framework Vite,
 thêm biến môi trường bằng `npx vercel env add GEMINI_API_KEY`).
+
+### Đã thêm key Gemini mà app vẫn báo “chưa có key — dùng bộ nội bộ”
+
+Trang web gọi `GET /api/health` để biết máy chủ có khoá hay chưa. Nếu route này không tới được
+(ví dụ rewrite SPA nuốt mất `/api/*`) thì giao diện sẽ báo “không gọi được /api/health” thay vì
+đoán bừa là chưa có key. Kiểm tra theo thứ tự:
+
+1. **Mở thẳng** `https://<tên-miền>/api/health` (thêm `?probe=1` để gọi thử Google).
+   - Trả về `{"llm":"gemini",...}` → máy chủ đã nhận khoá, xem tiếp bước 3.
+   - Trả về **HTML** (trang chủ) → request `/api/*` bị rewrite SPA nuốt; `vercel.json` trong repo
+     đã chừa `/api/` bằng `"source": "/((?!api(?:/|$)).*)"`, hãy chắc chắn tệp này có trong commit đã deploy.
+   - Trả về `"llm":"local-fallback"` → function không thấy biến `GEMINI_API_KEY`.
+2. **Đúng môi trường + deploy lại**: biến khai trong *Settings → Environment Variables* phải tick
+   đúng **Production** (và **Preview** nếu dùng preview), sau đó **Redeploy** — deploy cũ không tự nhận biến mới.
+   Vercel → *Functions* → chọn function `api/health` → tab *Environment Variables* để xem biến đã vào function chưa.
+3. **Khoá dùng được không**: `?probe=1` trả về `probe.ok=false` kèm mã lỗi rõ ràng
+   (`GEMINI_BAD_KEY`, `GEMINI_API_DISABLED`, `GEMINI_KEY_RESTRICTED`, `GEMINI_QUOTA`,
+   `GEMINI_MODEL_NOT_FOUND`…). Khoá dán kèm dấu ngoặc/khoảng trắng/xuống dòng đã được máy chủ tự
+   chuẩn hoá, nhưng khoá bị **giới hạn HTTP referrer** thì không dùng được từ server — hãy tạo khoá
+   không giới hạn referrer cho ứng dụng chạy phía máy chủ.
+4. Chạy `npm run check:ai` ở máy local: khoá đúng hay sai sẽ lộ ra ngay trước khi deploy.
+
+Khi Gemini trả lỗi, giao diện hiện nguyên văn lý do kèm gợi ý khắc phục, ví dụ:
+`Mô hình lớn chưa sẵn sàng (GEMINI_API_KEY không hợp lệ (Google từ chối khoá). Dán lại khoá mới từ … )`.
+
+### `npm warn allow-scripts … esbuild`
+
+npm ≥ 11.16 (và npm 12, mặc định từ 07/2026) **không chạy script cài đặt của gói phụ thuộc** nếu
+project chưa cho phép. esbuild cần `postinstall` để đặt binary vào `node_modules/esbuild/bin`, nên npm
+in cảnh báo này ở mỗi lần `npm install`/`vercel build`. Dự án đã khai báo sẵn trong `package.json`:
+
+```json
+"allowScripts": { "esbuild": true }
+```
+
+Để dạng không ghim phiên bản nên khi Vite nâng esbuild không phải duyệt lại. Muốn kiểm tra còn gói
+nào chưa duyệt: `npx npm@12 approve-scripts --allow-scripts-pending` (không in gì = đã sạch).
+Cảnh báo này không làm hỏng build (esbuild vẫn lấy binary từ gói `@esbuild/<nền tảng>`), nhưng để
+lại allowlist trong repo thì npm 12 chạy đúng như npm cũ.
 
 ## Nguồn dữ liệu & giấy phép
 

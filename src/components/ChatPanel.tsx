@@ -1,6 +1,22 @@
 import { type KeyboardEvent, type ReactElement, useEffect, useMemo, useRef } from "react";
 import { suggestionChips } from "@/lib/interpret";
-import type { ChatEngine, ChatTurn } from "@/lib/ai";
+import type { ChatEngine, ChatTurn, ServerHealth } from "@/lib/ai";
+
+type ServerLlmState = "checking" | "gemini" | "local" | "unreachable";
+
+const serverStatusText: Record<ServerLlmState, string> = {
+  checking: "đang kiểm tra…",
+  gemini: "Gemini đã sẵn sàng",
+  local: "chưa có key — dùng bộ nội bộ",
+  unreachable: "không gọi được /api/health"
+};
+
+const serverStatusClass: Record<ServerLlmState, string> = {
+  checking: "text-slate-300",
+  gemini: "text-emerald-300",
+  local: "text-amber-200",
+  unreachable: "text-rose-300"
+};
 
 const renderInline = (text: string, keyPrefix: string) => {
   const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
@@ -63,7 +79,10 @@ export type ChatPanelProps = {
   status: string;
   engine: ChatEngine | null;
   engineLabel: string;
-  serverLlm: "checking" | "gemini" | "local";
+  serverLlm: ServerLlmState;
+  serverHealth: ServerHealth | null;
+  isCheckingServer: boolean;
+  onCheckServer: () => void;
   senderName: string;
   setSenderName: (value: string) => void;
   hasChart: boolean;
@@ -80,6 +99,9 @@ export default function ChatPanel({
   engine,
   engineLabel,
   serverLlm,
+  serverHealth,
+  isCheckingServer,
+  onCheckServer,
   senderName,
   setSenderName,
   hasChart
@@ -122,11 +144,47 @@ export default function ChatPanel({
             chiếu, transit của bạn).
           </p>
           <p className="mt-2 text-slate-400">
-            Trạng thái máy chủ:{" "}
-            <span className={serverLlm === "gemini" ? "text-emerald-300" : "text-amber-200"}>
-              {serverLlm === "checking" ? "đang kiểm tra…" : serverLlm === "gemini" ? "Gemini đã sẵn sàng" : "chưa có key — dùng bộ nội bộ"}
-            </span>
+            Trạng thái máy chủ: <span className={serverStatusClass[serverLlm]}>{serverStatusText[serverLlm]}</span>
+            {serverLlm === "gemini" && serverHealth?.model ? <span className="text-slate-500"> · {serverHealth.model}</span> : null}
           </p>
+          {serverLlm === "unreachable" ? (
+            <p className="mt-2 text-rose-300">
+              {serverHealth?.error || "Không gọi được route /api/health."} Nếu đang chạy trên Vercel, hãy kiểm tra{" "}
+              <code className="text-rose-200">vercel.json</code> (rewrite SPA phải chừa <code className="text-rose-200">/api/*</code>) và mở thẳng{" "}
+              <code className="text-rose-200">/api/health</code> trên tên miền đã deploy.
+            </p>
+          ) : null}
+          {serverLlm === "local" && serverHealth?.keyPresent ? (
+            <p className="mt-2 text-amber-200">
+              Máy chủ có biến <code className="text-amber-100">GEMINI_API_KEY</code> nhưng khoá chưa dùng được
+              {serverHealth.probe?.code ? ` (${serverHealth.probe.code})` : ""}. Bấm “Kiểm tra Gemini” để xem Google trả lời gì.
+            </p>
+          ) : null}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onCheckServer}
+              disabled={isCheckingServer}
+              className="rounded-md border border-slate-600 px-2.5 py-1 text-xs text-slate-200 transition hover:border-sky-300 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isCheckingServer ? "Đang kiểm tra…" : "Kiểm tra Gemini"}
+            </button>
+            <span className="text-[11px] text-slate-500">
+              {serverHealth?.runtime ? `${serverHealth.runtime}${serverHealth.region ? ` · ${serverHealth.region}` : ""}` : "—"}
+              {serverHealth?.keyPresent && typeof serverHealth.keyLength === "number" ? ` · khoá ${serverHealth.keyLength} ký tự` : ""}
+            </span>
+          </div>
+          {serverHealth?.probe ? (
+            <p className={`mt-2 ${serverHealth.probe.ok ? "text-emerald-300" : "text-rose-300"}`}>
+              {serverHealth.probe.ok
+                ? `Google chấp nhận khoá · ${serverHealth.probe.modelCount ?? 0} model dùng được${
+                    serverHealth.probe.preferredModelAvailable === false && serverHealth.probe.suggestedModel
+                      ? ` · nên đặt GEMINI_MODEL=${serverHealth.probe.suggestedModel}`
+                      : ""
+                  }`
+                : `${serverHealth.probe.error || "Khoá chưa dùng được."}${serverHealth.probe.hint ? ` ${serverHealth.probe.hint}` : ""}`}
+            </p>
+          ) : null}
         </div>
 
         <div>
