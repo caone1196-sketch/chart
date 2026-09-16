@@ -194,3 +194,78 @@ Kết quả sau khi sửa: `npm test` → 12 hệ nhà · ayanamsa · âm lịch
 - `touch-none` trên khung giữ cử chỉ chụm/kéo cho bản đồ (như trước), nghĩa là vuốt trên khung không cuộn trang trên điện thoại.
 - Giới hạn dịch chuyển ±0,85 cạnh khung là hằng số theo khung, không đổi theo mức phóng (giữ nguyên hành vi kéo cũ):
   ở zoom nhỏ vẫn có thể kéo vòm trời lệch hẳn sang một bên, nhưng nút **⟲ Căn lại** và phím `0` luôn đưa về khung mặc định.
+
+## 8. Lượt soát 16/09/2026 (chiều) — npm allow-scripts & khoá Gemini trên Vercel
+
+Hai vấn đề người dùng báo: (1) mỗi lần `npm install`/`vercel build` có cảnh báo
+`npm warn allow-scripts … esbuild@0.27.7 (postinstall: node install.js)`; (2) thêm `GEMINI_API_KEY` trên
+Vercel nhưng app vẫn báo "chưa có key — dùng bộ nội bộ".
+
+### 8.1 Cảnh báo allow-scripts của npm: gói phụ thuộc không chạy được script cài đặt
+
+**Nguyên nhân:** npm ≥ 11.16 (và npm 12, mặc định từ 07/2026) **không chạy** `preinstall`/`install`/
+`postinstall` của gói phụ thuộc nếu project chưa cho phép trong `package.json`; `npm install` chỉ in cảnh báo
+rồi vẫn thoát 0, nên lỗi im lặng tới lúc chạy mới lộ. esbuild là gói duy nhất trong cây phụ thuộc cần script
+(`fsevents` cũng có `node-gyp rebuild` nhưng chỉ dành cho macOS và `os: ["darwin"]`).
+
+**Sửa:** thêm `"allowScripts": { "esbuild": true }` vào `package.json` (để dạng **không ghim phiên bản** để
+Vite nâng esbuild không phải duyệt lại; npm mặc định ghim `esbuild@0.27.7`). Đồng thời khai báo thẳng
+`esbuild` trong `devDependencies` vì các script `test:*` gọi binary này trực tiếp — trước đây nó chỉ có nhờ
+Vite kéo về, tức là phụ thuộc vào cách npm dedupe.
+
+Kiểm chứng: `npx npm@12 approve-scripts --allow-scripts-pending` → không in gì (sạch);
+`npm run test:ai`, `npm run build` chạy bình thường với binary esbuild lấy từ gói `@esbuild/linux-x64`.
+
+### 8.2 "Thêm key Gemini trên Vercel không nhận" — ba lỗi chồng nhau
+
+**Nguyên nhân 1 — thiếu route `/api/health`.** `App.tsx` hỏi `/api/health` để biết máy chủ có khoá chưa,
+nhưng route này **chỉ tồn tại trong `server/index.mjs`**, không có tệp nào trong `api/`. Trên Vercel, request
+rơi vào rewrite SPA và nhận về `index.html` với HTTP 200 → `response.json()` ném lỗi → hàm `.catch` cũ đặt
+`serverLlm = "local"` → giao diện luôn hiện "chưa có key — dùng bộ nội bộ" **dù khoá đã có và hợp lệ**.
+**Sửa:** thêm `api/health.js` dùng chung `healthHandler` với máy chủ dev; trả về đã có khoá chưa, độ dài khoá,
+model đang dùng, và `?probe=1` để gọi thử Google (ListModels) nhằm biết khoá có **thực sự** dùng được.
+Không trả về bất kỳ ký tự nào của khoá.
+
+**Nguyên nhân 2 — rewrite SPA nuốt luôn `/api/*`.** `vercel.json` cũ đặt `{"source": "/(.*)",
+"destination": "/index.html"}`. Kiểm tra bằng chính thư viện Vercel dùng lúc build
+(`@vercel/routing-utils` → `getTransformedRoutes`): route sinh ra là `^/(.*)$` và **khớp cả `/api/ai-chat`
+lẫn `/api/health`**. **Sửa:** `{"source": "/((?!api(?:/|$)).*)", "destination": "/index.html"}`; biên dịch lại
+cho ra `^/((?!api(?:/|$)).*)$`: `/`, `/api-key`, `/abc/def` → `index.html`;
+`/api`, `/api/`, `/api/ai-chat`, `/api/health` → đi thẳng tới function. Kèm `Cache-Control: no-store` cho `/api/*`.
+
+**Nguyên nhân 3 — lỗi thật bị che thành một câu chung chung.** `GEMINI_MODEL` mặc định cũ là
+`gemini-2.5-flash` (dòng 2.5, 06/2025) trong khi dòng hiện hành là Gemini 3.x; model bị khai tử/chưa mở
+trả về 404 mà mã cũ gộp hết thành "Lỗi khi gọi Gemini." kèm mã `GEMINI_NETWORK`. **Sửa:** mặc định
+`gemini-3.8-flash` + chuỗi dự phòng `gemini-flash-latest` → `gemini-3.6-flash` → `gemini-2.5-flash`
+(chỉ đổi model khi lỗi thuộc về model), dịch lỗi Google sang tiếng Việt kèm việc cần làm
+(`GEMINI_BAD_KEY`, `GEMINI_API_DISABLED`, `GEMINI_KEY_RESTRICTED`, `GEMINI_QUOTA`, `GEMINI_MODEL_NOT_FOUND`,
+`GEMINI_EMPTY`, `GEMINI_TIMEOUT`, `GEMINI_NETWORK`), và nâng `maxOutputTokens` 1024 → 4096 vì model dòng 3
+tính cả token suy luận vào hạn mức (câu trả lời dễ bị cụt thành rỗng).
+
+**Phụ:** khoá dán kèm dấu ngoặc, kèm tiền tố `GEMINI_API_KEY=` hoặc lẫn khoảng trắng/xuống dòng nay được
+chuẩn hoá (`normalizeApiKey`) và `/api/health` báo cờ `hadWhitespace`; giao diện phân biệt ba trạng thái
+"chưa có key" · "Gemini đã sẵn sàng" · "không gọi được /api/health" thay vì gộp hai trạng thái cuối làm một.
+
+### 8.3 Bất biến mới được khoá bằng test
+
+| Bất biến | Test |
+| --- | --- |
+| Chuẩn hoá khoá: cắt khoảng trắng, bỏ `"…"`/`'…'`, bỏ tiền tố `GEMINI_API_KEY=`, gỡ xuống dòng | `npm run test:ai` |
+| `/api/health` không bao giờ chứa nội dung khoá (chỉ boolean + độ dài) | `npm run test:ai` |
+| Lỗi Google được dịch đúng mã: khoá sai, chưa bật API, khoá bị giới hạn referrer, quota, model không tồn tại, 5xx, lỗi mạng | `npm run test:ai` |
+| Model đầu 404 thì tự rơi xuống model dự phòng, ghi lại `modelsTried` | `npm run test:ai` |
+| Khoá sai **không** thử thêm model (tránh nhân số lần gọi lỗi) | `npm run test:ai` |
+| Thiếu khoá thì không gọi mạng (0 request) và trả `NO_API_KEY` | `npm run test:ai` |
+| `?probe=1` trả lời được "khoá dùng được chưa" + gợi ý model thay thế | `npm run test:ai` |
+| Rewrite SPA không khớp `/api/*` (kiểm bằng `@vercel/routing-utils`) | thủ công, xem 8.2 |
+
+Kết quả sau khi sửa: `npm test` → tất cả bộ cũ giữ nguyên 0 lỗi, thêm **test:ai 58 phép kiểm, 0 lỗi**;
+`npm run typecheck` và `npm run build` sạch.
+
+## 9. Cách tự kiểm tra sau khi deploy
+
+1. `npm run check:ai` ở máy: khoá đúng/sai, model nào đang mở cho project của khoá.
+2. `https://<tên-miền>/api/health` → `{"llm":"gemini",…}` là function đã thấy biến môi trường.
+3. `https://<tên-miền>/api/health?probe=1` → `probe.ok = true` là Google chấp nhận khoá.
+4. Nếu (2) trả về **HTML**: biến hoặc rewrite chưa đúng — kiểm tra `vercel.json` có trong commit đã deploy,
+   biến đã tick đúng môi trường **Production**, và đã **Redeploy** sau khi thêm biến (deploy cũ không tự nhận biến mới).

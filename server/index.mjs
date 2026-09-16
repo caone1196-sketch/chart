@@ -11,9 +11,20 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import aiChatHandler from "../api/_handler.js";
+import aiChatHandler, { buildHealthPayload, healthHandler, normalizeApiKey } from "../api/_handler.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+// Nạp .env (nếu có) để chạy dev với GEMINI_API_KEY giống như trên Vercel.
+const envFile = path.join(root, ".env");
+if (fs.existsSync(envFile)) {
+  try {
+    process.loadEnvFile(envFile);
+    console.log("✦ Đã nạp biến môi trường từ .env");
+  } catch (error) {
+    console.warn(`… Không đọc được .env: ${error instanceof Error ? error.message : error}`);
+  }
+}
 const args = process.argv.slice(2);
 const isProd = args.includes("--prod") || process.env.NODE_ENV === "production";
 const portFromArgs = args.find((arg) => arg.startsWith("--port="))?.split("=")[1];
@@ -93,15 +104,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url.pathname === "/api/health") {
-    res.statusCode = 200;
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.end(
-      JSON.stringify({
-        ok: true,
-        mode: isProd ? "production" : "development",
-        llm: process.env.GEMINI_API_KEY ? "gemini" : "local-fallback"
-      })
-    );
+    await healthHandler(req, res);
     return;
   }
 
@@ -132,7 +135,14 @@ if (!isProd) {
 
 server.listen(port, host, () => {
   const mode = isProd ? "production (dist/)" : "development (Vite HMR)";
-  const llm = process.env.GEMINI_API_KEY ? "Gemini" : "bộ luận giải nội bộ (chưa có GEMINI_API_KEY)";
+  const health = buildHealthPayload();
+  const key = normalizeApiKey(process.env.GEMINI_API_KEY);
+
   console.log(`✦ Astral Chart VN đang chạy: http://${host}:${port} — ${mode}`);
-  console.log(`  Trợ lý AI: ${llm}`);
+  console.log(
+    health.llm === "gemini"
+      ? `  Trợ lý AI: Gemini (${health.model}) — khoá ${key.length} ký tự${health.key.looksLikeGoogleKey ? "" : ", ⚠ không giống khoá Google (thường bắt đầu bằng AIza)"}`
+      : "  Trợ lý AI: bộ luận giải nội bộ (chưa có GEMINI_API_KEY)"
+  );
+  console.log(`  Chẩn đoán: http://${host}:${port}/api/health (thêm ?probe=1 để gọi thử Google)`);
 });
