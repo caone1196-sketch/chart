@@ -4,7 +4,9 @@ import { ELEMENT_VI, MODALITY_VI, displayAngle, formatOffset } from "@/lib/astro
 import { HOUSE_SYSTEMS } from "@/lib/houses";
 import type { FixedStarHit } from "@/lib/sky";
 
-const row = "flex items-center justify-between gap-3 border-b border-slate-800/80 py-1.5 text-sm last:border-0";
+// Cho phép xuống dòng trên màn hình hẹp để không tràn ngang (tên dài + số liệu).
+const row =
+  "flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 border-b border-slate-800/80 py-1.5 text-[13px] last:border-0 sm:text-sm";
 
 const ASPECT_VI: Record<string, string> = {
   Conjunction: "Trùng tụ",
@@ -112,7 +114,7 @@ export default function ChartPanel({
                 <span className="font-medium" style={{ color: planet.color }}>
                   {planet.label}
                 </span>
-                <span className="flex items-center gap-3">
+                <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-0.5">
                   <span className="text-xs text-slate-500">nhà {planet.house}</span>
                   <span className="text-slate-200">{displayAngle(planet.longitude)}</span>
                   <span className={planet.retrograde ? "text-xs text-rose-300" : "text-xs text-slate-600"}>
@@ -151,7 +153,7 @@ export default function ChartPanel({
                 <span className="text-slate-200">
                   {aspect.fromLabel} – {aspect.toLabel}
                 </span>
-                <span className="flex items-center gap-3 text-xs">
+                <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-0.5 text-xs">
                   <span style={{ color: aspect.color }}>{ASPECT_VI[aspect.type] ?? aspect.type}</span>
                   <span className="text-slate-400">orb {aspect.orb.toFixed(2)}°</span>
                   <span className="text-slate-500">{aspect.trend === "Applying" ? "áp sát" : "tách"}</span>
@@ -168,8 +170,8 @@ export default function ChartPanel({
               <p className="text-sm text-slate-400">Không có sao cố định nào trong ngưỡng 1.5°.</p>
             ) : null}
             {fixedStars.slice(0, 24).map((hit) => (
-              <div key={`${hit.starName}-${hit.natalLabel}`} className="border-b border-slate-800/80 py-1.5 text-sm last:border-0">
-                <div className="flex items-center justify-between gap-3">
+              <div key={`${hit.starName}-${hit.natalLabel}`} className="border-b border-slate-800/80 py-1.5 text-[13px] last:border-0 sm:text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
                   <span className="text-slate-100">
                     {hit.starName} <span className="text-xs text-slate-500">{hit.constellation}</span>
                   </span>
@@ -192,7 +194,7 @@ export default function ChartPanel({
                 <span className="text-slate-200">
                   {hit.transitLabel} {ASPECT_VI[hit.aspect] ?? hit.aspect} {hit.natalLabel}
                 </span>
-                <span className="text-xs text-slate-400">
+                <span className="text-right text-xs text-slate-400">
                   orb {hit.orb.toFixed(2)}° · {hit.applying ? "áp sát" : "tách"}
                   {hit.transitRetrograde ? " · R" : ""}
                 </span>

@@ -273,7 +273,15 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
       const factor = distance / Math.max(24, pinchRef.current.distance);
       pinchRef.current = { distance };
       const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-      targetRef.current = zoomCameraAtPoint(targetRef.current, factor, mid, width, height);
+      let next = zoomCameraAtPoint(targetRef.current, factor, mid, width, height);
+      // Vuốt dọc bằng 2 ngón để ngẩng/hạ tầm nhìn — vì vuốt dọc 1 ngón đã
+      // dành cho cuộn trang (touch-pan-y) nên mobile cần lối này để đổi pitch.
+      // Chỉ áp dụng khi khoảng cách 2 ngón gần như không đổi (không phải chụm).
+      const dy = point.y - previous.y;
+      if (Math.abs(factor - 1) < 0.04 && Math.abs(dy) > 0.5) {
+        next = lookByPixels(next, 0, dy, height);
+      }
+      targetRef.current = next;
       return;
     }
 
@@ -415,32 +423,38 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
         tabIndex={0}
         onKeyDown={onKeyDown}
         aria-label="Khung ngắm bầu trời ba chiều: kéo để nhìn quanh, lăn chuột để phóng to thu nhỏ, phím mũi tên để xoay, phím cách để chạy thời gian"
-        className="relative aspect-[3/4] max-h-[78svh] min-h-[320px] w-full overflow-hidden rounded-2xl border border-slate-800 bg-black outline-none focus-visible:ring-2 focus-visible:ring-sky-500 sm:aspect-auto sm:h-[62vh] sm:min-h-[420px]"
+        className={
+          fullscreen
+            ? "relative h-screen w-screen select-none overflow-hidden border-0 bg-black outline-none"
+            : "sky-frame relative aspect-[3/4] min-h-[320px] w-full select-none overflow-hidden rounded-2xl border border-slate-800 bg-black outline-none focus-visible:ring-2 focus-visible:ring-sky-500 sm:aspect-auto sm:h-[62vh] sm:min-h-[420px]"
+        }
       >
         <canvas
           ref={canvasRef}
-          className="block h-full w-full cursor-grab touch-none active:cursor-grabbing"
+          className="sky-canvas block h-full w-full cursor-grab touch-pan-y active:cursor-grabbing"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
           onDoubleClick={onDoubleClick}
+          onContextMenu={(event) => event.preventDefault()}
         />
 
         {/* HUD góc trái: hướng nhìn + trường nhìn */}
-        <div className="pointer-events-none absolute left-2 top-2 max-w-[54%] rounded-lg bg-slate-950/70 px-2 py-1.5 text-[10px] leading-4 text-slate-300 backdrop-blur sm:left-3 sm:top-3 sm:max-w-none sm:px-3 sm:py-2 sm:text-[11px] sm:leading-5">
+        <div className="pointer-events-none absolute left-2 top-2 max-w-[52%] rounded-lg bg-slate-950/70 px-2 py-1.5 text-[10px] leading-4 text-slate-300 backdrop-blur sm:left-3 sm:top-3 sm:max-w-none sm:px-3 sm:py-2 sm:text-[11px] sm:leading-5">
           <div>
             Hướng <span className="font-semibold text-sky-300">{nearestCompass(cameraHud.yaw)}</span> · {Math.round(((cameraHud.yaw % 360) + 360) % 360)}°
             · ngẩng {cameraHud.pitch.toFixed(0)}°
           </div>
           <div>
-            Trường nhìn {cameraHud.fov.toFixed(0)}° · {stats.drawn.toLocaleString("vi-VN")} sao trong khung
+            Trường nhìn {cameraHud.fov.toFixed(0)}°
+            <span className="hidden sm:inline"> · {stats.drawn.toLocaleString("vi-VN")} sao trong khung</span>
           </div>
-          <div className="text-slate-400">{placeLabel}</div>
+          <div className="hidden text-slate-400 sm:block">{placeLabel}</div>
         </div>
 
         {/* HUD góc phải: thời gian mô phỏng */}
-        <div className="pointer-events-none absolute right-2 top-2 max-w-[44%] rounded-lg bg-slate-950/70 px-2 py-1.5 text-right text-[10px] leading-4 text-slate-300 backdrop-blur sm:right-3 sm:top-3 sm:max-w-none sm:px-3 sm:py-2 sm:text-[11px] sm:leading-5">
+        <div className="pointer-events-none absolute right-2 top-2 max-w-[42%] rounded-lg bg-slate-950/70 px-2 py-1.5 text-right text-[10px] leading-4 text-slate-300 backdrop-blur sm:right-3 sm:top-3 sm:max-w-none sm:px-3 sm:py-2 sm:text-[11px] sm:leading-5">
           <div className="font-semibold text-slate-100">{simDate.toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" })}</div>
           <div className="text-slate-400">{live ? "theo giờ thực" : playing ? `tua ${speed >= 1 ? `${speed} phút/giây` : "thời gian thực"}` : "tạm dừng"}</div>
         </div>
@@ -567,8 +581,14 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
       </div>
 
       <p className="text-xs text-slate-500">
-        Mẹo: kéo chuột để nhìn quanh, lăn chuột để phóng to quanh con trỏ, nháy đúp vào thiên thể để đưa vào giữa khung,
-        phím cách để tua thời gian. Khi tua nhanh, sao để lại vệt cung như ảnh phơi sáng thật.
+        <span className="sm:hidden">
+          Mẹo: vuốt ngang để xoay trời, vuốt dọc để cuộn trang, chụm 2 ngón để phóng to, vuốt dọc bằng 2 ngón để ngẩng/hạ tầm
+          nhìn. Chạm vào thiên thể để xem chi tiết.
+        </span>
+        <span className="hidden sm:inline">
+          Mẹo: kéo chuột để nhìn quanh, lăn chuột để phóng to quanh con trỏ, nháy đúp vào thiên thể để đưa vào giữa khung,
+          phím cách để tua thời gian. Khi tua nhanh, sao để lại vệt cung như ảnh phơi sáng thật.
+        </span>
       </p>
     </div>
   );

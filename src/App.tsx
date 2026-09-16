@@ -337,7 +337,7 @@ export default function App() {
 
   return (
     <main className="app-bg min-h-screen text-slate-100 antialiased">
-      <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-xl">
+      <header className="safe-t sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md sm:bg-slate-950/85 sm:backdrop-blur-xl">
         <div className="safe-x mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2.5 sm:gap-3 sm:py-3 sm:px-6 md:px-10">
           <p className="inline-flex items-center gap-2 rounded-md border border-sky-300/35 bg-sky-300/10 px-2.5 py-1 text-[11px] font-semibold tracking-[0.12em] text-sky-200 sm:px-3 sm:text-xs sm:tracking-[0.16em]">
             ✦ ASTRAL CHART VN
@@ -360,7 +360,7 @@ export default function App() {
       </header>
 
       <section
-        className="relative flex min-h-[72svh] items-center overflow-hidden sm:min-h-[80vh]"
+        className="hero-min-h relative flex items-center overflow-hidden"
         style={{
           backgroundImage: "linear-gradient(rgba(2,6,23,0.72), rgba(2,6,23,0.92)), url('/images/astro-night.jpg')",
           backgroundSize: "cover",

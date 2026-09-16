@@ -1,4 +1,4 @@
-import type { FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { motion } from "framer-motion";
 
 export type BirthFormValues = {
@@ -48,7 +48,15 @@ export default function BirthForm({
   geocodeNote: string;
   error: string;
 }) {
-  const update = (key: keyof BirthFormValues, value: string) => setValues((previous) => ({ ...previous, [key]: value }));
+  const [geoMessage, setGeoMessage] = useState("");
+
+  // Bàn phím Android (locale vi-VN) thường gõ dấu phẩy thập phân → đổi sang
+  // dấu chấm ngay khi nhập để Number(...) ở nơi lập chart không thành NaN.
+  const update = (key: keyof BirthFormValues, value: string) =>
+    setValues((previous) => ({
+      ...previous,
+      [key]: key === "latitude" || key === "longitude" || key === "timezone" ? value.replace(",", ".") : value
+    }));
 
   return (
     <form
@@ -63,6 +71,8 @@ export default function BirthForm({
             value={values.birthPlace}
             onChange={(event) => update("birthPlace", event.target.value)}
             placeholder="VD: Đà Nẵng, Việt Nam"
+            autoComplete="off"
+            enterKeyHint="next"
             className={fieldClass}
             required
           />
@@ -77,7 +87,11 @@ export default function BirthForm({
           <button
             type="button"
             onClick={() => {
-              if (!navigator.geolocation) return;
+              if (!navigator.geolocation) {
+                setGeoMessage("Thiết bị/trình duyệt này không hỗ trợ định vị. Hãy nhập tay vĩ độ, kinh độ.");
+                return;
+              }
+              setGeoMessage("Đang lấy vị trí…");
               navigator.geolocation.getCurrentPosition(
                 (position) => {
                   setValues((previous) => ({
@@ -87,8 +101,15 @@ export default function BirthForm({
                     birthPlace: previous.birthPlace || "Vị trí hiện tại",
                     timeZoneId: "Asia/Ho_Chi_Minh"
                   }));
+                  setGeoMessage("Đã lấy vị trí hiện tại của bạn.");
                 },
-                () => undefined,
+                (failure) => {
+                  setGeoMessage(
+                    failure.code === failure.PERMISSION_DENIED
+                      ? "Bạn đã từ chối quyền vị trí. Hãy bật quyền trong cài đặt trình duyệt hoặc nhập tay vĩ độ, kinh độ."
+                      : "Không lấy được vị trí (hết thời gian/không có GPS). Hãy nhập tay vĩ độ, kinh độ."
+                  );
+                },
                 { timeout: 8000 }
               );
             }}
@@ -98,6 +119,7 @@ export default function BirthForm({
           </button>
         </div>
         {geocodeNote ? <p className="text-xs text-emerald-300">{geocodeNote}</p> : null}
+        {geoMessage ? <p className="text-xs text-sky-200">{geoMessage}</p> : null}
       </label>
 
       <label className="space-y-2 md:col-span-2">
@@ -138,6 +160,7 @@ export default function BirthForm({
           onChange={(event) => update("birthTime", event.target.value)}
           placeholder="HH:mm"
           inputMode="numeric"
+          enterKeyHint="next"
           pattern="([01][0-9]|2[0-3]):[0-5][0-9]"
           className={fieldClass}
           required
@@ -147,12 +170,13 @@ export default function BirthForm({
       <label className="space-y-2">
         <span className={labelClass}>Vĩ độ</span>
         <input
-          type="number"
+          type="text"
           value={values.latitude}
           onChange={(event) => update("latitude", event.target.value)}
-          min={-90}
-          max={90}
-          step="any"
+          inputMode="decimal"
+          enterKeyHint="next"
+          autoComplete="off"
+          placeholder="VD: 21.0285"
           className={fieldClass}
           required
         />
@@ -161,12 +185,13 @@ export default function BirthForm({
       <label className="space-y-2">
         <span className={labelClass}>Kinh độ</span>
         <input
-          type="number"
+          type="text"
           value={values.longitude}
           onChange={(event) => update("longitude", event.target.value)}
-          min={-180}
-          max={180}
-          step="any"
+          inputMode="decimal"
+          enterKeyHint="next"
+          autoComplete="off"
+          placeholder="VD: 105.8542"
           className={fieldClass}
           required
         />
@@ -179,6 +204,9 @@ export default function BirthForm({
           value={values.timeZoneId}
           onChange={(event) => update("timeZoneId", event.target.value)}
           placeholder="Asia/Ho_Chi_Minh"
+          autoComplete="off"
+          autoCapitalize="none"
+          enterKeyHint="next"
           className={fieldClass}
         />
         <p className="text-xs text-slate-400">Dùng để tra offset lịch sử (kể cả DST). Để trống nếu muốn nhập offset thủ công.</p>
@@ -187,12 +215,13 @@ export default function BirthForm({
       <label className="space-y-2">
         <span className={labelClass}>Múi giờ thủ công (UTC offset)</span>
         <input
-          type="number"
+          type="text"
           value={values.timezone}
           onChange={(event) => update("timezone", event.target.value)}
-          min={-12}
-          max={14}
-          step={0.5}
+          inputMode="decimal"
+          enterKeyHint="done"
+          autoComplete="off"
+          placeholder="VD: 7"
           className={fieldClass}
           required
         />
