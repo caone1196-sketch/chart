@@ -85,6 +85,8 @@ export type Sky3DToggles = SkyDrawToggles & {
   trails: boolean;
   /** Lưới khoảng cách trên mặt đất. */
   groundGrid: boolean;
+  /** Tiểu hành tinh (Ceres, Pallas, Vesta…) — hiện rõ khi phóng to. */
+  asteroids: boolean;
 };
 
 export const SKY_3D_TOGGLES: Sky3DToggles = {
@@ -95,6 +97,7 @@ export const SKY_3D_TOGGLES: Sky3DToggles = {
   milkyWay: true,
   ecliptic: true,
   planets: true,
+  asteroids: true,
   grid: true,
   equatorial: true,
   atmosphere: true,
@@ -208,6 +211,10 @@ const PLANET_BODY: Record<string, { radius: number }> = {
  * Vẽ đĩa hành tinh "sống động": vân mây Sao Mộc + Vết Đỏ Lớn, vành đai Sao Thổ, chóp băng Sao Hỏa,
  * xoáy mây Sao Kim, hố va chạm Sao Thủy, đốm tối Sao Hải Vương… Tất cả tất định (không ngẫu nhiên)
  * để ảnh chụp màn hình tái lập được. Bán kính < 4 px thì chỉ tô màu cầu cho gọn.
+ *
+ * Khi phóng to sâu (bán kính đĩa ≥ ~14–18 px) bộ vẽ bổ sung **tầng chi tiết cao**: Sao Mộc thêm
+ * dải mây festoon + vùng xoáy quanh Vết Đỏ Lớn, Sao Hỏa thêm địa hình tối + quầng mù khí quyển,
+ * Sao Thủy thêm hố và tia va chạm, Sao Thiên Vương có mũ cực, Sao Hải Vương có mây ti sáng…
  */
 const drawPlanetBody = (
   ctx: CanvasRenderingContext2D,
@@ -253,15 +260,43 @@ const drawPlanetBody = (
     band(-0.02, 0.22, "rgba(178,116,74,0.8)");
     band(0.3, 0.15, "rgba(238,220,190,0.75)");
     band(0.6, 0.2, "rgba(150,104,70,0.7)");
+    if (radius >= 14) {
+      // Phóng to: thêm dải mảnh hai cực + các festoon (vệt tối cắm vào dải sáng) ở vùng xích đạo.
+      band(-0.86, 0.14, "rgba(124,92,64,0.5)");
+      band(0.86, 0.12, "rgba(116,86,60,0.45)");
+      for (let festoon = 0; festoon < 6; festoon += 1) {
+        const fx = -0.72 + festoon * 0.3;
+        blob(fx, 0.13, 0.05, 0.1, "rgba(150,104,72,0.5)", 0.18);
+      }
+      // Vùng xoáy sáng bao quanh Vết Đỏ Lớn.
+      blob(0.28, 0.34, 0.34, 0.2, "rgba(246,236,214,0.75)");
+    }
     blob(0.28, 0.34, 0.24, 0.13, "rgba(196,84,58,0.9)");
+    if (radius >= 18) blob(0.28, 0.34, 0.13, 0.065, "rgba(232,120,84,0.95)");
   } else if (key === "saturn") {
     band(-0.35, 0.22, "rgba(214,186,140,0.6)");
     band(0.05, 0.2, "rgba(238,220,178,0.65)");
     band(0.45, 0.2, "rgba(196,166,120,0.55)");
+    if (radius >= 14) {
+      band(-0.62, 0.14, "rgba(186,158,116,0.5)");
+      band(0.68, 0.13, "rgba(178,150,108,0.45)");
+      band(-0.1, 0.06, "rgba(246,232,196,0.5)");
+    }
   } else if (key === "mars") {
     blob(-0.15, 0.12, 0.5, 0.26, "rgba(96,44,28,0.6)", 0.3);
     blob(0.35, -0.3, 0.3, 0.16, "rgba(88,40,26,0.5)", -0.4);
     blob(0, -0.82, 0.32, 0.16, "rgba(250,248,244,0.92)");
+    if (radius >= 14) {
+      // Phóng to: thêm cao nguyên tối kiểu Syrtis Major, chóp băng Nam gọn hơn và quầng mù rìa.
+      blob(-0.42, -0.18, 0.24, 0.15, "rgba(92,42,26,0.55)", 0.7);
+      blob(0.1, 0.55, 0.3, 0.12, "rgba(102,48,30,0.45)", -0.2);
+      blob(0, -0.86, 0.18, 0.09, "rgba(255,254,250,0.95)");
+      ctx.strokeStyle = "rgba(240,214,180,0.3)";
+      ctx.lineWidth = radius * 0.07;
+      ctx.beginPath();
+      ctx.arc(x, y, radius * 0.94, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   } else if (key === "venus") {
     ctx.strokeStyle = "rgba(255,250,228,0.4)";
     ctx.lineWidth = radius * 0.16;
@@ -271,15 +306,53 @@ const drawPlanetBody = (
     ctx.beginPath();
     ctx.arc(x + radius * 0.25, y + radius * 0.3, radius * 0.55, 2.4, 4.6);
     ctx.stroke();
+    if (radius >= 14) {
+      ctx.strokeStyle = "rgba(244,232,196,0.32)";
+      ctx.lineWidth = radius * 0.1;
+      ctx.beginPath();
+      ctx.arc(x - radius * 0.05, y - radius * 0.42, radius * 0.5, 0.4, 2.6);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x + radius * 0.1, y + radius * 0.05, radius * 0.88, 2.8, 4.4);
+      ctx.stroke();
+    }
   } else if (key === "mercury") {
     blob(-0.25, -0.15, 0.18, 0.16, "rgba(70,66,64,0.55)");
     blob(0.3, 0.25, 0.13, 0.12, "rgba(70,66,64,0.5)");
     blob(0.05, -0.45, 0.1, 0.09, "rgba(70,66,64,0.45)");
+    if (radius >= 12) {
+      blob(-0.45, 0.35, 0.11, 0.1, "rgba(66,62,60,0.5)");
+      blob(0.5, -0.2, 0.09, 0.08, "rgba(66,62,60,0.45)");
+      blob(-0.05, 0.6, 0.08, 0.07, "rgba(66,62,60,0.4)");
+      // Tia va chạm sáng toả ra từ một hố trẻ (kiểu hố Tycho trên Mặt Trăng).
+      ctx.strokeStyle = "rgba(214,208,200,0.35)";
+      ctx.lineWidth = radius * 0.03;
+      for (let ray = 0; ray < 5; ray += 1) {
+        const angle = 0.6 + ray * 1.25;
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(angle) * radius * 0.32, y + Math.sin(angle) * radius * 0.32);
+        ctx.lineTo(x + Math.cos(angle) * radius * 0.85, y + Math.sin(angle) * radius * 0.85);
+        ctx.stroke();
+      }
+    }
   } else if (key === "uranus") {
     band(0.1, 0.3, "rgba(255,255,255,0.14)");
+    if (radius >= 16) {
+      band(-0.3, 0.18, "rgba(255,255,255,0.1)");
+      blob(0, -0.62, 0.55, 0.3, "rgba(186,236,240,0.22)");
+    }
   } else if (key === "neptune") {
     band(-0.2, 0.24, "rgba(255,255,255,0.16)");
     blob(-0.18, 0.15, 0.3, 0.17, "rgba(18,28,84,0.65)");
+    if (radius >= 16) {
+      ctx.strokeStyle = "rgba(236,244,255,0.5)";
+      ctx.lineWidth = radius * 0.05;
+      ctx.beginPath();
+      ctx.moveTo(x - radius * 0.6, y - radius * 0.42);
+      ctx.quadraticCurveTo(x, y - radius * 0.55, x + radius * 0.55, y - radius * 0.4);
+      ctx.stroke();
+      blob(-0.3, 0.42, 0.16, 0.09, "rgba(20,30,92,0.55)");
+    }
   }
   // Tối viền (limb darkening) đồng tâm — lưu ý: gradient hai tâm cắt nhau làm skia (napi-rs) panic.
   const limb = ctx.createRadialGradient(x, y, radius * 0.55, x, y, radius);
@@ -299,6 +372,76 @@ const drawPlanetBody = (
   shade.addColorStop(1, "rgba(3,5,10,0.55)");
   ctx.fillStyle = shade;
   ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  ctx.restore();
+};
+
+/** Nhiễu tất định theo số hiệu thiên thể — dùng sinh hình dạng tiểu hành tinh. */
+const asteroidHash = (seed: number, index: number) => {
+  const value = Math.sin(seed * 127.1 + index * 311.7) * 43758.5453;
+  return value - Math.floor(value);
+};
+
+/**
+ * Vẽ tiểu hành tinh như một **tảng đá vũ trụ**: silhouette đa giác lởm chởm tất định theo số hiệu,
+ * vài hố va chạm sẫm màu và shading khối cầu theo hướng Mặt Trời. Ở bán kính nhỏ chỉ là chấm đá.
+ */
+const drawAsteroidBody = (
+  ctx: CanvasRenderingContext2D,
+  seed: number,
+  x: number,
+  y: number,
+  radius: number,
+  tint: Rgb,
+  lightAngle: number
+) => {
+  const vertices = 11;
+  const jitter = 0.16 + asteroidHash(seed, 0) * 0.1;
+  ctx.save();
+  ctx.beginPath();
+  for (let i = 0; i <= vertices; i += 1) {
+    const index = i % vertices;
+    const angle = (index / vertices) * Math.PI * 2 + asteroidHash(seed, 40) * Math.PI;
+    const vertexRadius = radius * (1 - jitter * 0.5 + asteroidHash(seed, index + 1) * jitter);
+    const vx = x + Math.cos(angle) * vertexRadius;
+    const vy = y + Math.sin(angle) * vertexRadius * (0.86 + asteroidHash(seed, 30) * 0.2);
+    if (i === 0) ctx.moveTo(vx, vy);
+    else ctx.lineTo(vx, vy);
+  }
+  ctx.closePath();
+
+  const lightX = x + Math.cos(lightAngle) * radius * 0.4;
+  const lightY = y + Math.sin(lightAngle) * radius * 0.4;
+  const base = ctx.createRadialGradient(lightX, lightY, radius * 0.1, x, y, radius * 1.2);
+  base.addColorStop(0, rgbCss(mixColor(tint, [255, 255, 255], 0.3)));
+  base.addColorStop(0.6, rgbCss(tint));
+  base.addColorStop(1, rgbCss(mixColor(tint, [6, 8, 12], 0.6)));
+  ctx.fillStyle = base;
+  ctx.fill();
+
+  if (radius >= 4) {
+    ctx.clip();
+    const craters = radius >= 8 ? 5 : 3;
+    for (let crater = 0; crater < craters; crater += 1) {
+      const angle = asteroidHash(seed, crater + 60) * Math.PI * 2;
+      const dist = asteroidHash(seed, crater + 70) * 0.6;
+      const size = (0.1 + asteroidHash(seed, crater + 80) * 0.12) * radius;
+      ctx.beginPath();
+      ctx.arc(x + Math.cos(angle) * dist * radius, y + Math.sin(angle) * dist * radius, size, 0, Math.PI * 2);
+      ctx.fillStyle = rgbCss(mixColor(tint, [4, 6, 10], 0.5), 0.6);
+      ctx.fill();
+    }
+    const shade = ctx.createLinearGradient(
+      x + Math.cos(lightAngle) * radius,
+      y + Math.sin(lightAngle) * radius,
+      x - Math.cos(lightAngle) * radius,
+      y - Math.sin(lightAngle) * radius
+    );
+    shade.addColorStop(0, "rgba(0,0,0,0)");
+    shade.addColorStop(0.5, "rgba(0,0,0,0.12)");
+    shade.addColorStop(1, "rgba(2,4,8,0.72)");
+    ctx.fillStyle = shade;
+    ctx.fillRect(x - radius * 1.4, y - radius * 1.4, radius * 2.8, radius * 2.8);
+  }
   ctx.restore();
 };
 
@@ -346,6 +489,24 @@ export const planetPhase = (
 };
 
 /** Vành đai Sao Thổ: nửa sau vẽ trước đĩa, nửa trước vẽ đè lên sau đĩa. */
+
+/**
+ * Hướng sáng trên màn hình của một thiên thể: chiếu tiếp tuyến đường tròn lớn từ thiên thể về
+ * Mặt Trời lên hai trục màn hình. Không dùng toạ độ chiếu của Mặt Trời vì khi nó nằm SAU camera
+ * thì phép chiếu trả về NaN (và NaN truyền vào ctx.ellipse làm skia của napi-rs abort).
+ */
+const sunLightAngle = (sunVector: Vec3 | null, bodyVector: Vec3, projector: Camera3DProjector): number => {
+  if (!sunVector) return -Math.PI / 3;
+  const along = dot3(sunVector, bodyVector);
+  const tangent = {
+    x: sunVector.x - bodyVector.x * along,
+    y: sunVector.y - bodyVector.y * along,
+    z: sunVector.z - bodyVector.z * along
+  };
+  if (length3(tangent) <= 1e-9) return -Math.PI / 3;
+  const unit = normalize3(tangent);
+  return Math.atan2(-dot3(unit, projector.up), dot3(unit, projector.right));
+};
 
 const drawSaturnRings = (ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, from: number, to: number) => {
   ctx.save();
@@ -534,8 +695,13 @@ export const drawSky3D = (input: Sky3DDrawInput): Sky3DDrawResult => {
       if (upperAlt < range.min - 3 || lowerAlt > range.max + 3) continue; // không thể thấy
       // Chồng mí một chút để không lộ đường ghép giữa hai dải (làm tròn màu + khử răng cưa).
       const overlap = Math.min(0.35, (upperAlt - lowerAlt) * 0.12 + 0.05);
-      const lower = altitudeCircle(lowerAlt - overlap);
-      const upper = altitudeCircle(upperAlt + overlap);
+      // KHÔNG lấy mẫu ngoài ±90°: vượt thiên đỉnh một chút là phương vị bị lật 180°, vòng trên biến
+      // thành một vòng tròn nhỏ quanh thiên đỉnh và dải màu trở thành **hình vành khăn để thủng
+      // đúng tâm** — phóng to sát thiên đỉnh ban ngày sẽ thấy một "lỗ hổng" màu của dải nền.
+      // Kẹp mép trên về đúng 90°: mọi điểm vòng trên chập về thiên đỉnh nên dải khép kín thành hình
+      // quạt phủ trọn tâm khung; mép dưới chỉ kẹp khi dải chạm sàn −90° (thực tế không xảy ra).
+      const lower = altitudeCircle(Math.max(lowerAlt - overlap, -90));
+      const upper = altitudeCircle(Math.min(upperAlt + overlap, 90));
 
       // Ghép hai vòng độ cao cùng chỉ số phương vị thành dải. Lưu ý KHÔNG dùng densifyPath ở đây:
       // nó chèn số bước khác nhau cho hai vòng (cung dài ngắn khác nhau) nên chỉ số sẽ lệch nhau.
@@ -767,24 +933,40 @@ export const drawSky3D = (input: Sky3DDrawInput): Sky3DDrawResult => {
 
   /* ------------------------------------------------------------- tên chòm sao */
   if (toggles.constellationNames) {
-    const rankLimit = zoom < 1.3 ? 34 : zoom < 2.4 ? 55 : zoom < 5 ? 74 : 88;
+    // Ngưỡng số chòm được gọi tên nới rộng theo độ phóng: toàn cảnh vẫn gọi tên nhiều chòm hơn,
+    // và từ zoom ~4× trở lên cả 88 chòm đều có thể hiển thị đủ tên (Việt + Latin).
+    const rankLimit = zoom < 1.3 ? 44 : zoom < 2.4 ? 66 : zoom < 4 ? 80 : 88;
     const nameAlpha = atmosphere ? clamp01(0.15 + 0.85 * tone.starFactor) : 1;
     if (nameAlpha >= 0.2) {
+      ctx.font = "600 11px system-ui, sans-serif";
       for (const meta of frame.constellationLabels) {
         if (meta.rank > rankLimit) continue;
         const spun = altAzOf(spin(meta.alt, meta.az));
         if (spun.alt < (toggles.ground ? terrainHeightDeg(spun.az, 2) + 2.5 : -1)) continue;
         const projected = projector.projectVector(directionOf(spun.alt, spun.az));
-        if (!projected.visible || projected.x < 52 || projected.x > width - 52 || projected.y < 28 || projected.y > height - 28) continue;
+        if (!projected.visible) continue;
+
+        // Đo thật hai dòng chữ (có dấu tiếng Việt rộng hơn ước lượng theo số ký tự) rồi **kẹp vị trí
+        // nhãn vào trong khung** thay vì bỏ rơi nhãn sát mép — nhờ vậy tên chòm luôn hiển đủ chữ.
+        const viText = meta.vi.toUpperCase();
+        const widthVi = ctx.measureText(viText).width;
+        ctx.font = "10px system-ui, sans-serif";
+        const widthLatin = ctx.measureText(meta.latin).width;
+        ctx.font = "600 11px system-ui, sans-serif";
+        const halfWidth = Math.max(widthVi, widthLatin) / 2 + 6;
+        if (halfWidth * 2 > width - 8) continue; // nhãn rộng hơn cả khung — không còn chỗ đặt
+        const anchorX = clamp(projected.x, halfWidth + 2, width - halfWidth - 2);
+        const anchorY = clamp(projected.y, 30, height - 30);
+
         constellationLabelQueue.push({
-          box: labelBox(projected.x, projected.y + 5, Math.max(meta.vi.length, meta.latin.length) * 6.6, 30),
+          box: labelBox(anchorX, anchorY + 5, halfWidth * 2, 28),
           draw: () => {
-            drawText(ctx, meta.vi.toUpperCase(), projected.x, projected.y, {
+            drawText(ctx, viText, anchorX, anchorY, {
               font: "600 11px system-ui, sans-serif",
               color: `rgba(125,211,252,${(0.5 * nameAlpha).toFixed(3)})`,
               shadow: "rgba(2,6,23,0.7)"
             });
-            drawText(ctx, meta.latin, projected.x, projected.y + 11, {
+            drawText(ctx, meta.latin, anchorX, anchorY + 11, {
               font: "10px system-ui, sans-serif",
               color: `rgba(148,163,184,${(0.44 * nameAlpha).toFixed(3)})`,
               shadow: "rgba(2,6,23,0.7)"
@@ -1084,9 +1266,10 @@ export const drawSky3D = (input: Sky3DDrawInput): Sky3DDrawResult => {
     }
 
     // Đĩa hành tinh: lấy max(bán kính góc thật, kích thước hiển thị tối thiểu) rồi nhân theo độ phóng
-    // để phóng to thì hành tinh vừa to ra vừa lộ chi tiết vân mây / vành đai.
+    // để phóng to thì hành tinh vừa to ra vừa lộ chi tiết vân mây / vành đai. Trần nới rộng hơn ở
+    // độ phóng sâu (fov 5°) để tầng chi tiết cao của `drawPlanetBody` có đất diễn.
     const tint = hexToRgb(planet.color);
-    const radius = Math.max(angularRadius, PLANET_BODY[planet.key]?.radius ?? 5) * clamp(Math.pow(zoom, 0.3), 0.85, 2.6);
+    const radius = Math.max(angularRadius, PLANET_BODY[planet.key]?.radius ?? 5) * clamp(Math.pow(zoom, 0.34), 0.85, 3.4);
     ctx.globalCompositeOperation = "lighter";
     const glowRadius = radius * 3.1 + 6;
     const glow = ctx.createRadialGradient(projected.x, projected.y, 0.4, projected.x, projected.y, glowRadius);
@@ -1112,22 +1295,8 @@ export const drawSky3D = (input: Sky3DDrawInput): Sky3DDrawResult => {
       earthToPlanetAu: planet.distanceAu,
       earthToSunAu: sunBody?.distanceAu
     });
-    // Hướng sáng trên màn hình: chiếu tiếp tuyến đường tròn lớn từ hành tinh về Mặt Trời lên
-    // hai trục màn hình. Không dùng toạ độ chiếu của Mặt Trời vì khi nó nằm SAU camera thì
-    // phép chiếu trả về NaN (và NaN truyền vào ctx.ellipse làm skia của napi-rs abort).
-    let lightAngle = -Math.PI / 3;
-    if (sunVector) {
-      const along = dot3(sunVector, planetVector);
-      const tangent = {
-        x: sunVector.x - planetVector.x * along,
-        y: sunVector.y - planetVector.y * along,
-        z: sunVector.z - planetVector.z * along
-      };
-      if (length3(tangent) > 1e-9) {
-        const unit = normalize3(tangent);
-        lightAngle = Math.atan2(-dot3(unit, projector.up), dot3(unit, projector.right));
-      }
-    }
+    // Hướng sáng trên màn hình suy từ tiếp tuyến 3D về phía Mặt Trời (xem `sunLightAngle`).
+    const lightAngle = sunLightAngle(sunVector, planetVector, projector);
     const cosPhase = phase.cosPhase;
 
     // Mặt khuất: đĩa tối màu hành tinh pha đen.
@@ -1172,6 +1341,74 @@ export const drawSky3D = (input: Sky3DDrawInput): Sky3DDrawResult => {
     }
     if (projected.x >= -radius && projected.x <= width + radius && projected.y >= -radius && projected.y <= height + radius) {
       hits.push({ kind: "planet", key: planet.key, x: projected.x, y: projected.y, radius: Math.max(15, radius * 2) });
+    }
+  }
+
+  /* --------------------------------------- tiểu hành tinh (Ceres, Pallas, Vesta…) */
+  if (toggles.asteroids) {
+    const sunBodyForRocks = frame.planets.find((planet) => planet.key === "sun");
+    const sunVectorForRocks = sunBodyForRocks ? spin(sunBodyForRocks.alt, sunBodyForRocks.az) : null;
+
+    for (const asteroid of frame.asteroids) {
+      const spun = altAzOf(spin(asteroid.alt, asteroid.az));
+      const floor = toggles.ground ? terrainHeightDeg(spun.az, 2) - 0.8 : -2;
+      if (spun.alt < floor) continue;
+      const vector = refractDirection(directionOf(spun.alt, spun.az), atmosphere && spun.alt < 25);
+      const projected = projector.projectVector(vector);
+      if (!projected.visible) continue;
+      if (projected.x < -width || projected.x > width * 2 || projected.y < -height || projected.y > height * 2) continue;
+      // Ban ngày tiểu hành tinh mờ hơn cả Sao Kim/Sao Mộc nên khuất hẳn trong ánh trời.
+      if (atmosphere && tone.starFactor < 0.3) continue;
+
+      const isSelected = selected?.kind === "asteroid" && selected.key === asteroid.key;
+      const tint = hexToRgb(asteroid.color);
+      // Bán kính góc **thật** suy từ đường kính và khoảng cách địa tâm (chỉ lộ ở độ phóng rất sâu);
+      // dưới ngưỡng đó vẽ chấm đá đủ lớn để nhìn thấy và lớn dần theo độ phóng như hành tinh.
+      const trueRadius = projector.radiusPixels(asteroid.angularRadiusDeg, vector);
+      const dotRadius = clamp(1.15 * Math.pow(zoom, 0.32), 1, 3);
+      const radius = Math.max(trueRadius, dotRadius);
+
+      // Quầng mờ tách chấm đá khỏi nền sao khi còn nhỏ; khi được chọn thì quầng sáng hơn.
+      ctx.globalCompositeOperation = "lighter";
+      const glow = ctx.createRadialGradient(projected.x, projected.y, 0.3, projected.x, projected.y, radius * 2.6 + 3);
+      glow.addColorStop(0, rgbCss(tint, isSelected ? 0.52 : 0.34));
+      glow.addColorStop(1, rgbCss(tint, 0));
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(projected.x, projected.y, radius * 2.6 + 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
+
+      if (radius >= 3) {
+        // Đủ lớn để lộ hình "tảng đá vũ trụ" — shading theo hướng Mặt Trời như hành tinh.
+        const lightAngle = sunLightAngle(sunVectorForRocks, vector, projector);
+        drawAsteroidBody(ctx, asteroid.number, projected.x, projected.y, radius, tint, lightAngle);
+      } else {
+        ctx.fillStyle = rgbCss(mixColor(tint, [255, 255, 255], 0.25));
+        ctx.beginPath();
+        ctx.arc(projected.x, projected.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      if (isSelected) {
+        ctx.strokeStyle = "#fde68a";
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(projected.x, projected.y, radius + 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Nhãn chỉ hiện khi đã phóng to (fov ≲ 21°) hoặc đang chọn — tránh rối khung toàn cảnh.
+      if (zoom >= 3 || isSelected) {
+        placeLabel(asteroid.label, projected.x, projected.y, radius + 2, {
+          font: "600 10px system-ui, sans-serif",
+          color: isSelected ? "rgba(253,230,138,0.95)" : `rgba(226,232,240,${clamp(0.4 + zoom * 0.06, 0.5, 0.9).toFixed(2)})`,
+          shadow: "rgba(2,6,23,0.8)"
+        });
+      }
+      if (projected.x >= -radius && projected.x <= width + radius && projected.y >= -radius && projected.y <= height + radius) {
+        hits.push({ kind: "asteroid", key: asteroid.key, x: projected.x, y: projected.y, radius: Math.max(12, radius * 2.2) });
+      }
     }
   }
 

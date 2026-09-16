@@ -6,6 +6,7 @@
  * Toàn bộ hàm ở đây thuần tuý (không DOM) để kiểm chứng được bằng test.
  */
 import { PLANETS, calcObliquity, localSiderealDegrees, normalizeDegree } from "@/lib/astro";
+import { computeAsteroidsSky, type AsteroidSky } from "@/lib/asteroids";
 import {
   CONSTELLATION_LINES,
   CONSTELLATION_META,
@@ -617,6 +618,8 @@ export type SkyFrame = {
   lstDeg: number;
   obliquity: number;
   planets: PlanetSky[];
+  /** Các tiểu hành tinh sáng (Ceres, Pallas, Vesta…) — hiện rõ khi phóng to. */
+  asteroids: AsteroidSky[];
   stars: SkyStar[];
   lines: SkyPolyline[];
   milkyWay: SkyMilkyPoint[];
@@ -715,6 +718,7 @@ export const buildSkyFrame = (date: Date, latitude: number, longitude: number): 
     lstDeg,
     obliquity,
     planets: snapshot.planets,
+    asteroids: computeAsteroidsSky(date, lstDeg, latitude, obliquity),
     stars,
     lines,
     milkyWay,

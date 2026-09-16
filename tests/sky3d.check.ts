@@ -18,7 +18,9 @@
  * 10. Nhấp nháy, vệt sao, phần thiên cầu trong khung: đúng khoảng và đơn điệu.
  */
 import { createCanvas } from "@napi-rs/canvas";
-import { localSiderealDegrees } from "../src/lib/astro.ts";
+import { calcObliquity, localSiderealDegrees } from "../src/lib/astro.ts";
+import { ASTEROIDS, asteroidHelioJ2000, computeAsteroidsSky, hgMagnitude, solveKepler } from "../src/lib/asteroids.ts";
+import { STARS, precessFromJ2000, toHorizontal } from "../src/lib/sky.ts";
 import {
   CAMERA_FOV,
   CAMERA_PITCH_LIMIT,
@@ -785,6 +787,280 @@ for (const deltaMinutes of [0.5, 5, 45, 180]) {
   if (warm.ms > 1500) fail("hiệu năng 3D", `một khung hình mất ${warm.ms} ms`);
   ok();
   console.log(`   (khung 640×360 trong Node: ${warm.ms} ms · ${warm.result.drawnStars} sao)`);
+}
+
+/* ------------------------------------------------ 13. tiểu hành tinh: quỹ đạo & ephemeris */
+{
+  // Phương trình Kepler: E − e·sin E = M phải đúng với mọi tiểu hành tinh và mọi pha quỹ đạo.
+  for (const elements of ASTEROIDS) {
+    for (const M of [0.7, 47, 123.4, 179.2, 269, 359.3]) {
+      const E = solveKepler(M, elements.e);
+      const residual = Math.abs(wrap180(M - ((E / Math.PI) * 180 - elements.e * Math.sin(E) * (180 / Math.PI))));
+      if (residual > 1e-9) fail("kepler", `${elements.name}: sai số phương trình Kepler ${residual.toExponential(2)}° tại M=${M}`);
+      ok();
+    }
+    // Bán kính nhật tâm luôn nằm trong [a(1−e), a(1+e)] trên quãng ±30 năm quanh epoch.
+    for (let days = -11000; days <= 11000; days += 811) {
+      const vector = asteroidHelioJ2000(elements, elements.epochJd + days);
+      const r = Math.hypot(vector.x, vector.y, vector.z);
+      if (r < elements.a * (1 - elements.e) - 1e-9 || r > elements.a * (1 + elements.e) + 1e-9) {
+        fail("kepler", `${elements.name}: bán kính ${r.toFixed(4)} AU ngoài giới hạn quỹ đạo tại +${days} ngày`);
+      }
+      ok();
+    }
+  }
+
+  // Cấp sao H/G: ở đúng định nghĩa (r = Δ = 1 AU, pha 0°) phải trả về H.
+  for (const elements of ASTEROIDS) {
+    if (!near(hgMagnitude(elements.H, elements.G, 1, 1, 0), elements.H, 1e-9)) {
+      fail("cấp sao H/G", `${elements.name}: V(1,1,0°) ≠ H`);
+    }
+    ok();
+    // Xa hơn thì phải mờ đi.
+    if (!(hgMagnitude(elements.H, elements.G, 2, 2, 0) > elements.H)) fail("cấp sao H/G", `${elements.name}: xa hơn mà không mờ đi`);
+    ok();
+  }
+
+  // Đối chiếu ephemeris công bố (theskylive.com & ephemeris hoàng đạo, truy vấn 2026-09-16):
+  const date = new Date("2026-09-16T12:00:00Z");
+  const lstDeg = localSiderealDegrees(date, 105.8542);
+  const obliquity = calcObliquity(date);
+  const sky = computeAsteroidsSky(date, lstDeg, 21.0285, obliquity);
+  if (sky.length !== ASTEROIDS.length) fail("tiểu hành tinh", `khung thiếu tiểu hành tinh (${sky.length}/${ASTEROIDS.length})`);
+  ok();
+  for (const asteroid of sky) {
+    if (![asteroid.alt, asteroid.az, asteroid.ra, asteroid.dec, asteroid.magnitude, asteroid.distanceAu].every(Number.isFinite)) {
+      fail("tiểu hành tinh", `${asteroid.name}: toạ độ không hữu hạn`);
+    }
+    ok();
+  }
+
+  const ceres = sky.find((item) => item.key === "ceres");
+  const vesta = sky.find((item) => item.key === "vesta");
+  const pallas = sky.find((item) => item.key === "pallas");
+  if (!ceres || !vesta || !pallas) fail("tiểu hành tinh", "thiếu Ceres/Vesta/Pallas trong khung");
+  ok();
+
+  // Ceres ở cung Cự Giải (kinh độ hoàng đạo 90–120°) suốt 2026-08-12 → 2027-05 theo lịch thiên văn.
+  if (!(ceres.lon > 90 && ceres.lon < 120)) {
+    fail("tiểu hành tinh", `Ceres phải đang ở Cự Giải (90–120°), nhận ${ceres.lon.toFixed(2)}°`);
+  }
+  ok();
+  // Vesta (so với công bố 2026-09-11: RA 01h55m, Dec −00°, Δ 1,58 AU, mag 6,8 — Vesta trôi ~0,15°/ngày).
+  if (!(vesta.ra > 27.2 && vesta.ra < 29.4)) fail("tiểu hành tinh", `Vesta RA ngoài khoảng ephemeris: ${vesta.ra.toFixed(2)}°`);
+  if (!(vesta.dec > -1.2 && vesta.dec < 0.4)) fail("tiểu hành tinh", `Vesta Dec ngoài khoảng ephemeris: ${vesta.dec.toFixed(2)}°`);
+  if (!(vesta.distanceAu > 1.45 && vesta.distanceAu < 1.65)) fail("tiểu hành tinh", `Vesta Δ ngoài khoảng ephemeris: ${vesta.distanceAu.toFixed(3)} AU`);
+  if (!(vesta.magnitude > 6.2 && vesta.magnitude < 7.3)) fail("tiểu hành tinh", `Vesta mag ngoài khoảng ephemeris: ${vesta.magnitude.toFixed(2)}`);
+  ok();
+  // Pallas (so với công bố 2026-09-03: RA 01h40m, Dec −4°58′, Δ 2,054 AU, mag 8,8).
+  if (!(pallas.ra > 23 && pallas.ra < 25.4)) fail("tiểu hành tinh", `Pallas RA ngoài khoảng ephemeris: ${pallas.ra.toFixed(2)}°`);
+  if (!(pallas.dec > -9.6 && pallas.dec < -4)) fail("tiểu hành tinh", `Pallas Dec ngoài khoảng ephemeris: ${pallas.dec.toFixed(2)}°`);
+  if (!(pallas.distanceAu > 1.85 && pallas.distanceAu < 2.1)) fail("tiểu hành tinh", `Pallas Δ ngoài khoảng ephemeris: ${pallas.distanceAu.toFixed(3)} AU`);
+  if (!(pallas.magnitude > 8.2 && pallas.magnitude < 9.2)) fail("tiểu hành tinh", `Pallas mag ngoài khoảng ephemeris: ${pallas.magnitude.toFixed(2)}`);
+  ok();
+
+  // Bán kính góc thật: Ceres ~0,2–0,9″ tuỳ khoảng cách — luôn là một góc dương rất nhỏ.
+  if (!(ceres.angularRadiusDeg > 0 && ceres.angularRadiusDeg < 0.001)) {
+    fail("tiểu hành tinh", `bán kính góc Ceres bất thường: ${ceres.angularRadiusDeg}`);
+  }
+  ok();
+}
+
+/* ------------------------------------ 14. tiểu hành tinh trong khung 3D khi phóng to */
+{
+  const WIDTH = 640;
+  const HEIGHT = 360;
+  const latitude = 21.0285;
+  const renderRocks = (options: { iso: string; camera: Camera3D; toggles?: Partial<Sky3DToggles> }) => {
+    const frame = buildSkyFrame(new Date(options.iso), latitude, 105.8542);
+    const canvas = createCanvas(WIDTH, HEIGHT);
+    const result = drawSky3D({
+      ctx: canvas.getContext("2d") as unknown as CanvasRenderingContext2D,
+      width: WIDTH,
+      height: HEIGHT,
+      camera: options.camera,
+      frame,
+      rotation: skyRotationMatrix(0, latitude),
+      latitude,
+      toggles: { ...SKY_3D_TOGGLES, ...options.toggles },
+      selected: null,
+      sprites: createSpriteCache(),
+      spriteFactory: (spriteWidth, spriteHeight) => createCanvas(spriteWidth, spriteHeight),
+      timeMs: 0,
+      trailDegrees: 0
+    });
+    return { canvas, result, frame };
+  };
+
+  // Đêm 16/09/2026 (12:30 UTC ≈ 19:30 giờ Hà Nội): Juno cao ~50°, trời đã tối.
+  const iso = "2026-09-16T12:30:00Z";
+  const frame = buildSkyFrame(new Date(iso), latitude, 105.8542);
+  const juno = frame.asteroids.find((asteroid) => asteroid.key === "juno");
+  if (!juno || juno.alt < 20) fail("tiểu hành tinh 3D", `Juno không đủ cao để kiểm tra (alt=${juno?.alt.toFixed(1)}°)`);
+  ok();
+
+  const zoomedIn = renderRocks({ iso, camera: centerCameraOn({ yaw: 0, pitch: 20, fov: 12 }, { alt: juno.alt, az: juno.az }) });
+  const junoHit = zoomedIn.result.hits.find((hit) => hit.kind === "asteroid" && hit.key === "juno");
+  if (!junoHit) fail("tiểu hành tinh 3D", "phóng to mà không thấy Juno để bấm chọn");
+  ok();
+  if (junoHit && (!Number.isFinite(junoHit.x) || !Number.isFinite(junoHit.y))) fail("tiểu hành tinh 3D", "toạ độ Juno không hữu hạn");
+  ok();
+
+  // Nhãn & đĩa tiểu hành tinh chỉ vẽ khi bật lớp: tắt đi phải đổi ảnh.
+  const withoutRocks = renderRocks({
+    iso,
+    camera: centerCameraOn({ yaw: 0, pitch: 20, fov: 12 }, { alt: juno.alt, az: juno.az }),
+    toggles: { asteroids: false }
+  });
+  if (Buffer.compare(zoomedIn.canvas.toBuffer("image/png"), withoutRocks.canvas.toBuffer("image/png")) === 0) {
+    fail("tiểu hành tinh 3D", "bật/tắt lớp tiểu hành tinh mà ảnh không đổi");
+  }
+  ok();
+
+  // Đĩa Juno ở độ phóng sâu phải phủ một vùng điểm ảnh đáng kể (không còn là chấm vô danh).
+  const withData = zoomedIn.canvas.getContext("2d").getImageData(0, 0, WIDTH, HEIGHT).data;
+  const withoutData = withoutRocks.canvas.getContext("2d").getImageData(0, 0, WIDTH, HEIGHT).data;
+  let changed = 0;
+  for (let i = 0; i < withData.length; i += 4) {
+    if (Math.abs(withData[i] - withoutData[i]) + Math.abs(withData[i + 1] - withoutData[i + 1]) + Math.abs(withData[i + 2] - withoutData[i + 2]) > 24) changed += 1;
+  }
+  if (changed < 60) fail("tiểu hành tinh 3D", `tiểu hành tinh phóng to chỉ phủ ${changed} điểm ảnh`);
+  ok();
+
+  // Toàn cảnh (fov 64) không được vỡ: vẫn vẽ được và mọi hit hữu hạn.
+  const wide = renderRocks({ iso, camera: { yaw: juno.az, pitch: 30, fov: 64 } });
+  for (const hit of wide.result.hits) {
+    if (!Number.isFinite(hit.x) || !Number.isFinite(hit.y)) fail("tiểu hành tinh 3D", "toàn cảnh có hit rác");
+  }
+  ok();
+}
+
+/* ------------------------------------------------ 15. lỗ hổng thiên đỉnh ban ngày */
+{
+  const WIDTH = 640;
+  const HEIGHT = 360;
+  const latitude = 21.0285;
+  // Trời trưa (Mặt Trời ~51° cao, cách thiên đỉnh ~39°): vùng thiên đỉnh chỉ thuần dải màu trời.
+  const iso = "1996-11-11T05:00:00Z";
+  const frame = buildSkyFrame(new Date(iso), latitude, 105.8542);
+
+  const zenithPixel = (fov: number) => {
+    const camera: Camera3D = { yaw: 180, pitch: CAMERA_PITCH_LIMIT, fov };
+    const canvas = createCanvas(WIDTH, HEIGHT);
+    drawSky3D({
+      ctx: canvas.getContext("2d") as unknown as CanvasRenderingContext2D,
+      width: WIDTH,
+      height: HEIGHT,
+      camera,
+      frame,
+      rotation: skyRotationMatrix(0, latitude),
+      latitude,
+      toggles: { ...SKY_3D_TOGGLES, grid: false, equatorial: false, milkyWay: false, lines: false, constellationNames: false },
+      selected: null,
+      sprites: createSpriteCache(),
+      spriteFactory: (spriteWidth, spriteHeight) => createCanvas(spriteWidth, spriteHeight),
+      timeMs: 0,
+      trailDegrees: 0
+    });
+    const projector = makeCamera3D(camera, WIDTH, HEIGHT);
+    const zenith = projector.projectVector(directionOf(90, 0));
+    const data = canvas.getContext("2d").getImageData(0, 0, WIDTH, HEIGHT).data;
+    const at = (x: number, y: number) => {
+      const i = (Math.round(y) * WIDTH + Math.round(x)) * 4;
+      return [data[i], data[i + 1], data[i + 2]];
+    };
+    return { zenithPx: at(zenith.x, zenith.y), neighbourPx: at(zenith.x, zenith.y + 12) };
+  };
+
+  // Thiên đỉnh phải cùng màu với bầu trời ngay cạnh nó — nếu có "lỗ hổng" màu nền (xám-xanh)
+  // thì pixel thiên đỉnh sẽ lệch hàng chục đơn vị so với lân cận.
+  for (const fov of [64, 20, 8]) {
+    const { zenithPx, neighbourPx } = zenithPixel(fov);
+    for (let channel = 0; channel < 3; channel += 1) {
+      if (Math.abs(zenithPx[channel] - neighbourPx[channel]) > 20) {
+        fail("lỗ hổng thiên đỉnh", `fov ${fov}°: pixel thiên đỉnh rgb(${zenithPx}) lệch nền trời rgb(${neighbourPx})`);
+        break;
+      }
+    }
+    ok();
+  }
+}
+
+/* -------------------------------------- 16. vị trí chòm sao khi đi qua bầu trời */
+{
+  const latitude = 21.0285;
+  const date = new Date("2026-09-16T12:00:00Z");
+
+  // Đi qua kinh tuyến: đặt giờ sao = xích kinh của sao thì sao phải đứng đúng Nam/Bắc
+  // với độ cao 90 − |vĩ độ − xích vĩ| — tính chất hình học độc lập để kiểm chứng chuỗi
+  // tiến động J2000 → "của ngày" → toạ độ chân trời.
+  for (const name of ["Sirius", "Vega", "Betelgeuse", "Rigel", "Antares", "Altair", "Spica", "Fomalhaut"]) {
+    const star = STARS.find((item) => item.alternatives[0] === name);
+    if (!star) {
+      fail("vị trí chòm sao", `thiếu sao ${name} trong danh mục để kiểm chứng`);
+      continue;
+    }
+    const ofDate = precessFromJ2000(star.ra, star.dec, date);
+    const horizontal = toHorizontal(ofDate.ra, ofDate.dec, ofDate.ra, latitude);
+    const expectedAlt = 90 - Math.abs(latitude - ofDate.dec);
+    const expectedAz = ofDate.dec > latitude ? 0 : 180;
+    if (!near(horizontal.alt, expectedAlt, 1e-6)) {
+      fail("vị trí chòm sao", `${name} qua kinh tuyến ở độ cao ${horizontal.alt.toFixed(3)}° thay vì ${expectedAlt.toFixed(3)}°`);
+    }
+    if (!near(wrap180(horizontal.az - expectedAz), 0, 1e-6)) {
+      fail("vị trí chòm sao", `${name} qua kinh tuyến ở phương vị ${horizontal.az.toFixed(3)}° thay vì ${expectedAz}°`);
+    }
+    ok();
+  }
+
+  // Sao Bắc Cực luôn cách thiên cực đúng ~1°: độ cao phải bám vĩ độ trong ±1,5° suốt ngày đêm.
+  const polaris = STARS.find((item) => item.alternatives[0] === "Polaris");
+  if (!polaris) fail("vị trí chòm sao", "thiếu Polaris trong danh mục");
+  else {
+    for (const hour of [0, 6, 12, 18]) {
+      const frame = buildSkyFrame(new Date(Date.UTC(2026, 8, 16, hour)), latitude, 105.8542);
+      const spun = frame.stars.find((star) => star.index === polaris.index);
+      if (!spun || Math.abs(spun.alt - latitude) > 1.5) {
+        fail("vị trí chòm sao", `Polaris lúc ${hour}h có độ cao ${spun?.alt.toFixed(2)}° — không bám vĩ độ ${latitude}°`);
+      }
+      if (spun && !(spun.az < 12 || spun.az > 348)) {
+        fail("vị trí chòm sao", `Polaris lúc ${hour}h lệch khỏi phương Bắc (az=${spun.az.toFixed(1)}°)`);
+      }
+      ok();
+    }
+  }
+
+  // Đủ 88 chòm: mỗi chòm có cả đường nối lẫn nhãn, và đường nối có ít nhất 2 điểm hữu hạn.
+  const frame = buildSkyFrame(date, latitude, 105.8542);
+  if (frame.lines.length !== 88) fail("chòm sao", `thiếu đường nối chòm sao: ${frame.lines.length}/88`);
+  if (frame.constellationLabels.length !== 88) fail("chòm sao", `thiếu nhãn chòm sao: ${frame.constellationLabels.length}/88`);
+  ok();
+  for (const line of frame.lines) {
+    const finite = line.points.filter((point) => Number.isFinite(point.alt));
+    if (finite.length < 2) fail("chòm sao", `chòm ${line.abbr} không đủ điểm vẽ đường nối`);
+    ok();
+  }
+
+  // Tua thời gian 6 giờ: cả đường nối chòm sao phải quay đúng như sao (cùng ma trận ΔLST).
+  const later = new Date(date.getTime() + 6 * 3600000);
+  const frameLater = buildSkyFrame(later, latitude, 105.8542);
+  const deltaLst = wrap180(frameLater.lstDeg - frame.lstDeg);
+  const matrix = skyRotationMatrix(deltaLst, latitude);
+  let worstLine = 0;
+  for (const line of frame.lines) {
+    const matching = frameLater.lines.find((item) => item.abbr === line.abbr);
+    if (!matching) continue;
+    for (let i = 0; i < line.points.length; i += 3) {
+      const point = line.points[i];
+      if (!Number.isFinite(point.alt)) continue;
+      const rotated = altAzOf(applyMatrix3(matrix, directionOf(point.alt, point.az)));
+      const target = matching.points[i];
+      const separation = angularSeparationDeg(directionOf(rotated.alt, rotated.az), directionOf(target.alt, target.az));
+      if (separation > worstLine) worstLine = separation;
+    }
+  }
+  if (worstLine > 1e-4) fail("chòm sao", `đường nối chòm sao lệch ${worstLine.toExponential(2)}° sau 6 giờ tua`);
+  ok();
 }
 
 console.log(`\n${failures ? "✘" : "✔"} Bầu trời 3D: ${checks.toLocaleString("vi-VN")} phép kiểm, ${failures} lỗi.`);

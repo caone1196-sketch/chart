@@ -15,6 +15,10 @@ và chiếu qua ống kính pinhole.
 | Ba lớp núi che khuất | `terrainHeightDeg(az, lớp)` lấy mẫu 1°/bước, khối núi **đóng xuống đúng đường chân trời** nên không đè lưới mặt đất; lớp xa hoà vào màu trời (phối cảnh khí quyển), lớp gần sẫm nhất. |
 | Khí quyển | Khúc xạ Bennett (chỉ hướng < 25°), hấp thụ Kasten–Young theo độ cao, màu trời theo độ cao Mặt Trời, ráng chiều và quầng sáng quanh phương vị Mặt Trời, mù tán xạ sát chân trời. |
 | Hành tinh là **khối cầu được chiếu sáng** | Mỗi hành tinh vẽ như mô hình 3D: đĩa nền tối (phần đêm) → miền sáng cắt bằng `arc + terminator ellipse` theo **góc pha thật** (giải tam giác Trái Đất–Mặt Trời–hành tinh bằng khoảng cách AU thật từ astronomy-engine, nên Sao Thổ/Sao Mộc gần tròn đầy còn Sao Kim cận Trái Đất khuyết lưỡi liềm) → gradient gốc đặt lệch về phía Mặt Trời + tối viền đồng tâm + dải bóng tuyến tính dọc trục sáng → chi tiết bề mặt (Sao Mộc năm dải mây + Vết Đỏ Lớn, Sao Hỏa chóp băng, Sao Kim xoáy mây…) kẹp trong miền sáng; hướng sáng suy từ **tiếp tuyến 3D** của vector Mặt Trời (không chiếu toạ độ màn hình, tránh NaN). Sao Thổ thêm vành đai ba vòng (nửa sau vẽ trước đĩa, nửa trước đè lên sau). Mặt Trời có nhật hoa tia mảnh xoay chậm theo thời gian. |
+| Phóng to sâu lộ **tầng chi tiết cao** của hành tinh | Bán kính đĩa nới trần theo độ phóng (`zoom^0,34`, tới 3,4×): từ ≈12–18 px trở lên mỗi hành tinh bồi thêm chi tiết — Sao Mộc có dải mảnh hai cực, festoon cắm vào dải sáng và quầng xoáy quanh Vết Đỏ Lớn; Sao Hỏa thêm cao nguyên tối kiểu Syrtis Major, chóp băng Nam gọn và quầng mù rìa; Sao Thủy thêm hố và tia va chạm toả sáng; Sao Kim thêm xoáy mây mảnh; Sao Thiên Vương có mũ cực sáng; Sao Hải Vương có dải mây ti và đốm tối phụ. |
+| **Tiểu hành tinh** hiện rõ khi phóng to | 8 tiểu hành tinh sáng nhất vành đai chính (Ceres – hành tinh lùn, Pallas, Juno, Vesta, Iris, Flora, Hygiea, Eunomia) tính vị trí bằng phần tử quỹ đạo Kepler tức thời của NASA/JPL SBDB (epoch 2461200,5 = 2026‑07‑09, truy vấn 2026‑09‑16): giải phương trình Kepler → nhật tâm hoàng đạo J2000 → trừ vector Trái Đất của astronomy-engine (kèm hiệu chỉnh thời gian ánh sáng) → tiến động về "của ngày" → toạ độ chân trời; cấp sao theo mô hình H/G chuẩn. Ở toàn cảnh chúng là chấm đá có quầng mờ; phóng to (fov ≲ 21°) hiện nhãn; ở bán kính hiển thị ≥ 3 px vẽ thành **tảng đá lởm chởm tất định** (silhouette đa giác theo số hiệu + hố va chạm + shading theo hướng Mặt Trời); bán kính góc **thật** suy từ đường kính/khoảng cách nên phóng cực sâu thì đĩa to đúng tỉ lệ. Bấm chọn được như hành tinh (thẻ hiện loại, cấp sao, khoảng cách AU). Có nút bật/tắt lớp "Tiểu hành tinh". |
+| Thiên đỉnh **liền màu** khi ngẩng hết cỡ | Dải màu trời lấy mẫu độ cao bị kẹp về đúng ±90°: trước đây mép chồng mí vượt 90° làm phương vị lật 180° và vòng trên của dải cao nhất co thành vành khăn **để thủng một lỗ** đúng thiên đỉnh (ban ngày trông như lỗ hổng xám‑xanh của dải nền). Nay vòng trên chập về thiên đỉnh nên dải khép thành hình quạt phủ trọn tâm khung. |
+| Tên chòm **hiển đủ chữ** | Nhãn chòm sao đo bề rộng thật của cả hai dòng (Việt in hoa + Latin) rồi **kẹp vào trong khung** thay vì bỏ rơi khi sát mép, và ngưỡng số chòm được gọi tên nới rộng (44/66/80/88 theo độ phóng) — toàn cảnh vẫn đọc được nhiều tên hơn, phóng to thì đủ cả 88 chòm. |
 | Tua giờ thấy **vòm trời quay** | Hai lớp gợi ý vòm: (1) *lưới xích đạo* (bật được) — vòng xích thiên + các vòng xích vĩ ±30°/±60° và nan xích kinh mỗi 30°, vẽ bằng toạ độ xích đạo → khoá cứng vào khung sao nên quay tròn quanh thiên cực đúng như sao; (2) khi tua, vệt sao dài theo tốc độ (`clamp(speed·2, 0.5, 160)°`) thành **cung tròn đồng tâm** quanh cực thay vì vệt ngắn, đọc như vòm cầu đang xoay chứ không phải mặt phẳng trượt. |
 | Tắt khí quyển vẫn có địa hình | Khi tắt lớp khí quyển, mặt đất và ba lớp núi chuyển sang bảng màu trung tính (xám-xanh cố định, sống núi viền sáng) thay vì chìm vào trời đen — khung nhìn thành "trời vũ trụ + đất liền" chứ không hoá mặt phẳng trống; dải mù chân trời cũng tắt theo vì nó là hiệu ứng khí quyển. |
 | Nhấp nháy & vệt sao | `scintillation(seed, t, alt)` nhiễu tất định mạnh dần khi sao xuống thấp; khi tua thời gian mỗi sao vẽ **cung tròn lớn** từ vị trí cũ tới vị trí mới (nội suy slerp) như ảnh phơi sáng. |
@@ -62,7 +66,8 @@ nền trời theo dải độ cao (mỗi dải một đa giác ghép hai vòng �
 gradient dọc) → quầng sáng Mặt Trời → Ngân Hà → lưới độ cao/phương vị → lưới xích đạo (xích thiên
 vàng, nan xích kinh tím, khoá vào khung sao) → nét chòm sao (cắt phần
 khuất sau núi) → hoàng đạo + nhãn 12 cung → tên chòm sao → thiên thể sâu → **sao** (vệt → quầng →
-lõi → tia nhiễu xạ) → hành tinh / Mặt Trăng / Mặt Trời → mặt đất (nửa dưới `horizonY`) → lưới
+lõi → tia nhiễu xạ) → hành tinh / Mặt Trăng / Mặt Trời → **tiểu hành tinh** (quầng → tảng đá → nhãn
+khi phóng to) → mặt đất (nửa dưới `horizonY`) → lưới
 khoảng cách → ba lớp núi → mù chân trời → vạch chân trời + la bàn 8 hướng → nhãn chống chồng
 (theo thứ tự ưu tiên sao → DSO → hoàng đạo → chòm) → vòng ngắm đối tượng chọn.
 
@@ -78,10 +83,19 @@ khoảng cách → ba lớp núi → mù chân trời → vạch chân trời + 
 ## Kiểm chứng & ảnh chụp
 
 ```bash
-npm run test:sky3d   # ~1.510 phép kiểm: hình học camera, cắt tia, quay ΔLST, mặt đất, vẽ thật trên canvas
+npm run test:sky3d   # ~1.923 phép kiểm: hình học camera, cắt tia, quay ΔLST, mặt đất, vẽ thật trên canvas,
+                     # tiểu hành tinh (Kepler + đối chiếu ephemeris JPL/theskylive), lỗ hổng thiên đỉnh, vị trí chòm sao
 npm run test:ui3d    # gắn Sky3D vào jsdom: lăn chuột/kéo/phím cách/chọn thiên thể/đổi giờ/toàn màn hình
-npm run shot:sky3d   # 16 tình huống PNG trong .cache/shots/ (đêm, rạng, ngày, ngẩng cao, cúi, vệt sao, lưới xích đạo, Sao Mộc, Sao Thổ tròn đầy, Sao Kim lưỡi liềm…)
+npm run shot:sky3d   # 18 tình huống PNG trong .cache/shots/ (đêm, rạng, ngày, ngẩng cao, cúi, vệt sao, lưới xích đạo,
+                     # Sao Mộc, Sao Thổ tròn đầy, Sao Kim lưỡi liềm, phóng sâu vào tiểu hành tinh, ngẩng hết cỡ ban ngày…)
 ```
+
+Đối chiếu tiểu hành tinh với nguồn công bố (truy vấn 2026‑09‑16): Ceres đang ở Cự Giải
+(kinh độ hoàng đạo 90–120°) đúng lịch thiên văn 2026‑08‑12 → 2027‑05; Vesta/Pallas khớp
+theskylive.com trong ~0,1–0,3° (RA, Dec, khoảng cách AU, cấp sao). Vị trí chòm sao khi đi qua
+bầu trời được kiểm bằng tính chất hình học độc lập: sao qua kinh tuyến đứng đúng Nam/Bắc ở độ
+cao 90 − |vĩ độ − xích vĩ|, Polaris bám vĩ độ ±1,5° suốt ngày đêm, và cả đường nối chòm sao quay
+đúng ma trận ΔLST khi tua thời gian.
 
 Nhóm "vẽ thật" trong `tests/sky3d.check.ts` khẳng định bằng điểm ảnh: trời ngày sáng hơn trời
 đêm, mặt đất tối hơn trời, vạch chân trời sáng nằm ngang, ảnh **tất định** (hai lần vẽ trùng

@@ -60,7 +60,9 @@ const scenarios: Scenario[] = [
     note: "tắt khí quyển + mặt đất"
   },
   { name: "3d-11-nam-ban-cau", iso: "2026-09-16T14:00:00Z", camera: { yaw: 180, pitch: 18, fov: 70 }, lat: -33.87, lon: 151.21, note: "Sydney" },
-  { name: "3d-12-tron-mot-vong", iso: "2026-09-16T14:00:00Z", camera: { yaw: 300, pitch: 5, fov: 110 }, note: "fov tối đa 110°" }
+  { name: "3d-12-tron-mot-vong", iso: "2026-09-16T14:00:00Z", camera: { yaw: 300, pitch: 5, fov: 110 }, note: "fov tối đa 110°" },
+  { name: "3d-17-tieu-hanh-tinh", iso: "2026-09-16T12:30:00Z", camera: { yaw: 150, pitch: 40, fov: 10 }, aim: "juno", note: "phóng sâu vào tiểu hành tinh Juno" },
+  { name: "3d-18-thien-dinh-ngay", iso: "1996-11-11T05:00:00Z", camera: { yaw: 180, pitch: 89, fov: 20 }, note: "ngẩng hết cỡ ban ngày — thiên đỉnh liền màu, không lỗ hổng" }
 ];
 
 mkdirSync(".cache/shots", { recursive: true });
@@ -71,7 +73,8 @@ for (const scenario of scenarios) {
   const longitude = scenario.lon ?? LON;
   const frame = buildSkyFrame(date, latitude, longitude);
   const aimed = scenario.aim
-    ? frame.planets.find((planet) => planet.key === scenario.aim)
+    ? frame.planets.find((planet) => planet.key === scenario.aim) ??
+      frame.asteroids.find((asteroid) => asteroid.key === scenario.aim)
     : undefined;
   const camera: Camera3D = aimed
     ? centerCameraOn(scenario.camera, { alt: aimed.alt, az: aimed.az })

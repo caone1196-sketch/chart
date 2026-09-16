@@ -15,7 +15,8 @@ Web app tiếng Việt: **lập bản đồ sao (natal chart) → ngắm bầu t
 2. **Bản đồ sao 3D (bầu trời thật, khung nhìn phối cảnh)** — khung ngắm trời duy nhất của app (bản đồ 2D cũ đã được thay bằng bản 3D), chi tiết trong `docs/ban-do-3d.md`
    - 5.044 sao Hipparcos (tới cấp 6) màu theo chỉ số B-V, 88 chòm sao có đường nối và **tên tiếng Việt**, 118 thiên thể sâu, hoàng đạo 12 cung, Ngân Hà ~1.670 đám mây sao kèm **rãnh tối Great Rift**.
    - **Ống kính phối cảnh thật** (pinhole trên canvas 2D): chân trời thẳng, vòng độ cao cong đúng thấu kính, Mặt Trời/Mặt Trăng có bán kính góc thật nên phóng to thì to ra như ống nhòm; Mặt Trăng đúng pha, đúng hướng sáng.
-   - **Hành tinh là khối cầu chiếu sáng**: pha thật giải từ tam giác khoảng cách Trái Đất–Mặt Trời–hành tinh (Sao Thổ tròn đầy + vành đai trước/sau, Sao Kim lưỡi liềm khi cận địa), chi tiết bề mặt tất định, quầng ám màu riêng.
+   - **Hành tinh là khối cầu chiếu sáng**: pha thật giải từ tam giác khoảng cách Trái Đất–Mặt Trời–hành tinh (Sao Thổ tròn đầy + vành đai trước/sau, Sao Kim lưỡi liềm khi cận địa), chi tiết bề mặt tất định, quầng ám màu riêng; phóng to sâu bồi thêm tầng chi tiết cao (festoon + quầng Vết Đỏ Lớn của Sao Mộc, mũ cực Sao Thiên Vương…).
+   - **Tiểu hành tinh khi phóng to**: 8 tiểu hành tinh sáng (Ceres, Pallas, Juno, Vesta, Iris, Flora, Hygiea, Eunomia) tính bằng phần tử quỹ đạo JPL SBDB epoch 2026‑07‑09 + Kepler + hiệu chỉnh thời gian ánh sáng + cấp sao H/G; hiện chấm đá có nhãn khi phóng to, vẽ thành tảng đá lởm chởm ở độ phóng sâu, bấm chọn được như hành tinh.
    - **Khí quyển & địa hình**: màu trời theo độ cao Mặt Trời, ráng chiều, khúc xạ Bennett + hấp thụ Kasten–Young, sao nhấp nháy mạnh dần khi xuống thấp; mặt đất lưới khoảng cách 3→900 m và ba lớp núi theo chiều sâu; tắt khí quyển thì địa hình đổi bảng màu trung tính.
    - **Tua giờ thấy vòm trời quay**: lưới xích đạo khoá vào khung sao + vệt sao thành cung tròn dài theo tốc độ (thời gian thực tới 6 giờ/giây); sao quay bằng ma trận ΔLST nên mượt 60 fps.
    - **Điều khiển**: kéo nhìn quanh, lăn chuột/chụm phóng to **quanh con trỏ mà trang không cuộn**, nháy đúp đưa vật thể vào giữa, bấm vật thể → thẻ thông tin + **Hỏi AI về riêng nó**, ô tra cứu gõ được tiếng Việt không dấu, phím ←→↑↓ +/− và phím cách tua giờ, 13 nút bật/tắt lớp, toàn màn hình.
@@ -54,7 +55,7 @@ Các engine được kiểm chứng tự động với **Swiss Ephemeris** (`npm
 | Điểm ảo | 41 mốc 1900-2100 × 28 thiên thể | node trung bình 0,00015° · Lilith 0,115° · hành tinh giả định ≤ 0,007° · tiểu hành tinh 0,28-0,99° |
 | Lớp biến thể | 7 hệ hoàng đạo × 12 hệ nhà, dasha/varga/Tứ Trụ/Tử Vi/Maya/HD | kiểm tra tính nhất quán (cusp ↔ nhà, ayanamsa ↔ cung) |
 | Bản đồ sao (hiển thị) | 14.950 phép kiểm: khúc xạ/hấp thụ, phép chiếu & nghịch đảo, phóng to quanh con trỏ, **quy đổi lăn chuột & giới hạn dịch chuyển khung**, dựng khung 4 vĩ độ, Ngân Hà, pha Trăng, tra cứu | 0 lỗi (sai số nghịch đảo < 0,05°) |
-| Bầu trời 3D | 1.510 phép kiểm: hình học camera phối cảnh (chân trời thẳng, nghịch đảo < 1e-6 px), zoom quanh con trỏ nghiệm kín, quay ΔLST khớp khung dựng lại ≤ vài phần triệu độ, cắt mặt phẳng gần, lưới mặt đất, vệt sao, pha hành tinh theo tam giác khoảng cách, lưới xích đạo; kèm **vẽ thật trên canvas** và so sánh điểm ảnh (tất định từng byte) | 0 lỗi |
+| Bầu trời 3D | 1.923 phép kiểm: hình học camera phối cảnh (chân trời thẳng, nghịch đảo < 1e-6 px), zoom quanh con trỏ nghiệm kín, quay ΔLST khớp khung dựng lại ≤ vài phần triệu độ, cắt mặt phẳng gần, lưới mặt đất, vệt sao, pha hành tinh theo tam giác khoảng cách, lưới xích đạo, **tiểu hành tinh đối chiếu ephemeris JPL/theskylive**, **thiên đỉnh liền màu khi ngẩng hết cỡ ban ngày**, **vị trí chòm sao qua kinh tuyến/bám vĩ độ**; kèm **vẽ thật trên canvas** và so sánh điểm ảnh (tất định từng byte) | 0 lỗi |
 | Giao diện ngắm trời 3D | 1 lần chạy jsdom: gắn Sky3D, vòng rAF vẽ thật qua context giả, mô phỏng lăn chuột (không cuộn trang + trường nhìn đổi), kéo đổi hướng, phím cách tua, bấm chọn thiên thể → Hỏi AI → bỏ chọn, bật/tắt lớp, đổi ngày giờ, về giờ thực, toàn màn hình | 0 ngoại lệ, 0 console.error |
 
 ## Chạy dự án
@@ -71,7 +72,7 @@ npm run check:ai   # chẩn đoán cấu hình Gemini (khoá có dùng được 
 npm run test:sky   # mô hình hiển thị bầu trời (khúc xạ, phép chiếu, Ngân Hà, pha Trăng, tra cứu)
 npm run test:ui3d  # chạy giao diện ngắm trời 3D trong jsdom (lăn chuột/kéo/chọn thiên thể/đổi giờ)
 npm run test:sky3d # hình học + bộ vẽ của khung ngắm 3D (kèm vẽ thật trên canvas Node)
-npm run shot:sky3d # render 16 tình huống 3D ra PNG trong .cache/shots/
+npm run shot:sky3d # render 18 tình huống 3D ra PNG trong .cache/shots/ (thêm tiểu hành tinh phóng sâu, thiên đỉnh ban ngày)
 ```
 
 ### Biến môi trường (tuỳ chọn)
@@ -104,6 +105,7 @@ src/
   lib/houses.ts      12 hệ thống chia nhà port từ swehouse.c, đã kiểm chứng Swiss Ephemeris
   lib/zodiac.ts      7 hệ hoàng đạo/ayanamsa, 27 nakshatra, 16 varga, Vimshottari dasha, panchang
   lib/points.ts      điểm ảo: node, Lilith, Chiron & tiểu hành tinh, TNO, hành tinh giả định Hamburg
+  lib/asteroids.ts   vị trí tiểu hành tinh cho bầu trời: phần tử JPL SBDB 2026-07-09 + Kepler + thời gian ánh sáng + cấp sao H/G
   lib/patterns.ts    hình mẫu góc chiếu, hình dạng bản đồ, ưu thế bán cầu
   lib/hellenistic.ts Lots, phẩm chất hành tinh (dignity), phái bản đồ, nhà niềm vui
   lib/chinese.ts     Tứ Trụ (BaZi), Tử Vi Đẩu Số, lịch Maya

@@ -39,9 +39,11 @@ export type SkyDrawToggles = {
   grid: boolean;
   atmosphere: boolean;
   ground: boolean;
+  /** Tiểu hành tinh — chỉ lộ ra khi phóng to; không đặt thì coi như bật. */
+  asteroids?: boolean;
 };
 
-export type SkySelection = { kind: "star" | "deepsky" | "planet"; key: string } | null;
+export type SkySelection = { kind: "star" | "deepsky" | "planet" | "asteroid"; key: string } | null;
 
 export type SpriteCanvas = {
   width: number;
@@ -91,7 +93,7 @@ export const ensureSprites = (cache: SpriteCache, factory: SpriteFactory): Sprit
   return cache;
 };
 
-export type SkyHit = { kind: "star" | "deepsky" | "planet"; key: string; x: number; y: number; radius: number };
+export type SkyHit = { kind: "star" | "deepsky" | "planet" | "asteroid"; key: string; x: number; y: number; radius: number };
 
 export type SkyDrawInput = {
   ctx: CanvasRenderingContext2D;
@@ -503,25 +505,32 @@ export const drawSky = (input: SkyDrawInput): SkyDrawResult => {
 
   /* ------------------------------------------------------------ tên chòm sao */
   if (toggles.constellationNames) {
-    // Ở mức thu nhỏ chỉ ghi tên các chòm lớn; phóng to thì hiện dần tất cả.
-    const rankLimit = view.zoom < 1.2 ? 34 : view.zoom < 1.8 ? 55 : view.zoom < 3 ? 74 : 88;
+    // Ở mức thu nhỏ chỉ ghi tên các chòm lớn; phóng to thì hiện dần tất cả 88 chòm.
+    const rankLimit = view.zoom < 1.2 ? 44 : view.zoom < 1.8 ? 66 : view.zoom < 3 ? 80 : 88;
     // Tên chòm mờ dần khi trời còn sáng.
     const nameAlpha = atmosphere ? clamp01(0.15 + 0.85 * tone.starFactor) : 1;
+    ctx.font = "600 11px system-ui, sans-serif";
     for (const meta of frame.constellationLabels) {
       if (nameAlpha < 0.2) break;
       if (meta.rank > rankLimit) continue;
       if (meta.alt < minAltitudeOf(meta) + 2.5) continue;
       const { x, y, visible } = projector.forward(meta);
-      if (!visible || x < 48 || x > width - 48 || y < 28 || y > height - 28) continue;
+      if (!visible) continue;
+      // Đo thật hai dòng chữ rồi kẹp nhãn vào trong khung để tên chòm luôn hiển đủ chữ.
+      const viText = meta.vi.toUpperCase();
+      const halfWidth = Math.max(ctx.measureText(viText).width, ctx.measureText(meta.latin).width) / 2 + 6;
+      if (halfWidth * 2 > width - 8) continue;
+      const anchorX = clamp(x, halfWidth + 2, width - halfWidth - 2);
+      const anchorY = clamp(y, 30, height - 30);
       constellationLabelQueue.push({
-        box: labelBox(x, y + 5, Math.max(meta.vi.length, meta.latin.length) * 6.6, 30),
+        box: labelBox(anchorX, anchorY + 5, halfWidth * 2, 28),
         draw: () => {
-          drawText(ctx, meta.vi.toUpperCase(), x, y, {
+          drawText(ctx, viText, anchorX, anchorY, {
             font: "600 11px system-ui, sans-serif",
             color: `rgba(125, 211, 252, ${(0.5 * nameAlpha).toFixed(3)})`,
             shadow: "rgba(2, 6, 23, 0.7)"
           });
-          drawText(ctx, meta.latin, x, y + 11, {
+          drawText(ctx, meta.latin, anchorX, anchorY + 11, {
             font: "10px system-ui, sans-serif",
             color: `rgba(148, 163, 184, ${(0.42 * nameAlpha).toFixed(3)})`,
             shadow: "rgba(2, 6, 23, 0.7)"
@@ -705,6 +714,33 @@ export const drawSky = (input: SkyDrawInput): SkyDrawResult => {
         shadow: "rgba(2, 6, 23, 0.8)"
       });
       hits.push({ kind: "planet", key: planet.key, x, y, radius: 15 });
+    }
+  }
+
+  /* Tiểu hành tinh: quá mờ để hiện ở toàn cảnh — chỉ vẽ từ zoom ≥ 5 (như qua ống nhòm). */
+  if ((toggles.asteroids ?? true) && view.zoom >= 5) {
+    for (const asteroid of frame.asteroids) {
+      if (asteroid.alt < minAltitudeOf(asteroid) - 0.6) continue;
+      const { x, y, visible } = projector.forward(asteroid);
+      if (!visible || x < -60 || x > width + 60 || y < -60 || y > height + 60) continue;
+      if (atmosphere && tone.starFactor < 0.3) continue;
+      const isSelected = selected?.kind === "asteroid" && selected.key === asteroid.key;
+      const radius = clamp(2.6 * Math.pow(view.zoom, 0.18), 2.6, 5);
+
+      ctx.beginPath();
+      ctx.fillStyle = asteroid.color;
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = isSelected ? "#fde68a" : "rgba(15, 23, 42, 0.8)";
+      ctx.lineWidth = isSelected ? 2.2 : 1;
+      ctx.stroke();
+
+      placeLabel(`${asteroid.label} · mag ${asteroid.magnitude.toFixed(1)}`, x, y, radius, {
+        font: "600 10px system-ui, sans-serif",
+        color: "rgba(226, 232, 240, 0.9)",
+        shadow: "rgba(2, 6, 23, 0.8)"
+      });
+      hits.push({ kind: "asteroid", key: asteroid.key, x, y, radius: 13 });
     }
   }
 

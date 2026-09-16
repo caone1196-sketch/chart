@@ -368,6 +368,11 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
       if (!object) return null;
       return altAzOf(applyMatrix3(rotation, directionOf(object.alt, object.az)));
     }
+    if (hit.kind === "asteroid") {
+      const asteroid = frame.asteroids.find((item) => item.key === hit.key);
+      if (!asteroid) return null;
+      return altAzOf(applyMatrix3(rotation, directionOf(asteroid.alt, asteroid.az)));
+    }
     const planet = frame.planets.find((item) => item.key === hit.key);
     if (!planet) return null;
     return altAzOf(applyMatrix3(rotation, directionOf(planet.alt, planet.az)));
@@ -387,6 +392,15 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
       return { name: object.label || object.id, detail: `thiên thể sâu ${object.id}`, question: `Giới thiệu thiên thể ${object.id}.` };
     }
     const cached = frameRef.current?.frame;
+    if (selected.kind === "asteroid") {
+      const asteroid = cached?.asteroids.find((item) => item.key === selected.key);
+      if (!asteroid) return null;
+      return {
+        name: `${asteroid.label} (${asteroid.number})`,
+        detail: `${asteroid.kindVi} · mag ${asteroid.magnitude.toFixed(1)} · cách ${asteroid.distanceAu.toFixed(2)} AU`,
+        question: `Giới thiệu tiểu hành tinh ${asteroid.name} và vị trí hiện tại của nó.`
+      };
+    }
     const planet = cached?.planets.find((item) => item.key === selected.key);
     if (!planet) return null;
     const extra =
@@ -556,6 +570,7 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
         {toggle("milkyWay", "Ngân Hà")}
         {toggle("deepSky", "Thiên thể sâu")}
         {toggle("ecliptic", "Hoàng đạo")}
+        {toggle("asteroids", "Tiểu hành tinh")}
         {toggle("grid", "Lưới độ cao")}
         {toggle("equatorial", "Lưới xích đạo")}
         {toggle("groundGrid", "Lưới mặt đất")}
