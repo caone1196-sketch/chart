@@ -183,6 +183,112 @@ const DSO_SYMBOL: Record<string, "cluster" | "nebula" | "galaxy"> = {
 
 const ALWAYS_LABELLED_DSO = ["M31", "M42", "M45", "M8", "M13", "M44", "ω Cen", "LMC", "SMC"];
 
+/** Kích thước đĩa hiển thị (px ở zoom 1) và cường độ quầng cho từng hành tinh. */
+const PLANET_BODY: Record<string, { radius: number }> = {
+  mercury: { radius: 4.5 },
+  venus: { radius: 6.5 },
+  mars: { radius: 5.5 },
+  jupiter: { radius: 10 },
+  saturn: { radius: 8.5 },
+  uranus: { radius: 6 },
+  neptune: { radius: 6 }
+};
+
+/**
+ * Vẽ đĩa hành tinh "sống động": vân mây Sao Mộc + Vết Đỏ Lớn, vành đai Sao Thổ, chóp băng Sao Hỏa,
+ * xoáy mây Sao Kim, hố va chạm Sao Thủy, đốm tối Sao Hải Vương… Tất cả tất định (không ngẫu nhiên)
+ * để ảnh chụp màn hình tái lập được. Bán kính < 4 px thì chỉ tô màu cầu cho gọn.
+ */
+const drawPlanetBody = (ctx: CanvasRenderingContext2D, key: string, x: number, y: number, radius: number, tint: Rgb) => {
+  const disc = () => {
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+  };
+  const base = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.35, radius * 0.15, x, y, radius);
+  base.addColorStop(0, rgbCss(mixColor(tint, [255, 255, 255], 0.42)));
+  base.addColorStop(0.65, rgbCss(tint));
+  base.addColorStop(1, rgbCss(mixColor(tint, [10, 10, 16], 0.5)));
+  disc();
+  ctx.fillStyle = base;
+  ctx.fill();
+  if (radius < 4) return;
+
+  ctx.save();
+  disc();
+  ctx.clip();
+  const band = (offset: number, thickness: number, color: string) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(x - radius, y + offset * radius - (thickness * radius) / 2, radius * 2, thickness * radius);
+  };
+  const blob = (ox: number, oy: number, rx: number, ry: number, color: string, rotate = 0) => {
+    ctx.beginPath();
+    ctx.ellipse(x + ox * radius, y + oy * radius, rx * radius, ry * radius, rotate, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  };
+  if (key === "jupiter") {
+    band(-0.62, 0.2, "rgba(166,124,82,0.75)");
+    band(-0.28, 0.16, "rgba(240,224,196,0.8)");
+    band(-0.02, 0.22, "rgba(178,116,74,0.8)");
+    band(0.3, 0.15, "rgba(238,220,190,0.75)");
+    band(0.6, 0.2, "rgba(150,104,70,0.7)");
+    blob(0.28, 0.34, 0.24, 0.13, "rgba(196,84,58,0.9)");
+  } else if (key === "saturn") {
+    band(-0.35, 0.22, "rgba(214,186,140,0.6)");
+    band(0.05, 0.2, "rgba(238,220,178,0.65)");
+    band(0.45, 0.2, "rgba(196,166,120,0.55)");
+  } else if (key === "mars") {
+    blob(-0.15, 0.12, 0.5, 0.26, "rgba(96,44,28,0.6)", 0.3);
+    blob(0.35, -0.3, 0.3, 0.16, "rgba(88,40,26,0.5)", -0.4);
+    blob(0, -0.82, 0.32, 0.16, "rgba(250,248,244,0.92)");
+  } else if (key === "venus") {
+    ctx.strokeStyle = "rgba(255,250,228,0.4)";
+    ctx.lineWidth = radius * 0.16;
+    ctx.beginPath();
+    ctx.arc(x - radius * 0.2, y - radius * 0.1, radius * 0.75, -0.6, 1.8);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x + radius * 0.25, y + radius * 0.3, radius * 0.55, 2.4, 4.6);
+    ctx.stroke();
+  } else if (key === "mercury") {
+    blob(-0.25, -0.15, 0.18, 0.16, "rgba(70,66,64,0.55)");
+    blob(0.3, 0.25, 0.13, 0.12, "rgba(70,66,64,0.5)");
+    blob(0.05, -0.45, 0.1, 0.09, "rgba(70,66,64,0.45)");
+  } else if (key === "uranus") {
+    band(0.1, 0.3, "rgba(255,255,255,0.14)");
+  } else if (key === "neptune") {
+    band(-0.2, 0.24, "rgba(255,255,255,0.16)");
+    blob(-0.18, 0.15, 0.3, 0.17, "rgba(18,28,84,0.65)");
+  }
+  // Tối viền (limb darkening) cho đĩa trông hình cầu thay vì hình tròn dẹt.
+  const limb = ctx.createRadialGradient(x, y, radius * 0.55, x, y, radius);
+  limb.addColorStop(0, "rgba(0,0,0,0)");
+  limb.addColorStop(1, "rgba(4,6,12,0.5)");
+  ctx.fillStyle = limb;
+  ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  ctx.restore();
+};
+
+/** Vành đai Sao Thổ: nửa sau vẽ trước đĩa, nửa trước vẽ đè lên sau đĩa. */
+const drawSaturnRings = (ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, from: number, to: number) => {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-0.32);
+  const rings: Array<[number, number, string]> = [
+    [1.55, 0.16, "rgba(216,196,158,0.75)"],
+    [1.85, 0.22, "rgba(196,176,140,0.6)"],
+    [2.15, 0.1, "rgba(170,150,120,0.45)"]
+  ];
+  for (const [ringRadius, lineWidth, color] of rings) {
+    ctx.beginPath();
+    ctx.ellipse(0, 0, ringRadius * radius, ringRadius * radius * 0.32, 0, from, to);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth * radius;
+    ctx.stroke();
+  }
+  ctx.restore();
+};
+
 /** Bán kính góc thật (độ) của Mặt Trời, Mặt Trăng và hành tinh — dùng khi phóng to. */
 const TRUE_ANGULAR_RADIUS_DEG: Record<string, number> = {
   sun: 0.266,
@@ -774,6 +880,19 @@ export const drawSky3D = (input: Sky3DDrawInput): Sky3DDrawResult => {
       ctx.fillStyle = "#fffbe8";
       ctx.arc(projected.x, projected.y, radius, 0, Math.PI * 2);
       ctx.fill();
+      // Nhật hoa: các tia mảnh xoay rất chậm theo thời gian cho cảm giác Mặt Trời "sống".
+      ctx.globalCompositeOperation = "lighter";
+      ctx.strokeStyle = "rgba(255,224,168,0.16)";
+      ctx.lineWidth = Math.max(1, radius * 0.07);
+      for (let ray = 0; ray < 12; ray += 1) {
+        const angle = (ray / 12) * Math.PI * 2 + timeMs * 0.00002;
+        const outer = radius * (1.4 + 0.32 * Math.abs(Math.sin(ray * 2.399)));
+        ctx.beginPath();
+        ctx.moveTo(projected.x + Math.cos(angle) * radius * 1.05, projected.y + Math.sin(angle) * radius * 1.05);
+        ctx.lineTo(projected.x + Math.cos(angle) * outer, projected.y + Math.sin(angle) * outer);
+        ctx.stroke();
+      }
+      ctx.globalCompositeOperation = "source-over";
       placeLabel("Mặt Trời", projected.x, projected.y, radius, {
         font: "600 11px system-ui, sans-serif",
         color: "rgba(255,247,214,0.95)",
@@ -841,28 +960,32 @@ export const drawSky3D = (input: Sky3DDrawInput): Sky3DDrawResult => {
       continue;
     }
 
-    const radius = Math.max(2.6, angularRadius) * clamp(Math.pow(zoom, 0.12), 1, 2);
+    // Đĩa hành tinh: lấy max(bán kính góc thật, kích thước hiển thị tối thiểu) rồi nhân theo độ phóng
+    // để phóng to thì hành tinh vừa to ra vừa lộ chi tiết vân mây / vành đai.
+    const tint = hexToRgb(planet.color);
+    const radius = Math.max(angularRadius, PLANET_BODY[planet.key]?.radius ?? 5) * clamp(Math.pow(zoom, 0.3), 0.85, 2.6);
     ctx.globalCompositeOperation = "lighter";
-    const glowRadius = radius * 3.2 + 5;
+    const glowRadius = radius * 3.1 + 6;
     const glow = ctx.createRadialGradient(projected.x, projected.y, 0.4, projected.x, projected.y, glowRadius);
-    glow.addColorStop(0, "rgba(255,255,255,0.5)");
-    glow.addColorStop(0.35, rgbCss(hexToRgb(planet.color), 0.28));
-    glow.addColorStop(1, rgbCss(hexToRgb(planet.color), 0));
+    glow.addColorStop(0, rgbCss(tint, 0.5));
+    glow.addColorStop(0.4, rgbCss(tint, 0.2));
+    glow.addColorStop(1, rgbCss(tint, 0));
     ctx.fillStyle = glow;
     ctx.beginPath();
     ctx.arc(projected.x, projected.y, glowRadius, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalCompositeOperation = "source-over";
 
-    ctx.beginPath();
-    ctx.fillStyle = planet.color;
-    ctx.arc(projected.x, projected.y, radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = isSelected ? "#fde68a" : "rgba(15,23,42,0.8)";
+    if (planet.key === "saturn") drawSaturnRings(ctx, projected.x, projected.y, radius, Math.PI, Math.PI * 2);
+    drawPlanetBody(ctx, planet.key, projected.x, projected.y, radius, tint);
+    if (planet.key === "saturn") drawSaturnRings(ctx, projected.x, projected.y, radius, 0, Math.PI);
+    ctx.strokeStyle = isSelected ? "#fde68a" : "rgba(8,12,24,0.85)";
     ctx.lineWidth = isSelected ? 2.4 : 1;
+    ctx.beginPath();
+    ctx.arc(projected.x, projected.y, radius, 0, Math.PI * 2);
     ctx.stroke();
 
-    if (zoom > 1.15 || isSelected) {
+    if (zoom > 0.9 || isSelected) {
       placeLabel(planet.label, projected.x, projected.y, radius + 2, {
         font: "600 11px system-ui, sans-serif",
         color: "rgba(241,245,249,0.95)",
@@ -885,11 +1008,21 @@ export const drawSky3D = (input: Sky3DDrawInput): Sky3DDrawResult => {
 
     // Nửa dưới đường chân trời = mặt đất (đường chân trời chiếu thành đường thẳng).
     const horizonY = clamp(projector.horizonY, -height * 2, height * 3);
-    const farGround = mixColor(tone.groundFar, [0, 0, 0], 0.08 + 0.34 * tone.starFactor);
+    // Không khí quyển thì không còn mù che phủ: chuyển sang bảng màu trung tính đủ tương phản
+    // để địa hình và lưới vẫn đọc được trên nền trời đen kiểu vũ trụ (không hoá "mặt phẳng trống").
+    const farGround = atmosphere
+      ? mixColor(tone.groundFar, [0, 0, 0], 0.08 + 0.34 * tone.starFactor)
+      : ([24, 30, 40] as Rgb);
+    const midGround = atmosphere
+      ? mixColor(tone.ground, [0, 0, 0], 0.2 + 0.14 * tone.starFactor)
+      : ([13, 17, 24] as Rgb);
+    const nearGround = atmosphere
+      ? mixColor(tone.ground, [0, 0, 0], 0.52 + 0.1 * tone.starFactor)
+      : ([6, 8, 12] as Rgb);
     const groundGradient = ctx.createLinearGradient(0, horizonY, 0, Math.max(height, horizonY + 40) + 60);
     groundGradient.addColorStop(0, rgbCss(farGround));
-    groundGradient.addColorStop(0.42, rgbCss(mixColor(tone.ground, [0, 0, 0], 0.2 + 0.14 * tone.starFactor)));
-    groundGradient.addColorStop(1, rgbCss(mixColor(tone.ground, [0, 0, 0], 0.52 + 0.1 * tone.starFactor)));
+    groundGradient.addColorStop(0.42, rgbCss(midGround));
+    groundGradient.addColorStop(1, rgbCss(nearGround));
     ctx.fillStyle = groundGradient;
     ctx.fillRect(0, horizonY, width, Math.max(height, horizonY + 40) - horizonY + 80);
 
@@ -898,7 +1031,7 @@ export const drawSky3D = (input: Sky3DDrawInput): Sky3DDrawResult => {
       ctx.lineWidth = 1;
       GROUND_RINGS_M.forEach((distance, index) => {
         const fade = clamp01(1 - index / (GROUND_RINGS_M.length + 1.5));
-        ctx.strokeStyle = `rgba(158,205,238,${(0.1 + 0.22 * fade).toFixed(3)})`;
+        ctx.strokeStyle = `rgba(158,205,238,${((atmosphere ? 0.1 : 0.16) + (atmosphere ? 0.22 : 0.26) * fade).toFixed(3)})`;
         for (const path of projectPath(groundRingPath(distance, 3), projector, 2)) {
           if (path.length < 2) continue;
           ctx.beginPath();
@@ -907,7 +1040,7 @@ export const drawSky3D = (input: Sky3DDrawInput): Sky3DDrawResult => {
           ctx.stroke();
         }
       });
-      ctx.strokeStyle = "rgba(158,205,238,0.12)";
+      ctx.strokeStyle = atmosphere ? "rgba(158,205,238,0.12)" : "rgba(158,205,238,0.2)";
       for (let az = 0; az < 360; az += 15) {
         for (const path of projectPath(
           [
@@ -947,12 +1080,15 @@ export const drawSky3D = (input: Sky3DDrawInput): Sky3DDrawResult => {
       ridge.push([terrainHeightDeg(az, 0), terrainHeightDeg(az, 1), terrainHeightDeg(az, 2)]);
     }
     // Ba lớp núi mờ dần theo khoảng cách (phối cảnh khí quyển): lớp xa hoà vào màu trời đất
-    // phía chân trời, lớp gần sẫm nhất. Công thức dùng `tone.ridge` nên đúng cho cả ngày và đêm.
-    const layerColors = [
-      rgbCss(mixColor(farGround, tone.ridge, 0.35)),
-      rgbCss(mixColor(farGround, tone.ridge, 0.72)),
-      rgbCss(mixColor(tone.ridge, [0, 0, 0], 0.28))
-    ];
+    // phía chân trời, lớp gần sẫm nhất. Công thức dùng `tone.ridge` nên đúng cho cả ngày và đêm;
+    // khi tắt khí quyển thì dùng thang xám-xanh cố định để sống núi vẫn tách rõ khỏi trời đen.
+    const layerColors = atmosphere
+      ? [
+          rgbCss(mixColor(farGround, tone.ridge, 0.35)),
+          rgbCss(mixColor(farGround, tone.ridge, 0.72)),
+          rgbCss(mixColor(tone.ridge, [0, 0, 0], 0.28))
+        ]
+      : [rgbCss([44, 52, 64]), rgbCss([26, 31, 40]), rgbCss([13, 16, 22])];
 
     for (let layer = 0; layer < 3; layer += 1) {
       // Khối núi được đóng xuống **đúng đường chân trời** (alt = 0): núi xa chỉ là dải ôm chân trời,
@@ -973,7 +1109,11 @@ export const drawSky3D = (input: Sky3DDrawInput): Sky3DDrawResult => {
           ctx.beginPath();
           ctx.moveTo(ridgePoints[0].x, ridgePoints[0].y);
           for (const point of ridgePoints) ctx.lineTo(point.x, point.y);
-          ctx.strokeStyle = layer === 0 ? rgbCss(tone.horizon, 0.32) : rgbCss(tone.ridge, layer === 2 ? 0.55 : 0.32);
+          ctx.strokeStyle = atmosphere
+            ? layer === 0
+              ? rgbCss(tone.horizon, 0.32)
+              : rgbCss(tone.ridge, layer === 2 ? 0.55 : 0.32)
+            : `rgba(176,196,228,${layer === 2 ? 0.4 : 0.26})`;
           ctx.lineWidth = layer === 2 ? 2.2 : 1;
           ctx.stroke();
         }
@@ -994,8 +1134,8 @@ export const drawSky3D = (input: Sky3DDrawInput): Sky3DDrawResult => {
       fillRidge();
     }
 
-    // Mù tán xạ ngay trên đường chân trời, đậm hơn ở phía Mặt Trời.
-    const fogAlpha = clamp01(0.03 + 0.26 * tone.glowStrength) * (0.3 + 0.7 * tone.starFactor) + 0.014;
+    // Mù tán xạ ngay trên đường chân trời, đậm hơn ở phía Mặt Trời (chỉ khi có khí quyển).
+    const fogAlpha = atmosphere ? clamp01(0.03 + 0.26 * tone.glowStrength) * (0.3 + 0.7 * tone.starFactor) + 0.014 : 0;
     if (fogAlpha > 0.03) {
       const bandHeight = clamp(height * 0.075, 16, 90);
       ctx.globalCompositeOperation = "lighter";

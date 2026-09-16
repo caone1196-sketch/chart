@@ -42,6 +42,8 @@ const scenarios: Scenario[] = [
   { name: "3d-07-mat-dat", iso: "1996-11-10T17:30:00Z", camera: { yaw: 200, pitch: -9, fov: 74 }, note: "cúi xuống: lưới khoảng cách" },
   { name: "3d-08-mat-trang", iso: "2026-09-20T14:00:00Z", camera: { yaw: 90, pitch: 30, fov: 6 }, aim: "moon", note: "soi Mặt Trăng (pha thật, trăng trương huyền thượng huyền)" },
   { name: "3d-13-mat-troi", iso: "1996-11-11T05:00:00Z", camera: { yaw: 140, pitch: 30, fov: 9 }, aim: "sun", note: "soi Mặt Trời ban ngày" },
+  { name: "3d-14-sao-moc", iso: "2026-01-15T13:00:00Z", camera: { yaw: 100, pitch: 25, fov: 10 }, aim: "jupiter", note: "đĩa Sao Mộc có vân + Vết Đỏ" },
+  { name: "3d-15-sao-tho", iso: "2026-01-15T13:00:00Z", camera: { yaw: 100, pitch: 25, fov: 10 }, aim: "saturn", note: "Sao Thổ có vành đai" },
   {
     name: "3d-09-vet-sao",
     iso: "1996-11-10T17:30:00Z",

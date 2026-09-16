@@ -14,6 +14,8 @@ và chiếu qua ống kính pinhole.
 | Chiều sâu mặt đất | Mắt cao 1,65 m: vòng tròn bán kính `D` mét nằm ở độ cao `−atan(1,65/D)` → lưới 9 vòng (3→900 m) hội tụ về chân trời, kèm nan phương vị và cọc mốc "12 m / 96 m / 900 m". |
 | Ba lớp núi che khuất | `terrainHeightDeg(az, lớp)` lấy mẫu 1°/bước, khối núi **đóng xuống đúng đường chân trời** nên không đè lưới mặt đất; lớp xa hoà vào màu trời (phối cảnh khí quyển), lớp gần sẫm nhất. |
 | Khí quyển | Khúc xạ Bennett (chỉ hướng < 25°), hấp thụ Kasten–Young theo độ cao, màu trời theo độ cao Mặt Trời, ráng chiều và quầng sáng quanh phương vị Mặt Trời, mù tán xạ sát chân trời. |
+| Hành tinh "sống động" | Mỗi hành tinh là một đĩa có chi tiết tất định: Sao Mộc năm dải mây + Vết Đỏ Lớn, Sao Thổ vành đai ba vòng (nửa sau vẽ trước đĩa, nửa trước đè lên sau), Sao Hỏa chóp băng + vùng tối, Sao Kim xoáy mây, Sao Thủy hố va chạm, Thiên Vương/Hải Vương dải mây và đốm tối; kèm quầng sáng ám màu riêng và tối viền (limb darkening) cho cảm giác hình cầu. Mặt Trời có nhật hoa tia mảnh xoay chậm theo thời gian. |
+| Tắt khí quyển vẫn có địa hình | Khi tắt lớp khí quyển, mặt đất và ba lớp núi chuyển sang bảng màu trung tính (xám-xanh cố định, sống núi viền sáng) thay vì chìm vào trời đen — khung nhìn thành "trời vũ trụ + đất liền" chứ không hoá mặt phẳng trống; dải mù chân trời cũng tắt theo vì nó là hiệu ứng khí quyển. |
 | Nhấp nháy & vệt sao | `scintillation(seed, t, alt)` nhiễu tất định mạnh dần khi sao xuống thấp; khi tua thời gian mỗi sao vẽ **cung tròn lớn** từ vị trí cũ tới vị trí mới (nội suy slerp) như ảnh phơi sáng. |
 | Chuyển động mượt | Khung sao chỉ dựng lại mỗi ~4 phút mô phỏng; giữa hai lần dựng, toàn bộ sao quay bằng **ma trận Rodrigues quanh trục thiên cực theo ΔLST** — chính xác tuyệt đối và rẻ (~5.000 phép nhân), nên tua nhanh vẫn mượt 60 fps. Camera được *easing* mũ về đích (kéo/thả không giật). |
 
@@ -81,7 +83,9 @@ npm run shot:sky3d   # 13 tình huống PNG trong .cache/shots/ (đêm, rạng, 
 Nhóm "vẽ thật" trong `tests/sky3d.check.ts` khẳng định bằng điểm ảnh: trời ngày sáng hơn trời
 đêm, mặt đất tối hơn trời, vạch chân trời sáng nằm ngang, ảnh **tất định** (hai lần vẽ trùng
 từng byte), nhấp nháy đổi ảnh theo thời gian còn tắt thì không, vệt sao không làm mất sao,
-và các góc nhìn biên (fov 5°/110°, ngẩng 89°, cúi −42°, Nam bán cầu) không sinh toạ độ rác.
+tắt khí quyển thì sống núi vẫn tách khỏi trời và mặt đất vẫn đọc được, đĩa hành tinh phủ đủ
+điểm ảnh với Sao Mộc ám màu gỉ sắt / Sao Thổ lộ vành đai, và các góc nhìn biên
+(fov 5°/110°, ngẩng 89°, cúi −42°, Nam bán cầu) không sinh toạ độ rác.
 
 ## Giới hạn đã biết
 

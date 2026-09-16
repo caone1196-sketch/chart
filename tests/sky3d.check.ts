@@ -678,6 +678,74 @@ for (const deltaMinutes of [0.5, 5, 45, 180]) {
     ok();
   }
 
+  // Tắt khí quyển: địa hình vẫn phải đọc được (không hoá "mặt phẳng trống") — sống núi sáng hơn trời phía trên.
+  const noAtmo = render({ iso: "1996-11-10T17:30:00Z", camera: { yaw: 180, pitch: 8, fov: 70 }, toggles: { atmosphere: false } });
+  const noAtmoHorizon = Math.round(makeCamera3D({ yaw: 180, pitch: 8, fov: 70 }, WIDTH, HEIGHT).horizonY);
+  if (noAtmoHorizon > 60 && noAtmoHorizon < HEIGHT - 40) {
+    const ridgeBand = luminance(noAtmo.canvas, 0, noAtmoHorizon - 24, WIDTH, 16);
+    const skyBand = luminance(noAtmo.canvas, 0, noAtmoHorizon - 90, WIDTH, 20);
+    if (ridgeBand <= skyBand + 2) {
+      fail("vẽ 3D", `tắt khí quyển mà núi không tách khỏi trời (núi ${ridgeBand.toFixed(1)} vs trời ${skyBand.toFixed(1)})`);
+    }
+    ok();
+    const groundBand = luminance(noAtmo.canvas, 0, noAtmoHorizon + 30, WIDTH, 20);
+    if (groundBand <= skyBand) fail("vẽ 3D", "tắt khí quyển mà mặt đất tối hơn cả trời (không đọc được mặt phẳng đất)");
+    ok();
+  } else {
+    fail("vẽ 3D", `horizonY=${noAtmoHorizon} ngoài khoảng mong đợi cho kiểm tra không khí quyển`);
+  }
+
+  // Hành tinh "sống động": đĩa có chi tiết chiếm vùng ảnh đáng kể và Sao Mộc ám màu gỉ sắt.
+  // Hướng camera vào từng hành tinh (như nháy đúp trong app) rồi mới kiểm tra đĩa và màu.
+  const planetsFrame = buildSkyFrame(new Date("2026-01-15T13:00:00Z"), 21.0285, 105.8542);
+  const jupiter = planetsFrame.planets.find((planet) => planet.key === "jupiter");
+  const saturn = planetsFrame.planets.find((planet) => planet.key === "saturn");
+  if (!jupiter || !saturn) fail("hành tinh 3D", "khung thiếu Sao Mộc/Sao Thổ");
+  ok();
+  const jupCam = centerCameraOn({ yaw: 80, pitch: 30, fov: 16 }, { alt: jupiter.alt, az: jupiter.az });
+  const satCam = centerCameraOn({ yaw: 250, pitch: 30, fov: 16 }, { alt: saturn.alt, az: saturn.az });
+  const withJupiter = render({ iso: "2026-01-15T13:00:00Z", camera: jupCam });
+  const withoutJupiter = render({ iso: "2026-01-15T13:00:00Z", camera: jupCam, toggles: { planets: false } });
+  const withSaturn = render({ iso: "2026-01-15T13:00:00Z", camera: satCam });
+
+  const dataWith = withJupiter.canvas.getContext("2d").getImageData(0, 0, WIDTH, HEIGHT).data;
+  const dataWithout = withoutJupiter.canvas.getContext("2d").getImageData(0, 0, WIDTH, HEIGHT).data;
+  let changed = 0;
+  for (let i = 0; i < dataWith.length; i += 4) {
+    if (Math.abs(dataWith[i] - dataWithout[i]) + Math.abs(dataWith[i + 1] - dataWithout[i + 1]) + Math.abs(dataWith[i + 2] - dataWithout[i + 2]) > 24) changed += 1;
+  }
+  if (changed < 400) fail("hành tinh 3D", `đĩa hành tinh chỉ phủ ${changed} điểm ảnh — quá nhỏ để "sống động"`);
+  ok();
+
+  const jupiterHit = withJupiter.result.hits.find((hit) => hit.kind === "planet" && hit.key === "jupiter");
+  if (!jupiterHit) fail("hành tinh 3D", "không thấy Sao Mộc trong khung để kiểm tra màu");
+  else {
+    const px = withJupiter.canvas
+      .getContext("2d")
+      .getImageData(Math.round(jupiterHit.x) - 2, Math.round(jupiterHit.y) - 2, 5, 5).data;
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    for (let i = 0; i < px.length; i += 4) {
+      r += px[i];
+      g += px[i + 1];
+      b += px[i + 2];
+    }
+    if (!(r > b + 20 && r > 90)) fail("hành tinh 3D", `tâm Sao Mộc không ám màu gỉ sắt sáng (rgb=${(r / 25).toFixed(0)},${(g / 25).toFixed(0)},${(b / 25).toFixed(0)})`);
+    ok();
+  }
+
+  const saturnHit = withSaturn.result.hits.find((hit) => hit.kind === "planet" && hit.key === "saturn");
+  if (saturnHit) {
+    // Vành đai: điểm cách tâm ~27 px phải sáng hơn nền trời quanh nó.
+    const ring = luminance(withSaturn.canvas, Math.round(saturnHit.x) + 24, Math.round(saturnHit.y) - 10, 6, 6);
+    const space = luminance(withSaturn.canvas, Math.round(saturnHit.x) + 60, Math.round(saturnHit.y) - 40, 6, 6);
+    if (ring <= space + 6) fail("hành tinh 3D", `không thấy vành đai Sao Thổ (vành ${ring.toFixed(1)} vs nền ${space.toFixed(1)})`);
+    ok();
+  } else {
+    fail("hành tinh 3D", "không thấy Sao Thổ trong khung để kiểm tra vành đai");
+  }
+
   // Hiệu năng: một khung hình trong Node phải dưới 1,5 giây (trình duyệt còn nhanh hơn nhiều).
   const warm = render({ iso: "1996-11-10T17:30:00Z", camera: { yaw: 180, pitch: 12, fov: 64 } });
   if (warm.ms > 1500) fail("hiệu năng 3D", `một khung hình mất ${warm.ms} ms`);

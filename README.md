@@ -29,6 +29,7 @@ Web app tiếng Việt: **lập bản đồ sao (natal chart) → xem bản đ�
    - **Mặt đất phối cảnh**: lưới khoảng cách 3→900 m hội tụ về chân trời (mắt cao 1,65 m), ba lớp núi mờ dần theo chiều sâu che khuất bầu trời thấp.
    - **Khí quyển & ánh sáng**: màu trời theo độ cao Mặt Trời, ráng chiều, khúc xạ + hấp thụ gần chân trời, sao **nhấp nháy** mạnh dần khi xuống thấp.
    - **Thời gian mượt**: sao quay liên tục bằng ma trận ΔLST (không dựng lại catalogue mỗi khung hình); tua nhanh để thấy **vệt sao** như ảnh phơi sáng; tốc độ từ thời gian thực tới 6 giờ/giây.
+   - **Hành tinh sống động**: đĩa có chi tiết (vân Sao Mộc + Vết Đỏ, vành đai Sao Thổ, chóp băng Sao Hỏa, xoáy mây Sao Kim…) kèm quầng màu riêng; tắt khí quyển thì địa hình đổi bảng màu trung tính để không hoá mặt phẳng trống.
 
 4. **Hỏi AI**
    - Hai lớp: gọi mô hình ngôn ngữ lớn qua `/api/ai-chat` nếu máy chủ có `OPENAI_API_KEY`, nếu không thì dùng **bộ luận giải nội bộ** chạy hoàn toàn trên trình duyệt (đọc đúng vị trí hành tinh, nhà, góc chiếu, sao cố định, transit, pha Mặt Trăng, giờ mọc/lặn).
