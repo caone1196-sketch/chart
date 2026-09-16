@@ -76,8 +76,9 @@ khoảng cách → ba lớp núi → mù chân trời → vạch chân trời + 
 ## Kiểm chứng & ảnh chụp
 
 ```bash
-npm run test:sky3d   # 1.498 phép kiểm: hình học camera, cắt tia, quay ΔLST, mặt đất, vẽ thật trên canvas
-npm run shot:sky3d   # 13 tình huống PNG trong .cache/shots/ (đêm, rạng, ngày, ngẩng cao, cúi, vệt sao, Nam bán cầu…)
+npm run test:sky3d   # ~1.500 phép kiểm: hình học camera, cắt tia, quay ΔLST, mặt đất, vẽ thật trên canvas
+npm run test:ui3d    # gắn Sky3D vào jsdom: lăn chuột/kéo/phím cách/chọn thiên thể/đổi giờ/toàn màn hình
+npm run shot:sky3d   # 15 tình huống PNG trong .cache/shots/ (đêm, rạng, ngày, ngẩng cao, cúi, vệt sao, Sao Mộc, Sao Thổ…)
 ```
 
 Nhóm "vẽ thật" trong `tests/sky3d.check.ts` khẳng định bằng điểm ảnh: trời ngày sáng hơn trời

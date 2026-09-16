@@ -64,6 +64,7 @@ Các engine được kiểm chứng tự động với **Swiss Ephemeris** (`npm
 | Bản đồ sao (hiển thị) | 14.963 phép kiểm: khúc xạ/hấp thụ, phép chiếu & nghịch đảo, phóng to quanh con trỏ, **quy đổi lăn chuột & giới hạn dịch chuyển khung**, dựng khung 4 vĩ độ, Ngân Hà, pha Trăng, tra cứu | 0 lỗi (sai số nghịch đảo < 0,05°) |
 | Bầu trời 3D | 1.498 phép kiểm: hình học camera phối cảnh (chân trời thẳng, nghịch đảo < 1e-6 px), zoom quanh con trỏ nghiệm kín, quay ΔLST khớp khung dựng lại ≤ vài phần triệu độ, cắt mặt phẳng gần, lưới mặt đất, vệt sao; kèm **vẽ thật trên canvas** và so sánh điểm ảnh (tất định từng byte) | 0 lỗi |
 | Giao diện bản đồ sao | 1 lần chạy jsdom: gắn giao diện, vẽ ≈133.000 lời gọi, mô phỏng lăn (khẳng định `preventDefault` để trang không cuộn + zoom đúng hướng)/kéo/bấm sao/đổi chế độ/tra cứu/bàn phím | 0 ngoại lệ, 0 console.error |
+| Giao diện ngắm trời 3D | 1 lần chạy jsdom: gắn Sky3D, vòng rAF vẽ thật qua context giả, mô phỏng lăn chuột (không cuộn trang + trường nhìn đổi), kéo đổi hướng, phím cách tua, bấm chọn thiên thể → Hỏi AI → bỏ chọn, bật/tắt lớp, đổi ngày giờ, về giờ thực, toàn màn hình | 0 ngoại lệ, 0 console.error |
 
 ## Chạy dự án
 
@@ -77,6 +78,7 @@ npm run data       # sinh lại dữ liệu sao vào src/data/ từ gói npm d3-
 npm test           # toàn bộ kiểm chứng số liệu + bản đồ sao + giao diện
 npm run test:sky   # mô hình hiển thị bầu trời (khúc xạ, phép chiếu, Ngân Hà, pha Trăng, tra cứu)
 npm run test:ui    # chạy giao diện bản đồ sao trong jsdom và mô phỏng thao tác
+npm run test:ui3d  # chạy giao diện ngắm trời 3D trong jsdom (lăn chuột/kéo/chọn thiên thể/đổi giờ)
 npm run shot:sky   # render thử bản đồ ra PNG trong .cache/shots/ (cần @napi-rs/canvas)
 npm run test:sky3d # hình học + bộ vẽ của khung ngắm 3D (kèm vẽ thật trên canvas Node)
 npm run shot:sky3d # render 13 tình huống 3D ra PNG trong .cache/shots/
