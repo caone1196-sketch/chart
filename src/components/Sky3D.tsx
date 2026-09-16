@@ -397,12 +397,12 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
   const altAz = selected ? selectionAltAz({ kind: selected.kind, key: selected.key, x: 0, y: 0, radius: 0 }) : null;
 
   const toggle = (key: keyof Sky3DToggles, label: string) => (
-    <label key={key} className="flex cursor-pointer items-center gap-1.5 rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1">
+    <label key={key} className="flex min-h-9 cursor-pointer items-center gap-2 rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1.5 transition hover:border-sky-400/70 has-[:checked]:border-sky-300/70 has-[:checked]:bg-sky-400/10 has-[:checked]:text-sky-100">
       <input
         type="checkbox"
         checked={toggles[key]}
         onChange={(event) => setToggles((previous) => ({ ...previous, [key]: event.target.checked }))}
-        className="h-3 w-3 accent-sky-400"
+        className="h-4 w-4 accent-sky-400"
       />
       {label}
     </label>
@@ -479,7 +479,8 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
       </div>
 
       {/* --------------------------------------------------------- điều khiển */}
-      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+      <div className="card flex flex-wrap items-center gap-x-3 gap-y-2 p-3 text-xs text-slate-300">
+        <span className="overline w-full sm:w-auto">Thời gian</span>
         <button
           type="button"
           className="chip"
@@ -507,7 +508,7 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
           <select
             value={speed}
             onChange={(event) => setSpeed(Number(event.target.value))}
-            className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1"
+            className="h-9 rounded-lg border border-slate-700 bg-slate-950 px-2 text-slate-200 outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70"
           >
             {SPEED_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -527,7 +528,7 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
             simRef.current = parsed.getTime();
             dirtyRef.current = true;
           }}
-          className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-slate-200"
+          className="h-9 rounded-lg border border-slate-700 bg-slate-950 px-2 text-slate-200 outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 [color-scheme:dark]"
         />
         <label className="flex items-center gap-2">
           Phóng to
@@ -541,12 +542,14 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
               const fov = Number(event.target.value);
               targetRef.current = clampCamera({ ...targetRef.current, fov });
             }}
-            className="w-32 accent-sky-400"
+            className="w-28 accent-sky-400 md:w-36"
           />
         </label>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+      <div className="card p-3">
+        <p className="overline mb-2">Lớp hiển thị</p>
+        <div className="flex flex-wrap gap-2 text-xs text-slate-300">
         {toggle("lines", "Chòm sao")}
         {toggle("constellationNames", "Tên chòm sao")}
         {toggle("starNames", "Tên sao")}
@@ -560,6 +563,7 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
         {toggle("ground", "Mặt đất")}
         {toggle("twinkle", "Nhấp nháy")}
         {toggle("trails", "Vệt sao")}
+        </div>
       </div>
 
       <p className="text-xs text-slate-500">

@@ -155,7 +155,7 @@ export default function ChatPanel({
           ) : null}
         </div>
 
-        <div ref={scrollRef} className="mt-4 h-[26rem] overflow-y-auto rounded-xl border border-slate-700 bg-slate-950/80 p-3 md:p-4">
+        <div ref={scrollRef} className="mt-4 h-[24rem] overflow-y-auto rounded-xl border border-slate-700 bg-slate-950/80 p-3 md:h-[28rem] md:p-4">
           <div className="space-y-3">
             {messages.map((message, index) => (
               <div

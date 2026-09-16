@@ -328,23 +328,23 @@ export default function App() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 antialiased">
+    <main className="app-bg min-h-screen text-slate-100 antialiased">
       <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-3.5 md:px-10">
           <p className="inline-flex items-center gap-2 rounded-md border border-sky-300/35 bg-sky-300/10 px-3 py-1 text-xs font-semibold tracking-[0.16em] text-sky-200">
             ✦ ASTRAL CHART VN
           </p>
-          <nav className="flex items-center gap-5 text-sm text-slate-300">
-            <a href="#lap-chart" className="transition hover:text-sky-200">
+          <nav className="no-scrollbar -mx-1 flex items-center gap-4 overflow-x-auto px-1 text-sm text-slate-300 md:gap-5">
+            <a href="#lap-chart" className="whitespace-nowrap transition hover:text-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 rounded-md px-1 py-0.5">
               Lập bản đồ sao
             </a>
-            <a href="#ban-do-sao" className="transition hover:text-sky-200">
+            <a href="#ban-do-sao" className="whitespace-nowrap transition hover:text-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 rounded-md px-1 py-0.5">
               Bản đồ sao 3D
             </a>
-            <a href="#ket-qua" className="transition hover:text-sky-200">
+            <a href="#ket-qua" className="whitespace-nowrap transition hover:text-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 rounded-md px-1 py-0.5">
               Kết quả natal
             </a>
-            <a href="#hoi-ai" className="transition hover:text-sky-200">
+            <a href="#hoi-ai" className="whitespace-nowrap transition hover:text-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 rounded-md px-1 py-0.5">
               Hỏi AI
             </a>
           </nav>
@@ -440,8 +440,45 @@ export default function App() {
         </div>
       </section>
 
+      <section className="relative overflow-hidden border-b border-slate-800/70">
+        <div className="pointer-events-none absolute inset-x-0 -top-24 h-64 bg-[radial-gradient(600px_220px_at_50%_0%,rgb(56_189_248/0.14),transparent_70%)]" />
+        <div className="mx-auto w-full max-w-7xl px-6 py-16 md:px-10 md:py-24">
+          <p className="overline">Bản đồ sao · Bầu trời thật 3D · Luận giải AI</p>
+          <h1 className="mt-4 max-w-3xl text-4xl font-semibold leading-tight tracking-tight md:text-5xl">
+            Ngắm bầu trời của bạn{" "}
+            <span className="bg-gradient-to-r from-sky-300 via-indigo-300 to-amber-200 bg-clip-text text-transparent">
+              như đang đứng dưới sao
+            </span>
+          </h1>
+          <p className="mt-5 max-w-2xl text-base leading-relaxed text-slate-300">
+            Lập bản đồ sao natal trong vài giây, rồi bước vào khung ngắm phối cảnh 3D: sao nhấp nháy, Ngân Hà có rãnh tối,
+            hành tinh là khối cầu với pha thật, và vòm trời xoay khi bạn tua thời gian. Cần luận giải? Hỏi AI từng câu hoặc
+            hỏi riêng một thiên thể.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <a href="#lap-chart" className="btn-primary">Lập bản đồ sao</a>
+            <a href="#ban-do-sao" className="btn-ghost">Ngắm bầu trời 3D</a>
+            <a href="#hoi-ai" className="btn-ghost">Hỏi AI</a>
+          </div>
+          <dl className="mt-10 grid max-w-2xl grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+            {[
+              ["5.044", "sao Hipparcos"],
+              ["88", "chòm sao tên Việt"],
+              ["12", "hệ nhà chiêm tinh"],
+              ["60 fps", "vòm trời quay mượt"]
+            ].map(([value, label]) => (
+              <div key={label} className="card flex flex-col px-4 py-3">
+                <dt className="order-2 mt-1 block text-xs text-slate-400">{label}</dt>
+                <dd className="order-1 text-xl font-semibold text-sky-200">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </section>
+
       <section id="lap-chart" className="mx-auto w-full max-w-7xl px-6 py-16 md:px-10">
-        <h2 className="text-3xl font-semibold">1. Nhập dữ liệu sinh</h2>
+        <p className="overline">Mục 1</p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">Nhập dữ liệu sinh</h2>
         <p className="mt-3 max-w-3xl text-slate-300">
           Toạ độ và múi giờ IANA giúp tính chính xác cung Mọc và nhà. Bạn có thể tìm toạ độ tự động bằng tên địa điểm, chọn nhanh thành
           phố, hoặc nhập tay.
@@ -460,7 +497,8 @@ export default function App() {
       </section>
 
       <section id="ban-do-sao" className="mx-auto w-full max-w-7xl px-6 pb-16 md:px-10">
-        <h2 className="text-3xl font-semibold">2. Bản đồ sao 3D &amp; bầu trời hôm nay</h2>
+        <p className="overline">Mục 2</p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">Bản đồ sao 3D &amp; bầu trời hôm nay</h2>
         <p className="mt-3 max-w-3xl text-slate-300">
           Bầu trời thật tại vị trí của bạn — sao, chòm sao, hành tinh, Mặt Trăng, Ngân Hà tính từ catalogue Hipparcos và
           astronomy-engine — chiếu qua ống kính phối cảnh 3D: chân trời thẳng, vòng độ cao cong, hành tinh là khối cầu có
@@ -480,7 +518,7 @@ export default function App() {
 
         {skySnapshot && riseSet ? (
           <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
+            <div className="card p-5 transition hover:border-slate-700">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">Đang thấy trên trời</h3>
               <ul className="mt-3 space-y-1 text-sm text-slate-200">
                 {skySnapshot.visibleNow.length ? (
@@ -497,7 +535,7 @@ export default function App() {
                 )}
               </ul>
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
+            <div className="card p-5 transition hover:border-slate-700">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">Mặt Trời &amp; Mặt Trăng</h3>
               <p className="mt-3 text-sm text-slate-200">{skySnapshot.moonPhase}</p>
               <p className="text-xs text-slate-400">Độ sáng {(skySnapshot.moonIllumination * 100).toFixed(0)}%</p>
@@ -509,7 +547,7 @@ export default function App() {
               </p>
               <p className="text-xs text-slate-500">Giờ theo {riseSet.timeZoneLabel}</p>
             </div>
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5">
+            <div className="card p-5 transition hover:border-slate-700">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">Hành tinh theo cung</h3>
               <ul className="mt-3 space-y-1 text-sm text-slate-200">
                 {skySnapshot.planets
@@ -531,7 +569,8 @@ export default function App() {
       </section>
 
       <section id="ket-qua" className="mx-auto w-full max-w-7xl px-6 pb-16 md:px-10">
-        <h2 className="text-3xl font-semibold">3. Kết quả bản đồ sao natal</h2>
+        <p className="overline">Mục 3</p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">Kết quả bản đồ sao natal</h2>
         <AnimatePresence mode="wait">
           {chart ? (
             <motion.div key="result" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.45 }}>
@@ -584,7 +623,8 @@ export default function App() {
 
       <section id="hoi-ai" className="mx-auto w-full max-w-7xl px-6 pb-24 md:px-10">
         <div className="border-t border-slate-800 pt-12">
-          <h2 className="text-3xl font-semibold">4. Đặt câu hỏi cho AI trả lời</h2>
+          <p className="overline">Mục 4</p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">Đặt câu hỏi cho AI trả lời</h2>
           <p className="mt-3 max-w-3xl text-slate-300">
             Hỏi tự nhiên bằng tiếng Việt. Câu hỏi được gửi kèm toàn bộ dữ liệu bản đồ sao, transit hiện tại, sao cố định và tình trạng bầu
             trời tại nơi bạn ở. Nếu máy chủ chưa có <code className="text-sky-200">OPENAI_API_KEY</code>, hệ thống vẫn trả lời bằng bộ luận
