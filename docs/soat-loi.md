@@ -242,6 +242,10 @@ trả về 404 mà mã cũ gộp hết thành "Lỗi khi gọi Gemini." kèm mã
 `GEMINI_EMPTY`, `GEMINI_TIMEOUT`, `GEMINI_NETWORK`), và nâng `maxOutputTokens` 1024 → 4096 vì model dòng 3
 tính cả token suy luận vào hạn mức (câu trả lời dễ bị cụt thành rỗng).
 
+> **Cập nhật 16/09/2026:** bỏ model `gemini-3.8-flash` và toàn bộ chuỗi dự phòng — app chỉ dùng
+> đúng một model `gemini-3.6-flash` (`DEFAULT_MODEL`, `MODEL_FALLBACKS = []`). Model 404 → trả
+> `GEMINI_MODEL_NOT_FOUND` kèm hướng dẫn kiểm tra `/api/health?probe=1`, không thử model khác.
+
 **Phụ:** khoá dán kèm dấu ngoặc, kèm tiền tố `GEMINI_API_KEY=` hoặc lẫn khoảng trắng/xuống dòng nay được
 chuẩn hoá (`normalizeApiKey`) và `/api/health` báo cờ `hadWhitespace`; giao diện phân biệt ba trạng thái
 "chưa có key" · "Gemini đã sẵn sàng" · "không gọi được /api/health" thay vì gộp hai trạng thái cuối làm một.
@@ -253,13 +257,13 @@ chuẩn hoá (`normalizeApiKey`) và `/api/health` báo cờ `hadWhitespace`; gi
 | Chuẩn hoá khoá: cắt khoảng trắng, bỏ `"…"`/`'…'`, bỏ tiền tố `GEMINI_API_KEY=`, gỡ xuống dòng | `npm run test:ai` |
 | `/api/health` không bao giờ chứa nội dung khoá (chỉ boolean + độ dài) | `npm run test:ai` |
 | Lỗi Google được dịch đúng mã: khoá sai, chưa bật API, khoá bị giới hạn referrer, quota, model không tồn tại, 5xx, lỗi mạng | `npm run test:ai` |
-| Model đầu 404 thì tự rơi xuống model dự phòng, ghi lại `modelsTried` | `npm run test:ai` |
+| Chỉ một model duy nhất (`gemini-3.6-flash`): 404 → `GEMINI_MODEL_NOT_FOUND`, `modelsTried` chỉ có một model | `npm run test:ai` |
 | Khoá sai **không** thử thêm model (tránh nhân số lần gọi lỗi) | `npm run test:ai` |
 | Thiếu khoá thì không gọi mạng (0 request) và trả `NO_API_KEY` | `npm run test:ai` |
 | `?probe=1` trả lời được "khoá dùng được chưa" + gợi ý model thay thế | `npm run test:ai` |
 | Rewrite SPA không khớp `/api/*` (kiểm bằng `@vercel/routing-utils`) | thủ công, xem 8.2 |
 
-Kết quả sau khi sửa: `npm test` → tất cả bộ cũ giữ nguyên 0 lỗi, thêm **test:ai 58 phép kiểm, 0 lỗi**;
+Kết quả sau khi sửa: `npm test` → tất cả bộ cũ giữ nguyên 0 lỗi, thêm **test:ai 60 phép kiểm, 0 lỗi** (model duy nhất `gemini-3.6-flash`);
 `npm run typecheck` và `npm run build` sạch.
 
 ## 9. Cách tự kiểm tra sau khi deploy
