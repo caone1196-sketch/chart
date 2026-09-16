@@ -20,7 +20,7 @@ Web app tiếng Việt: **lập bản đồ sao (natal chart) → ngắm bầu t
    - **Tua giờ thấy vòm trời quay**: lưới xích đạo khoá vào khung sao + vệt sao thành cung tròn dài theo tốc độ (thời gian thực tới 6 giờ/giây); sao quay bằng ma trận ΔLST nên mượt 60 fps.
    - **Điều khiển**: kéo nhìn quanh, lăn chuột/chụm phóng to **quanh con trỏ mà trang không cuộn**, nháy đúp đưa vật thể vào giữa, bấm vật thể → thẻ thông tin + **Hỏi AI về riêng nó**, ô tra cứu gõ được tiếng Việt không dấu, phím ←→↑↓ +/− và phím cách tua giờ, 13 nút bật/tắt lớp, toàn màn hình.
    - Thẻ phụ: hành tinh đang thấy được, giờ mọc/lặn Mặt Trời - Mặt Trăng, hành tinh theo cung.
-   - **Giao diện & cảm ứng**: hero mở đầu chuyển màu, overline đánh số mục, thẻ `.card` thống nhất, nền trời đêm hai quầng sáng; nav cuộn ngang trên màn hẹp; ô nhập/select/checkbox/nút đạt cỡ chạm ≥44 px trên thiết bị cảm ứng; `scroll-padding` bù header dính; tôn trọng `prefers-reduced-motion`.
+   - **Giao diện & cảm ứng**: hero mở đầu chuyển màu, overline đánh số mục, thẻ `.card` thống nhất, nền trời đêm hai quầng sáng; kết quả natal gom vào **một thẻ có tab** (Tổng quan · Hành tinh · 12 nhà · Góc chiếu · Sao cố định · Transit, kèm số lượng) thay vì sáu thẻ xếp chồng, danh sách dài tự cuộn trong khung cao cố định; nav cuộn ngang trên màn hẹp; ô nhập/select/checkbox/nút đạt cỡ chạm ≥44 px trên thiết bị cảm ứng; `scroll-padding` bù header dính; tôn trọng `prefers-reduced-motion`.
 
 3. **Hỏi AI (Gemini)**
 

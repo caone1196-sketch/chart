@@ -579,8 +579,8 @@ export default function App() {
                 {chart.timezoneId ?? "múi giờ thủ công"} · giờ sinh quy đổi {chart.utcDate.toUTCString()}
               </p>
 
-              <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/55 p-4 md:p-6">
+              <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+                <div className="card p-4 md:p-6">
                   <ChartWheel
                     planets={chart.planets}
                     aspects={chart.aspects}
@@ -627,7 +627,7 @@ export default function App() {
         <h2 className="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">Đặt câu hỏi cho AI trả lời</h2>
           <p className="mt-3 max-w-3xl text-slate-300">
             Hỏi tự nhiên bằng tiếng Việt. Câu hỏi được gửi kèm toàn bộ dữ liệu bản đồ sao, transit hiện tại, sao cố định và tình trạng bầu
-            trời tại nơi bạn ở. Nếu máy chủ chưa có <code className="text-sky-200">OPENAI_API_KEY</code>, hệ thống vẫn trả lời bằng bộ luận
+            trời tại nơi bạn ở. Nếu máy chủ chưa có <code className="text-sky-200">GEMINI_API_KEY</code>, hệ thống vẫn trả lời bằng bộ luận
             giải nội bộ.
           </p>
         </div>
