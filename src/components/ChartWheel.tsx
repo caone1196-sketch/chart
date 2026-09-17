@@ -61,7 +61,7 @@ export default function ChartWheel({
       viewBox={`0 0 ${WHEEL_SIZE} ${WHEEL_SIZE}`}
       role="img"
       aria-label="Vòng bản đồ sao: 12 cung hoàng đạo, 12 nhà và vị trí các hành tinh"
-      className="mx-auto block h-auto w-full max-w-[36rem] touch-pan-y"
+      className="mx-auto block h-auto w-full max-w-[32rem] min-[428px]:max-w-[36rem] sm:max-w-[36rem] touch-manipulation"
     >
       <title>Vòng bản đồ sao natal</title>
       <defs>

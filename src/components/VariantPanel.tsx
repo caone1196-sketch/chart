@@ -6,7 +6,7 @@ import { ZODIAC_FRAMES, type ZodiacFrameId } from "@/lib/zodiac";
 import { VARIANT_CARDS, VARIANT_GROUPS } from "@/lib/variants-knowledge";
 import { compareHouseSystems, compareZodiacFrames, type VariantChart } from "@/lib/chart-variants";
 
-const card = "rounded-2xl border border-slate-800 bg-slate-900/50 p-4 sm:p-5";
+const card = "rounded-2xl border border-slate-800 bg-slate-900/50 p-3 sm:p-5 w-full max-w-full overflow-hidden";
 const sub = "text-xs uppercase tracking-wider text-slate-400";
 const row = "flex items-center justify-between gap-3 border-b border-slate-800/70 py-1.5 text-sm";
 
@@ -43,8 +43,8 @@ export default function VariantPanel({
   const dateText = (date: Date) => date.toISOString().slice(0, 16).replace("T", " ") + " UTC";
 
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <section className="space-y-4 w-full max-w-full overflow-hidden">
+      <div className="flex w-full max-w-full flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold text-slate-100 sm:text-2xl">Biến thể bản đồ sao</h2>
           <p className="text-sm text-slate-400">
@@ -54,11 +54,11 @@ export default function VariantPanel({
               : `${ZODIAC_FRAMES.find((frame) => frame.id === variant.zodiacFrame)?.label ?? variant.zodiacFrame} (ayanamsa ${variant.ayanamsaValue.toFixed(3)}°)`}
           </p>
         </div>
-        <div className="grid w-full gap-2 text-xs sm:flex sm:w-auto sm:flex-wrap">
+        <div className="grid w-full max-w-full gap-2 text-xs sm:flex sm:w-auto sm:flex-wrap">
           <select
             value={variant.houseSystem}
             onChange={(event) => onHouseSystem(event.target.value as HouseSystemId)}
-            className="w-full min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-200 sm:w-auto"
+            className="w-full min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 min-[428px]:py-3 text-slate-200 sm:w-auto"
           >
             {HOUSE_SYSTEMS.map((system) => (
               <option key={system.id} value={system.id}>
@@ -69,7 +69,7 @@ export default function VariantPanel({
           <select
             value={variant.zodiacFrame}
             onChange={(event) => onZodiacFrame(event.target.value as ZodiacFrameId)}
-            className="w-full min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-slate-200 sm:w-auto"
+            className="w-full min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 min-[428px]:py-3 text-slate-200 sm:w-auto"
           >
             {ZODIAC_FRAMES.map((frame) => (
               <option key={frame.id} value={frame.id}>
@@ -80,7 +80,7 @@ export default function VariantPanel({
         </div>
       </div>
 
-      <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible">
+      <div className="no-scrollbar -mx-1 flex max-w-full gap-2 overflow-x-auto overscroll-x-contain px-1 pb-2 sm:flex-wrap sm:overflow-visible">
         {TABS.map((item) => (
           <button
             key={item.id}
@@ -99,7 +99,7 @@ export default function VariantPanel({
 
       {tab === "houses" && (
         <>
-        <div className={`${card} overflow-x-auto [-webkit-overflow-scrolling:touch]`}>
+        <div className={`${card} table-scroll`}>
           <h3 className="text-lg font-semibold">So sánh 12 hệ chia nhà</h3>
           <p className="mt-1 text-xs text-slate-400">
             Ô đậm là nhà khác với hệ đang chọn ({variant.houseSystemLabel}). Đây là lý do cùng một hành tinh có thể được luận ở nhà 4 hoặc nhà 5
@@ -156,7 +156,7 @@ export default function VariantPanel({
           </p>
           {chart.houseNote && <p className="mt-2 text-xs text-amber-200">⚠ {chart.houseNote}</p>}
         </div>
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid w-full max-w-full gap-3 min-[428px]:gap-4 sm:gap-4 lg:grid-cols-2">
           <div className={card}>
             <h3 className="text-lg font-semibold">Cusp 12 nhà — {variant.houseSystemLabel}</h3>
             <div className="mt-3">
@@ -262,7 +262,7 @@ export default function VariantPanel({
       )}
 
       {tab === "patterns" && (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid w-full max-w-full gap-3 min-[428px]:gap-4 sm:gap-4 lg:grid-cols-2">
           <div className={card}>
             <h3 className="text-lg font-semibold">
               Hình dạng: {variant.shape.label}
@@ -293,7 +293,7 @@ export default function VariantPanel({
       )}
 
       {tab === "vedic" && (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid w-full max-w-full gap-3 min-[428px]:gap-4 sm:gap-4 lg:grid-cols-2">
           <div className={card}>
             <h3 className="text-lg font-semibold">Rashi · Nakshatra · Pada</h3>
             <p className="mt-1 text-xs text-slate-400">
@@ -381,7 +381,7 @@ export default function VariantPanel({
       )}
 
       {tab === "chinese" && (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid w-full max-w-full gap-3 min-[428px]:gap-4 sm:gap-4 lg:grid-cols-2">
           <div className={card}>
             <h3 className="text-lg font-semibold">Tứ Trụ (BaZi)</h3>
             <div className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
@@ -486,7 +486,7 @@ export default function VariantPanel({
       )}
 
       {tab === "design" && (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid w-full max-w-full gap-3 min-[428px]:gap-4 sm:gap-4 lg:grid-cols-2">
           <div className={card}>
             <h3 className="text-lg font-semibold">{variant.design.typeVi}</h3>
             <div className="mt-2 space-y-1 text-sm text-slate-300">
@@ -534,7 +534,7 @@ export default function VariantPanel({
       )}
 
       {tab === "predict" && (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid w-full max-w-full gap-3 min-[428px]:gap-4 sm:gap-4 lg:grid-cols-2">
           <div className={card}>
             <h3 className="text-lg font-semibold">Hồi quy &amp; tiến triển</h3>
             <div className="mt-2 space-y-1 text-sm text-slate-300">

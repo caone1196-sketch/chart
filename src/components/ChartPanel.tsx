@@ -43,8 +43,8 @@ export default function ChartPanel({
   ];
 
   return (
-    <div className="card flex min-h-0 flex-col p-3 sm:p-4 md:p-5">
-      <div className="no-scrollbar -mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1" role="tablist" aria-label="Nội dung kết quả bản đồ sao">
+    <div className="card flex min-h-0 w-full max-w-full flex-col p-3 min-[428px]:p-4 sm:p-4 md:p-5 overflow-hidden">
+      <div className="no-scrollbar -mx-1 flex max-w-full items-center gap-2 overflow-x-auto overscroll-x-contain px-1 pb-2" role="tablist" aria-label="Nội dung kết quả bản đồ sao">
         {tabs.map((item) => (
           <button
             key={item.id}
@@ -63,7 +63,7 @@ export default function ChartPanel({
         ))}
       </div>
 
-      <div className="mt-2 max-h-[22rem] min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1 sm:max-h-[24rem] lg:max-h-[32rem]">
+      <div className="mt-2 max-h-[22rem] min-h-0 w-full max-w-full flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pr-1 sm:max-h-[24rem] lg:max-h-[32rem]">
         {tab === "overview" ? (
           <div className="space-y-4">
             <div>

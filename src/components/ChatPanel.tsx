@@ -121,8 +121,8 @@ export default function ChatPanel({
   };
 
   return (
-    <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
-      <div className="order-2 space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5 lg:order-1 lg:col-span-1">
+    <div className="grid w-full max-w-full gap-4 sm:gap-6 lg:grid-cols-3 overflow-hidden">
+      <div className="order-2 w-full max-w-full space-y-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 p-3 min-[428px]:p-4 sm:p-5 lg:order-1 lg:col-span-1">
         <label className="block space-y-2">
           <span className="text-xs font-medium uppercase tracking-[0.08em] text-slate-300">Tên người hỏi</span>
           <input
@@ -223,7 +223,7 @@ export default function ChatPanel({
         </button>
       </div>
 
-      <div className="order-1 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5 lg:order-2 lg:col-span-2">
+      <div className="order-1 w-full max-w-full overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 p-3 min-[428px]:p-4 sm:p-5 lg:order-2 lg:col-span-2">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-lg font-semibold">Trò chuyện với AI luận giải</h3>
           {engine ? (
@@ -233,7 +233,7 @@ export default function ChatPanel({
           ) : null}
         </div>
 
-        <div ref={scrollRef} className="chat-scroll mt-4 max-h-[26rem] min-h-[18rem] overflow-y-auto overscroll-contain rounded-xl border border-slate-700 bg-slate-950/80 p-3 md:max-h-none md:p-4">
+        <div ref={scrollRef} className="chat-scroll mt-4 max-h-[26rem] min-h-[18rem] w-full max-w-full overflow-x-hidden overflow-y-auto overscroll-contain rounded-xl border border-slate-700 bg-slate-950/80 p-3 md:max-h-none md:p-4">
           <div className="space-y-3">
             {messages.map((message, index) => (
               <div
