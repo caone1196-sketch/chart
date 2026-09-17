@@ -273,3 +273,84 @@ Kết quả sau khi sửa: `npm test` → tất cả bộ cũ giữ nguyên 0 l�
 3. `https://<tên-miền>/api/health?probe=1` → `probe.ok = true` là Google chấp nhận khoá.
 4. Nếu (2) trả về **HTML**: biến hoặc rewrite chưa đúng — kiểm tra `vercel.json` có trong commit đã deploy,
    biến đã tick đúng môi trường **Production**, và đã **Redeploy** sau khi thêm biến (deploy cũ không tự nhận biến mới).
+
+## 10. Lượt soát 17/09/2026 — vòng bản đồ sao bị cắt lẹm trên Android & nhiều khoá Gemini
+
+Hai việc người dùng yêu cầu: (1) "lỗi bản đồ bị cắt lẹm" trên điện thoại Android — người dùng
+xác nhận là **vòng bản đồ sao natal ở mục 3**, không phải bản đồ bầu trời 3D; (2) thêm khoá
+Gemini 3.6 ở dạng **nhiều khoá trong biến môi trường máy chủ** (không dán khoá trong giao diện).
+
+### 10.1 Vòng bản đồ sao bị cắt — bốn lỗi hình học chồng nhau
+
+Bản cũ vẽ trong `viewBox 0 0 500 500` với tâm (250, 250) và **không có khái niệm vùng đệm**:
+phần tử nào vượt quá `0…500` đều bị SVG gọt (mặc định `overflow: hidden`), mà trên khung hẹp
+thì mép bị gọt lại rơi đúng vào chỗ mắt hay nhìn (đỉnh vòng, hai bên hông).
+
+| # | Lỗi | Bằng chứng đo được | Sửa |
+| --- | --- | --- | --- |
+| 10.1.1 | Nhãn AC/DC/MC/IC gần như **biến mất**: đặt ở bán kính 232 rồi trừ tiếp 13 ở `y`, trong khi chữ 12px | Ca AC = 0° (đỉnh vòng): mép trên chữ ở `y = 250 − 232 − 13 − 9 = −4` → nằm ngoài khung | Nhãn nằm giữa vành hoàng đạo (bán kính 249), có **chip nền** và được tính bằng `pointBox()` |
+| 10.1.2 | Đĩa hành tinh bị gọt khi lùi vào vành trong | Hải Vương tinh: tâm r = 134, đĩa 13 + huy hiệu R + nửa nét 1,2 → mép ~150,2 > giới hạn khung nhìn thấy được, vượt `viewBox` **3,3 đơn vị** | Vành trong cùng (r = 90) + bán kính đĩa 15,5 + vùng đệm 16 ở mọi mép |
+| 10.1.3 | Vòng ngoài sát mép | r = 236 + nửa nét 0,75 = 236,75 trên nửa khung 250 → chỉ chừa **13,25 đơn vị** (5,3% → nhìn như bị "lẹm" khi khung bị bóp) | Vòng ngoài r = 280 trên nửa khung 300, chừa **20 đơn vị**, vùng an toàn bắt buộc 16 |
+| 10.1.4 | Ký hiệu hành tinh là **chữ** ("Sun", "Moon"), rộng ~4em | Chữ "Moon" ở cỡ 13 tràn khỏi đĩa bán kính 13, chồng lên các hành tinh bên cạnh | Vẽ **glyph chiêm tinh** (☉ ☽ ☿ ♀ ♂ ♃ ♄ ♅ ♆ ♇ — trường `glyph` vốn đã có trong dữ liệu), rộng ~1em nên luôn nằm gọn trong đĩa |
+
+### 10.2 Sửa gốc: hình học là dữ liệu, không phải toạ độ viết tay trong JSX
+
+Toàn bộ hình học được tách ra `src/lib/wheel-geometry.ts` (khung 600×600):
+
+- **Vành có tên và thứ tự cố định**: đĩa nền (284) → vành hoàng đạo [218…280] → số nhà (204) →
+  hành tinh (178, mỗi bậc lùi 22, tối đa 5 vành) → vòng góc chiếu (72). Nét dày của vành được
+  tính để **khớp khít** hai đường kẻ, không tràn ra ngoài.
+- **Mọi thứ vẽ ra đều sinh ra hộp bao** (`boxes`), nên bài kiểm khẳng định được "không gì bị cắt"
+  thay vì phải tin vào mắt người viết.
+- **Đặt hành tinh không chồng** (`planetPlacement`): đi từ vành ngoài vào, ưu tiên giữ **đúng
+  kinh độ thật**; khi vành đã kín thì nới dần sang hai bên theo bước 6° (tối đa ±90°), và
+  khoảng cách góc tối thiểu giữa hai vành được giải bằng **định luật cosin** theo khoảng cách
+  Euclid thật — nhờ vậy 10 hành tinh dồn trong 0° vẫn không đĩa nào chạm đĩa nào.
+- **Vạch dẫn luôn chỉ đúng kinh độ thật**: ký hiệu có thể dịch để dễ đọc, nhưng vạch nối từ mép
+  đĩa tới vành hoàng đạo vẽ theo kinh độ thật, và mỗi lần dịch đều sinh cảnh báo giải thích.
+- **Chip nhãn góc không đè ký hiệu cung**: khi AC/DC/MC/IC rơi trúng giữa một cung, ký hiệu cung
+  được dịch trong lòng cung của nó (±13°) — vẫn đọc đúng cung, không bị chip che.
+- **Dữ liệu bẩn không phá hình vẽ**: `NaN`/`Infinity` quy về 0° thay vì lan ra toạ độ SVG.
+
+### 10.3 Nhiều khoá Gemini: tự xoay khi khoá lỗi / hết quota
+
+Trước đây chỉ có một khoá (`GEMINI_API_KEY`); hết quota là app rơi về bộ luận giải nội bộ dù còn
+khoá khác trong tay.
+
+- **Khai báo**: `GEMINI_API_KEYS=khoá1,khoá2,…` (ngăn cách bằng dấu phẩy / chấm phẩy / xuống dòng)
+  hoặc `GEMINI_API_KEY` + `GEMINI_API_KEY_2…9` (cách cũ vẫn chạy y như trước). Khoá trùng bị gỡ.
+  Thứ tự ưu tiên: `GEMINI_API_KEYS` → `GEMINI_API_KEY` → `GEMINI_API_KEY_2…9`.
+- **Xoay khoá** (`isKeyRotationFailure`): chỉ xoay với lỗi **thuộc về khoá** — `GEMINI_BAD_KEY`,
+  `GEMINI_KEY_RESTRICTED`, `GEMINI_QUOTA`, `GEMINI_MODEL_NOT_FOUND` (khoá có thể thuộc project
+  khác) và `GEMINI_UPSTREAM` (Google lỗi tạm thời). Lỗi bộ lọc an toàn (`GEMINI_EMPTY`), quá thời
+  gian hay mất mạng thì **không** xoay: xoay cũng vô ích mà chỉ nhân số lần gọi lỗi.
+- **Model không đổi**: dù có bao nhiêu khoá, app vẫn chỉ gọi `gemini-3.6-flash`.
+- **Không lộ khoá**: phản hồi chỉ có số thứ tự (`keyUsed`, `keyAttempts: [{key, code}]`, độ dài,
+  4 ký tự cuối trong ghi chú), tuyệt đối không trả lại nội dung khoá — kể cả trong thông báo lỗi.
+- **Chẩn đoán**: `/api/health` báo `keys.total/usable/sources/rotation`; `?probe=1` gọi thử
+  **từng khoá song song** (tối đa 5 khoá, mỗi khoá 9 giây) và trả `probes` + `probeSummary`;
+  `npm run check:ai` in trạng thái từng khoá ở dòng lệnh. Giao diện chat hiện
+  "2/3 khoá dùng được (tự xoay)", danh sách kết quả từng khoá, và ghi chú khi máy chủ phải xoay khoá.
+
+### 10.4 Bất biến mới được khoá bằng test
+
+| Bất biến | Test |
+| --- | --- |
+| Mọi phần tử của vòng (kể cả nửa nét vẽ và hộp chữ) nằm trong khung, chừa ≥ 16/600 vùng đệm | `npm run test:wheel` |
+| Không có `NaN`/`Infinity` trong SVG; dữ liệu bẩn quy về 0° | `test:wheel` |
+| 10 hành tinh dồn trong 0° vẫn không đĩa nào chạm đĩa nào; vạch dẫn chỉ đúng kinh độ thật | `test:wheel` |
+| Ký hiệu cung không chồng lên chip nhãn AC/DC/MC/IC; chip đủ lớn để đọc | `test:wheel` |
+| Huy hiệu nghịch hành R nằm gọn trong đĩa | `test:wheel` |
+| **Hình học cũ phải trượt đúng phép kiểm** (nhãn AC ở đỉnh vòng bị cắt) | `test:wheel` (khối đối chứng) |
+| Gộp nhiều khoá: đúng thứ tự ưu tiên, khử trùng, chuẩn hoá, chỉ nhận `_2…_9` | `npm run test:ai` |
+| Xoay khoá đúng lúc: khoá #1 sai/hết quota → gọi khoá #2 và trả lời; lỗi rỗng/mạng thì **không** xoay | `test:ai` |
+| Mọi khoá hỏng → `keyAttempts` liệt kê từng khoá kèm mã lỗi, không kèm nội dung khoá | `test:ai` |
+| `?probe=1` kiểm từng khoá song song, đếm đúng số khoá dùng được, tối đa 5 khoá | `test:ai` |
+| `/api/health` không bao giờ chứa nội dung khoá (chỉ số lượng, độ dài, tên biến) | `test:ai` |
+| Lớp AI phía trình duyệt đọc đúng payload nhiều khoá và tương thích payload một khoá cũ | `npm run test:health-ui` |
+| `ChatPanel` hiện đúng "x/y khoá dùng được", nguồn khai báo, kết quả từng khoá và ghi chú xoay khoá | `test:health-ui` |
+
+Kết quả sau khi sửa: `npm test` 13 bộ + `test:wheel` 2.066 phép kiểm + `test:health-ui` 38 phép kiểm —
+tất cả 0 lỗi; `npm run typecheck` và `npm run build` sạch; ảnh kiểm bằng mắt ở
+`.cache/shots/wheel-*.png` (900px và 360px) cho thấy vòng tròn trọn vẹn, không phần tử nào chạm
+lưới vùng an toàn.

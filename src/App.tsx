@@ -319,7 +319,15 @@ export default function App() {
 
     if ("reply" in result && result.reply) {
       setEngine("gemini");
-      setEngineLabel(result.model || "mô hình lớn");
+      // Nhiều khoá: nói rõ đang dùng khoá thứ mấy, và ghi chú khi máy chủ phải tự xoay khoá.
+      setEngineLabel(
+        result.model
+          ? `${result.model}${
+              result.keysConfigured && result.keysConfigured > 1 ? ` · khoá ${result.keyUsed ?? 1}/${result.keysConfigured}` : ""
+            }`
+          : "mô hình lớn"
+      );
+      setStatus(result.keyNote ? `Đã tự xoay khoá Gemini: ${result.keyNote}` : "");
       setServerLlm("gemini");
       void refreshServerHealth(false);
       setChatMessages((previous) => [...previous, { role: "assistant", content: result.reply }]);
