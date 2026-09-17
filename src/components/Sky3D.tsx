@@ -438,10 +438,17 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
           onPointerCancel={onPointerUp}
           onDoubleClick={onDoubleClick}
           onContextMenu={(event) => event.preventDefault()}
+          onTouchStart={(event) => {
+            // Chặn trình duyệt thu phóng cả trang khi chụm 2 ngón trên canvas
+            if (event.touches.length > 1) event.preventDefault();
+          }}
+          onTouchMove={(event) => {
+            if (event.touches.length > 1) event.preventDefault();
+          }}
         />
 
         {/* HUD góc trái: hướng nhìn + trường nhìn */}
-        <div className="pointer-events-none absolute left-2 top-2 max-w-[52%] rounded-lg bg-slate-950/70 px-2 py-1.5 text-[10px] leading-4 text-slate-300 backdrop-blur sm:left-3 sm:top-3 sm:max-w-none sm:px-3 sm:py-2 sm:text-[11px] sm:leading-5">
+        <div className="pointer-events-none absolute left-1.5 top-1.5 max-w-[48%] rounded-lg bg-slate-950/70 px-2 py-1 text-[9px] leading-3 text-slate-300 backdrop-blur sm:left-3 sm:top-3 sm:max-w-none sm:px-3 sm:py-2 sm:text-[11px] sm:leading-5">
           <div>
             Hướng <span className="font-semibold text-sky-300">{nearestCompass(cameraHud.yaw)}</span> · {Math.round(((cameraHud.yaw % 360) + 360) % 360)}°
             · ngẩng {cameraHud.pitch.toFixed(0)}°
@@ -454,14 +461,14 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
         </div>
 
         {/* HUD góc phải: thời gian mô phỏng */}
-        <div className="pointer-events-none absolute right-2 top-2 max-w-[42%] rounded-lg bg-slate-950/70 px-2 py-1.5 text-right text-[10px] leading-4 text-slate-300 backdrop-blur sm:right-3 sm:top-3 sm:max-w-none sm:px-3 sm:py-2 sm:text-[11px] sm:leading-5">
+        <div className="pointer-events-none absolute right-1.5 top-1.5 max-w-[42%] rounded-lg bg-slate-950/70 px-2 py-1 text-right text-[9px] leading-3 text-slate-300 backdrop-blur sm:right-3 sm:top-3 sm:max-w-none sm:px-3 sm:py-2 sm:text-[11px] sm:leading-5">
           <div className="font-semibold text-slate-100">{simDate.toLocaleString("vi-VN", { dateStyle: "medium", timeStyle: "short" })}</div>
           <div className="text-slate-400">{live ? "theo giờ thực" : playing ? `tua ${speed >= 1 ? `${speed} phút/giây` : "thời gian thực"}` : "tạm dừng"}</div>
         </div>
 
         {/* Thẻ vật thể đang chọn */}
         {selected && selectionInfo ? (
-          <div className="absolute inset-x-2 bottom-14 flex flex-wrap items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/85 px-3 py-2 text-xs text-slate-200 backdrop-blur sm:inset-x-auto sm:bottom-3 sm:left-3 sm:right-40">
+          <div className="absolute inset-x-1.5 bottom-12 flex max-w-full flex-wrap items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-950/85 px-2.5 py-1.5 text-[11px] text-slate-200 backdrop-blur sm:inset-x-auto sm:bottom-3 sm:left-3 sm:right-40 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs">
             <span className="font-semibold text-amber-200">{selectionInfo.name}</span>
             <span className="text-slate-400">
               {selectionInfo.detail}
@@ -493,7 +500,7 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
       </div>
 
       {/* --------------------------------------------------------- điều khiển */}
-      <div className="card flex flex-wrap items-center gap-x-2 gap-y-2 p-2.5 text-xs text-slate-300 sm:gap-x-3 sm:p-3">
+      <div className="card flex w-full max-w-full flex-wrap items-center gap-2 p-2.5 text-xs min-[428px]:p-3 min-[428px]:text-[13px] text-slate-300 sm:gap-x-3 sm:p-3 overflow-hidden">
         <span className="overline w-full sm:w-auto">Thời gian</span>
         <button
           type="button"
@@ -542,7 +549,7 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
             simRef.current = parsed.getTime();
             dirtyRef.current = true;
           }}
-          className="h-11 w-full min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-2 text-slate-200 outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 [color-scheme:dark] sm:h-9 sm:w-auto"
+          className="h-11 w-full min-w-0 max-w-full rounded-lg border border-slate-700 bg-slate-950 px-2 text-slate-200 outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 [color-scheme:dark] sm:h-9 sm:w-auto"
         />
         <label className="flex w-full items-center gap-2 sm:w-auto">
           Phóng to
@@ -561,7 +568,7 @@ export default function Sky3D({ latitude, longitude, placeLabel, onAskAbout }: S
         </label>
       </div>
 
-      <div className="card p-3">
+      <div className="card w-full max-w-full p-3 overflow-hidden">
         <p className="overline mb-2">Lớp hiển thị</p>
         <div className="flex flex-wrap gap-1.5 text-[11px] text-slate-300 sm:gap-2 sm:text-xs">
         {toggle("lines", "Chòm sao")}

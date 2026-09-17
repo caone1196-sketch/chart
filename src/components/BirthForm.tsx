@@ -13,7 +13,7 @@ export type BirthFormValues = {
 };
 
 const fieldClass =
-  "w-full rounded-lg border border-slate-600/80 bg-slate-950/90 px-3 py-2.5 text-slate-100 outline-none ring-sky-300 transition placeholder:text-slate-500 focus:border-sky-300 focus:ring [color-scheme:dark]";
+  "w-full max-w-full min-w-0 rounded-lg border border-slate-600/80 bg-slate-950/90 px-3 py-2.5 text-slate-100 outline-none ring-sky-300 transition placeholder:text-slate-500 focus:border-sky-300 focus:ring [color-scheme:dark]";
 const labelClass = "text-xs font-medium uppercase tracking-[0.08em] text-slate-300";
 
 export const CITY_PRESETS = [
@@ -61,11 +61,11 @@ export default function BirthForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="grid gap-4 rounded-2xl border border-slate-700/80 bg-slate-900/65 p-4 shadow-[0_20px_80px_-40px_rgba(56,189,248,0.35)] sm:gap-5 sm:p-6 md:grid-cols-2 md:p-8"
+      className="grid w-full max-w-full gap-3 rounded-2xl border border-slate-700/80 bg-slate-900/65 p-3 min-[428px]:p-4 min-[428px]:gap-4 shadow-[0_20px_80px_-40px_rgba(56,189,248,0.35)] sm:gap-5 sm:p-6 md:grid-cols-2 md:p-8 overflow-hidden"
     >
       <label className="space-y-2 md:col-span-2">
         <span className={labelClass}>Nơi sinh (tìm toạ độ tự động)</span>
-        <div className="flex flex-col gap-2.5 sm:flex-row sm:gap-3">
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:gap-3 w-full max-w-full">
           <input
             type="text"
             value={values.birthPlace}
@@ -124,7 +124,7 @@ export default function BirthForm({
 
       <label className="space-y-2 md:col-span-2">
         <span className={labelClass}>Chọn nhanh thành phố</span>
-        <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:overflow-visible">
+        <div className="no-scrollbar -mx-1 flex max-w-full gap-2 overflow-x-auto overscroll-x-contain px-1 pb-2 sm:flex-wrap sm:overflow-visible">
           {CITY_PRESETS.map((city, index) => (
             <button
               key={`${city.name}-${index}`}

@@ -1,26 +1,70 @@
 @import "tailwindcss";
 
+/* ===== RESET & BASE RESPONSIVE ===== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
 html {
   scroll-behavior: smooth;
-  /* neo cuộn dừng dưới header dính */
   scroll-padding-top: 7rem;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  touch-action: pan-x pan-y;
+  overscroll-behavior: none;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: clip;
 }
 
-/* Chặn tràn ngang trên điện thoại (bảng rộng, quầng sáng tuyệt đối…) */
 html,
 body {
   max-width: 100%;
-  overflow-x: hidden;
-  /* Chỉ chặn overscroll ngang: giữ pull-to-refresh dọc của Chrome Android. */
+  width: 100%;
+  overflow-x: clip;
+  touch-action: pan-x pan-y;
+  overscroll-behavior: none;
   overscroll-behavior-x: none;
+  overscroll-behavior-y: contain;
+  margin: 0;
+  padding: 0;
 }
 
-/* Không cho chữ dài / mã / URL đẩy layout rộng ra */
 body {
   overflow-wrap: break-word;
   word-break: break-word;
+  position: relative;
+  width: 100%;
+  min-width: 320px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  width: 100%;
+  max-width: 100vw;
+  min-width: 0;
+  overflow-x: clip;
+  touch-action: pan-x pan-y;
+  isolation: isolate;
+}
+
+img,
+video,
+canvas,
+svg,
+iframe {
+  max-width: 100%;
+  height: auto;
+}
+
+table {
+  max-width: 100%;
+  border-collapse: collapse;
 }
 
 @media (min-width: 640px) {
@@ -35,16 +79,17 @@ body {
   }
 }
 
-/* Nền "trời đêm" hai quầng sáng dịu, giữ đúng tông slate-950 */
 .app-bg {
   background:
     radial-gradient(1100px 520px at 82% -12%, rgb(56 89 199 / 0.16), transparent 62%),
     radial-gradient(900px 460px at 6% 4%, rgb(56 189 248 / 0.08), transparent 58%),
     rgb(2 6 23);
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: clip;
 }
 
 @layer base {
-  /* Bỏ vệt xám khi chạm trên Chrome Android + bỏ độ trễ double-tap-zoom. */
   a,
   button,
   summary,
@@ -54,6 +99,7 @@ body {
   label,
   canvas {
     -webkit-tap-highlight-color: transparent;
+    max-width: 100%;
   }
 
   button,
@@ -62,15 +108,30 @@ body {
   select {
     touch-action: manipulation;
   }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  @media (min-width: 640px) {
+    input,
+    select,
+    textarea {
+      font-size: 14px;
+    }
+  }
 }
 
-/* Fallback cho trình duyệt Android cũ chưa hiểu đơn vị svh (Chrome < 108):
-   khai báo vh trước, svh sau — máy mới dùng svh (không nhảy layout khi thanh
-   địa chỉ co giãn), máy cũ rớt về vh. Không viết bằng 2 class Tailwind vì thứ
-   tự thắng thua giữa chúng không được đảm bảo. */
+/* ===== HERO - TỰ ĐỘNG THEO MÀN HÌNH ===== */
 .hero-min-h {
   min-height: 72vh;
   min-height: 72svh;
+  min-height: 72dvh;
+  width: 100%;
+  max-width: 100vw;
+  overflow: hidden;
 }
 
 @media (min-width: 640px) {
@@ -79,41 +140,125 @@ body {
   }
 }
 
-.sky-frame {
-  max-height: 78vh;
-  max-height: 78svh;
+@media (max-width: 380px) {
+  .hero-min-h {
+    min-height: 68vh;
+    min-height: 68svh;
+  }
 }
 
+/* Điện thoại màn hình lớn: 428px - 639px (Pro Max, Ultra, Fold) */
+@media (min-width: 428px) and (max-width: 639px) {
+  .hero-min-h {
+    min-height: 76vh;
+    min-height: 76svh;
+  }
+}
+
+/* ===== SKY FRAME - RESPONSIVE CHO MỌI ĐIỆN THOẠI ===== */
+.sky-frame {
+  width: 100%;
+  max-width: 100%;
+  max-height: 78vh;
+  max-height: 78svh;
+  max-height: 78dvh;
+  min-height: 320px;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  overflow: hidden;
+  border-radius: 1rem;
+}
+
+@media (max-width: 380px) {
+  .sky-frame {
+    min-height: 280px;
+  }
+}
+
+@media (min-width: 381px) and (max-width: 427px) {
+  .sky-frame {
+    min-height: 360px;
+  }
+}
+
+/* Điện thoại màn hình lớn */
+@media (min-width: 428px) and (max-width: 639px) {
+  .sky-frame {
+    min-height: 440px;
+    max-height: 72vh;
+    border-radius: 1.25rem;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 767px) {
+  .sky-frame {
+    min-height: 480px;
+    aspect-ratio: 4 / 3;
+  }
+}
+
+/* ===== CHAT SCROLL ===== */
 .chat-scroll {
   height: 60vh;
   height: 60svh;
+  height: 60dvh;
+  max-height: 70vh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 @media (min-width: 768px) {
   .chat-scroll {
     height: 28rem;
+    max-height: 32rem;
   }
 }
 
-/* Canvas bầu trời: vuốt dọc 1 ngón để cuộn trang (xem Sky3D), chặn menu
-   long-press và bôi đen khi kéo trên Android. */
+@media (max-width: 380px) {
+  .chat-scroll {
+    height: 50vh;
+    height: 50svh;
+  }
+}
+
+@media (min-width: 428px) and (max-width: 639px) {
+  .chat-scroll {
+    height: 62vh;
+    height: 62svh;
+  }
+}
+
 .sky-canvas {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+  touch-action: pan-y !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 100% !important;
+  display: block;
 }
 
 .no-scrollbar {
   scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+  width: 0;
+  height: 0;
 }
 
 @layer components {
   .chip {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs text-slate-300 transition touch-manipulation hover:border-sky-400 hover:text-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-xs text-slate-300 transition touch-manipulation hover:border-sky-400 hover:text-sky-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 disabled:cursor-not-allowed disabled:opacity-50;
+    max-width: 100%;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-height: 2.25rem;
   }
 
   .chip-active {
@@ -122,34 +267,138 @@ body {
 
   .card {
     @apply rounded-2xl border border-slate-800 bg-slate-900/50;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    overflow-wrap: break-word;
   }
 
   .btn-primary {
     @apply inline-flex items-center justify-center gap-2 rounded-xl bg-sky-400 px-5 py-2.5 text-sm font-semibold text-slate-950 transition touch-manipulation hover:bg-sky-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/80 active:scale-[0.98];
+    max-width: 100%;
+    min-height: 2.75rem;
+    white-space: nowrap;
   }
 
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 px-5 py-2.5 text-sm font-medium text-slate-200 transition touch-manipulation hover:border-sky-300/70 hover:text-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/70 active:scale-[0.98];
+    max-width: 100%;
+    min-height: 2.75rem;
+    white-space: nowrap;
   }
 
   .overline {
     @apply text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-400/90;
+    max-width: 100%;
+    overflow-wrap: break-word;
+  }
+
+  .container-auto {
+    width: 100%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+  }
+
+  .table-scroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    border-radius: 0.75rem;
+  }
+
+  .table-scroll table {
+    min-width: 100%;
+    width: max-content;
   }
 }
 
-/* Mục tiêu cảm ứng: ô nhập, chọn, checkbox và thanh trượt đủ cỡ ngón tay */
+/* ===== RESPONSIVE CHO TỪNG CỠ ĐIỆN THOẠI ===== */
+/* Rất nhỏ: 320-380 */
+@media (max-width: 380px) {
+  .chip {
+    padding-left: 0.625rem;
+    padding-right: 0.625rem;
+    font-size: 11px;
+    min-height: 2rem;
+  }
+
+  .btn-primary,
+  .btn-ghost {
+    padding-left: 1rem;
+    padding-right: 1rem;
+    font-size: 13px;
+    min-height: 2.5rem;
+  }
+}
+
+/* Điện thoại màn hình lớn: 428px+ */
+@media (min-width: 428px) and (max-width: 639px) {
+  .chip {
+    padding-left: 0.875rem;
+    padding-right: 0.875rem;
+    font-size: 13px;
+    min-height: 2.5rem;
+  }
+
+  .btn-primary,
+  .btn-ghost {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+    font-size: 15px;
+    min-height: 3rem;
+  }
+
+  .card {
+    border-radius: 1.25rem;
+  }
+
+  .overline {
+    font-size: 12px;
+  }
+}
+
+/* Tablet nhỏ / điện thoại gập mở */
+@media (min-width: 640px) and (max-width: 767px) {
+  .chip {
+    font-size: 13px;
+    min-height: 2.5rem;
+  }
+}
+
+@media (min-width: 640px) {
+  .container-auto {
+    padding-left: max(1.5rem, env(safe-area-inset-left));
+    padding-right: max(1.5rem, env(safe-area-inset-right));
+  }
+}
+
+@media (min-width: 1024px) {
+  .container-auto {
+    padding-left: max(2.5rem, env(safe-area-inset-left));
+    padding-right: max(2.5rem, env(safe-area-inset-right));
+    max-width: 80rem;
+  }
+}
+
 @media (pointer: coarse) {
   input:not([type="checkbox"]):not([type="range"]),
   select,
   textarea {
     min-height: 2.75rem;
-    /* iOS Safari tự phóng to trang khi focus ô có cỡ chữ < 16px */
-    font-size: 16px;
+    font-size: 16px !important;
   }
 
   input[type="checkbox"] {
     width: 1.15rem;
     height: 1.15rem;
+    min-height: auto;
   }
 
   input[type="range"] {
@@ -162,18 +411,67 @@ body {
   }
 }
 
-/* Vùng an toàn cho máy có tai thỏ / thanh gesture */
+@media (max-width: 380px) {
+  input:not([type="checkbox"]):not([type="range"]),
+  select,
+  textarea {
+    min-height: 2.5rem;
+    font-size: 16px !important;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  button,
+  .chip {
+    min-height: 2.25rem;
+  }
+}
+
+/* Điện thoại màn hình lớn - input to hơn cho dễ chạm */
+@media (min-width: 428px) and (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="range"]),
+  select,
+  textarea {
+    min-height: 3rem;
+    font-size: 16px !important;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
 .safe-t {
-  padding-top: env(safe-area-inset-top);
+  padding-top: max(0.5rem, env(safe-area-inset-top));
 }
 
 .safe-x {
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
 }
 
 .safe-b {
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+@media (min-width: 640px) {
+  .safe-x {
+    padding-left: max(1.5rem, env(safe-area-inset-left));
+    padding-right: max(1.5rem, env(safe-area-inset-right));
+  }
+}
+
+@media (min-width: 1024px) {
+  .safe-x {
+    padding-left: max(2.5rem, env(safe-area-inset-left));
+    padding-right: max(2.5rem, env(safe-area-inset-right));
+  }
+}
+
+/* Điện thoại màn hình lớn - safe area rộng hơn */
+@media (min-width: 428px) and (max-width: 639px) {
+  .safe-x {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
 }
 
 @media (max-width: 640px) {
@@ -199,4 +497,86 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgb(71 85 105);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+span,
+a,
+li,
+dt,
+dd {
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.flex,
+.grid {
+  min-width: 0;
+}
+
+.flex > *,
+.grid > * {
+  min-width: 0;
+}
+
+/* ===== RESPONSIVE TEXT ===== */
+@media (max-width: 380px) {
+  h1 {
+    font-size: clamp(1.5rem, 6vw, 1.75rem) !important;
+    line-height: 1.2 !important;
+  }
+
+  h2 {
+    font-size: clamp(1.25rem, 5vw, 1.5rem) !important;
+  }
+
+  h3 {
+    font-size: clamp(1rem, 4vw, 1.125rem) !important;
+  }
+}
+
+/* Điện thoại màn hình lớn - chữ to hơn, dễ đọc hơn */
+@media (min-width: 428px) and (max-width: 639px) {
+  h1 {
+    font-size: clamp(1.75rem, 7vw, 2.25rem) !important;
+    line-height: 1.15 !important;
+  }
+
+  h2 {
+    font-size: clamp(1.5rem, 6vw, 1.875rem) !important;
+    line-height: 1.2 !important;
+  }
+
+  h3 {
+    font-size: clamp(1.125rem, 5vw, 1.375rem) !important;
+  }
+
+  p {
+    font-size: clamp(0.9375rem, 4vw, 1.0625rem);
+    line-height: 1.6;
+  }
+}
+
+/* Landscape điện thoại */
+@media (max-height: 500px) and (orientation: landscape) {
+  .hero-min-h {
+    min-height: 100vh;
+    min-height: 100svh;
+  }
+
+  .sky-frame {
+    min-height: 280px;
+    max-height: 85vh;
+  }
+
+  .chat-scroll {
+    height: 70vh;
+  }
 }
