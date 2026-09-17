@@ -12,6 +12,12 @@ export type AskResult = {
   engine: ChatEngine;
   model?: string;
   note?: string;
+  /** Khoá đã dùng (1-based) và tổng số khoá máy chủ đang có. */
+  keyUsed?: number;
+  keysConfigured?: number;
+  keyRotations?: number;
+  /** Ghi chú ẩn danh khi phải xoay khoá (không chứa nội dung khoá). */
+  keyNote?: string | null;
 };
 
 export type AskPayload = {
@@ -34,6 +40,25 @@ export type ServerHealth = {
   keyPresent: boolean;
   keyLength: number | null;
   keyLooksValid: boolean | null;
+  /** Tổng số khoá Gemini máy chủ đang có (GEMINI_API_KEY + GEMINI_API_KEYS + GEMINI_API_KEY_n). */
+  keysTotal: number;
+  /** Số khoá dùng được (đúng sau khi gọi ?probe=1). */
+  keysUsable: number;
+  /** Tên các biến môi trường đang cung cấp khoá (không phải giá trị khoá). */
+  keySources: string[];
+  /** Có nhiều hơn 1 khoá → máy chủ tự xoay khi khoá lỗi / hết quota. */
+  keyRotation: boolean;
+  /** Kết quả kiểm tra từng khoá khi gọi ?probe=1. */
+  probeKeys: Array<{
+    key: number;
+    ok: boolean;
+    code?: string;
+    error?: string;
+    hint?: string;
+    modelCount?: number;
+    preferredModelAvailable?: boolean;
+    suggestedModel?: string | null;
+  }>;
   probe: {
     ok: boolean;
     status: number;
@@ -64,7 +89,20 @@ const postJson = async (url: string, body: unknown) => {
     });
 
     const text = await response.text();
-    let payload: { reply?: string; error?: string; code?: string; model?: string; hint?: string; detail?: string; modelsTried?: string[] } = {};
+    let payload: {
+      reply?: string;
+      error?: string;
+      code?: string;
+      model?: string;
+      hint?: string;
+      detail?: string;
+      modelsTried?: string[];
+      keyUsed?: number;
+      keysConfigured?: number;
+      keyRotations?: number;
+      keyNote?: string | null;
+      keyAttempts?: Array<{ key: number; code: string }>;
+    } = {};
 
     try {
       payload = text ? JSON.parse(text) : {};
@@ -94,6 +132,11 @@ export const checkServerHealth = async (probe = false): Promise<ServerHealth> =>
     keyPresent: false,
     keyLength: null,
     keyLooksValid: null,
+    keysTotal: 0,
+    keysUsable: 0,
+    keySources: [],
+    keyRotation: false,
+    probeKeys: [],
     probe: null,
     error: null
   };
@@ -120,6 +163,13 @@ export const checkServerHealth = async (probe = false): Promise<ServerHealth> =>
     }
 
     const key = (payload.key || {}) as Record<string, unknown>;
+    const keys = (payload.keys || {}) as Record<string, unknown>;
+    const probeSummary = (payload.probeSummary || {}) as Record<string, unknown>;
+    const keysTotal = typeof keys.total === "number" ? keys.total : key.present === true ? 1 : 0;
+    const keysUsable =
+      typeof keys.usable === "number" ? keys.usable : typeof probeSummary.usable === "number" ? probeSummary.usable : keysTotal;
+    const probedKeys = Array.isArray(payload.probes) ? (payload.probes as ServerHealth["probeKeys"]) : [];
+
     return {
       reachable: true,
       llm: payload.llm === "gemini" ? "gemini" : "local",
@@ -131,6 +181,11 @@ export const checkServerHealth = async (probe = false): Promise<ServerHealth> =>
       keyPresent: key.present === true,
       keyLength: typeof key.length === "number" ? key.length : null,
       keyLooksValid: typeof key.looksLikeGoogleKey === "boolean" ? key.looksLikeGoogleKey : null,
+      keysTotal,
+      keysUsable,
+      keySources: Array.isArray(keys.sources) ? (keys.sources as string[]) : [],
+      keyRotation: keys.rotation === true || keysTotal > 1,
+      probeKeys: probedKeys,
       probe: payload.probe && typeof payload.probe === "object" ? (payload.probe as ServerHealth["probe"]) : null,
       error: null
     };
@@ -157,11 +212,24 @@ export const askServerAi = async (payload: AskPayload): Promise<AskResult | { er
     const { ok, status, payload: data } = await postJson("/api/ai-chat", payload);
 
     if (!ok || !data.reply) {
-      const note = data.hint ? `${data.error || `Máy chủ AI trả về mã ${status}.`} ${data.hint}` : data.error;
+      const tried = Array.isArray(data.keyAttempts) && data.keyAttempts.length
+        ? ` Đã thử ${data.keyAttempts.length} khoá: ${data.keyAttempts
+            .map((attempt) => `khoá #${attempt.key} (${attempt.code})`)
+            .join(", ")}.`
+        : "";
+      const note = data.hint ? `${data.error || `Máy chủ AI trả về mã ${status}.`}${tried} ${data.hint}` : `${data.error ?? ""}${tried}`;
       return { error: note || `Máy chủ AI trả về mã ${status}.`, code: data.code || "SERVER_ERROR", hint: data.hint };
     }
 
-    return { reply: data.reply, engine: "gemini", model: data.model };
+    return {
+      reply: data.reply,
+      engine: "gemini",
+      model: data.model,
+      keyUsed: typeof data.keyUsed === "number" ? data.keyUsed : undefined,
+      keysConfigured: typeof data.keysConfigured === "number" ? data.keysConfigured : undefined,
+      keyRotations: typeof data.keyRotations === "number" ? data.keyRotations : undefined,
+      keyNote: data.keyNote ?? null
+    };
   } catch (error) {
     const message =
       error instanceof Error && error.name === "AbortError"

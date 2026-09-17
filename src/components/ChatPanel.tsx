@@ -136,8 +136,10 @@ export default function ChatPanel({
         <div className="rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-3 text-xs text-slate-300">
           <p className="font-semibold text-slate-200">Trợ lý trả lời bằng 2 lớp</p>
           <p className="mt-1">
-            1. Nếu máy chủ có <code className="text-sky-200">GEMINI_API_KEY</code>, câu hỏi được gửi tới Gemini kèm toàn bộ
-            dữ liệu chart.
+            1. Nếu máy chủ có khoá Gemini (<code className="text-sky-200">GEMINI_API_KEY</code> hoặc{" "}
+            <code className="text-sky-200">GEMINI_API_KEYS</code> / <code className="text-sky-200">GEMINI_API_KEY_2…9</code>), câu hỏi
+            được gửi tới Gemini kèm toàn bộ dữ liệu chart
+            {serverHealth && serverHealth.keysTotal > 1 ? " — nhiều khoá thì tự xoay khi hết quota" : ""}.
           </p>
           <p className="mt-1">
             2. Nếu chưa có key, hệ thống dùng bộ luận giải nội bộ chạy ngay trên trình duyệt (vẫn đọc đúng vị trí hành tinh, nhà, góc
@@ -146,6 +148,12 @@ export default function ChatPanel({
           <p className="mt-2 text-slate-400">
             Trạng thái máy chủ: <span className={serverStatusClass[serverLlm]}>{serverStatusText[serverLlm]}</span>
             {serverLlm === "gemini" && serverHealth?.model ? <span className="text-slate-500"> · {serverHealth.model}</span> : null}
+            {serverHealth && serverHealth.keysTotal > 1 ? (
+              <span className="text-slate-500">
+                {" "}
+                · {serverHealth.keysUsable}/{serverHealth.keysTotal} khoá dùng được{serverHealth.keyRotation ? " (tự xoay)" : ""}
+              </span>
+            ) : null}
           </p>
           {serverLlm === "unreachable" ? (
             <p className="mt-2 text-rose-300">
@@ -172,9 +180,21 @@ export default function ChatPanel({
             <span className="text-[11px] text-slate-500">
               {serverHealth?.runtime ? `${serverHealth.runtime}${serverHealth.region ? ` · ${serverHealth.region}` : ""}` : "—"}
               {serverHealth?.keyPresent && typeof serverHealth.keyLength === "number" ? ` · khoá ${serverHealth.keyLength} ký tự` : ""}
+              {serverHealth?.keySources?.length ? ` · nguồn: ${serverHealth.keySources.join(" + ")}` : ""}
             </span>
           </div>
-          {serverHealth?.probe ? (
+          {serverHealth?.probeKeys?.length ? (
+            <ul className="mt-2 space-y-1">
+              {serverHealth.probeKeys.map((item) => (
+                <li key={item.key} className={item.ok ? "text-emerald-300" : "text-rose-300"}>
+                  {item.ok
+                    ? `✔ khoá #${item.key}: Google chấp nhận (${item.modelCount ?? 0} model)`
+                    : `✘ khoá #${item.key}: ${item.error || "chưa dùng được"}${item.code ? ` (${item.code})` : ""}`}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {serverHealth?.probe && !serverHealth.probeKeys?.length ? (
             <p className={`mt-2 ${serverHealth.probe.ok ? "text-emerald-300" : "text-rose-300"}`}>
               {serverHealth.probe.ok
                 ? `Google chấp nhận khoá · ${serverHealth.probe.modelCount ?? 0} model dùng được${

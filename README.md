@@ -24,7 +24,8 @@ Web app tiếng Việt: **lập bản đồ sao (natal chart) → ngắm bầu t
 
 3. **Hỏi AI (Gemini)**
 
-   - Hai lớp: gọi **Google Gemini** qua `/api/ai-chat` (Vercel Serverless hoặc máy chủ dev) nếu máy chủ có `GEMINI_API_KEY`, nếu không thì dùng **bộ luận giải nội bộ** chạy hoàn toàn trên trình duyệt (đọc đúng vị trí hành tinh, nhà, góc chiếu, sao cố định, transit, pha Mặt Trăng, giờ mọc/lặn). Khoá API chỉ nằm ở biến môi trường máy chủ, không bao giờ nhúng vào bundle.
+   - Hai lớp: gọi **Google Gemini** qua `/api/ai-chat` (Vercel Serverless hoặc máy chủ dev) nếu máy chủ có khoá, nếu không thì dùng **bộ luận giải nội bộ** chạy hoàn toàn trên trình duyệt (đọc đúng vị trí hành tinh, nhà, góc chiếu, sao cố định, transit, pha Mặt Trăng, giờ mọc/lặn). Khoá API chỉ nằm ở biến môi trường máy chủ, không bao giờ nhúng vào bundle.
+   - **Nhiều khoá + tự xoay khoá**: khai `GEMINI_API_KEYS=khoá1,khoá2,…` (hoặc `GEMINI_API_KEY` + `GEMINI_API_KEY_2…9`, tối đa 9 khoá). Gặp lỗi **thuộc về khoá** (khoá sai, khoá bị giới hạn referrer/IP, hết quota, model chưa mở cho project của khoá, Google lỗi 5xx) thì máy chủ tự thử khoá kế tiếp — vẫn chỉ dùng đúng model `gemini-3.6-flash`; lỗi không thuộc về khoá (bộ lọc an toàn, quá thời gian) thì không xoay để khỏi nhân số lần gọi. Câu trả lời ghi rõ đang dùng khoá thứ mấy; mọi phản hồi (kể cả `/api/health`) **không bao giờ chứa nội dung khoá** — chỉ số thứ tự, độ dài và 4 ký tự cuối.
    - Nhận diện ý định câu hỏi (tính cách, sự nghiệp, tình cảm, tài chính, sức khỏe, gia đình, học tập, di chuyển, vận hạn, tương hợp, sao cố định, bầu trời, giải thích khái niệm…), trả lời có dẫn chứng dữ liệu và phần gợi ý hành động kèm khuyến cáo.
 
 4. **Biến thể bản đồ sao (mục 3b)**
@@ -55,6 +56,8 @@ Các engine được kiểm chứng tự động với **Swiss Ephemeris** (`npm
 | Lớp biến thể | 7 hệ hoàng đạo × 12 hệ nhà, dasha/varga/Tứ Trụ/Tử Vi/Maya/HD | kiểm tra tính nhất quán (cusp ↔ nhà, ayanamsa ↔ cung) |
 | Bản đồ sao (hiển thị) | 14.950 phép kiểm: khúc xạ/hấp thụ, phép chiếu & nghịch đảo, phóng to quanh con trỏ, **quy đổi lăn chuột & giới hạn dịch chuyển khung**, dựng khung 4 vĩ độ, Ngân Hà, pha Trăng, tra cứu | 0 lỗi (sai số nghịch đảo < 0,05°) |
 | Bầu trời 3D | 1.510 phép kiểm: hình học camera phối cảnh (chân trời thẳng, nghịch đảo < 1e-6 px), zoom quanh con trỏ nghiệm kín, quay ΔLST khớp khung dựng lại ≤ vài phần triệu độ, cắt mặt phẳng gần, lưới mặt đất, vệt sao, pha hành tinh theo tam giác khoảng cách, lưới xích đạo; kèm **vẽ thật trên canvas** và so sánh điểm ảnh (tất định từng byte) | 0 lỗi |
+| Vòng bản đồ sao natal | 2.066 phép kiểm: render thật `ChartWheel` rồi soi lại SVG (hộp bao từng phần tử kể cả nửa nét và chữ), 4 lá số thật, ca AC ở đỉnh vòng, vĩ độ 78°, 10 hành tinh dồn một độ, dữ liệu NaN/Infinity — kèm **đối chứng**: hình học cũ phải trượt đúng phép kiểm | 0 lỗi (mọi nét vẽ nằm trong vùng đệm 16/600 ≈ 2,7%) |
+| Lớp AI phía trình duyệt | 38 phép kiểm: đọc `/api/health` (một khoá, nhiều khoá, chưa có khoá, route trả HTML), xoay khoá khi trả lời, thông báo khi mọi khoá hỏng, và render `ChatPanel` để chắc giao diện hiện đúng số khoá / nguồn khai báo / ghi chú xoay khoá | 0 lỗi |
 | Giao diện ngắm trời 3D | 1 lần chạy jsdom: gắn Sky3D, vòng rAF vẽ thật qua context giả, mô phỏng lăn chuột (không cuộn trang + trường nhìn đổi), kéo đổi hướng, phím cách tua, bấm chọn thiên thể → Hỏi AI → bỏ chọn, bật/tắt lớp, đổi ngày giờ, về giờ thực, toàn màn hình | 0 ngoại lệ, 0 console.error |
 
 ## Chạy dự án
@@ -67,6 +70,10 @@ npm run build      # build ra dist/index.html (một tệp duy nhất)
 npm run preview    # phục vụ dist/ kèm API route
 npm run data       # sinh lại dữ liệu sao vào src/data/ từ gói npm d3-celestial
 npm test           # toàn bộ kiểm chứng số liệu + bản đồ sao + giao diện + lớp API Gemini
+npm run test:wheel       # vòng bản đồ sao natal không bị cắt lẹm (render SVG rồi soi hộp bao)
+npm run shot:wheel       # render vòng bản đồ sao ra PNG trong .cache/shots/ để kiểm bằng mắt
+npm run test:health-ui   # lớp AI phía trình duyệt đọc đúng payload nhiều khoá
+npm run check:ai         # chẩn đoán từng khoá Gemini bằng dòng lệnh
 npm run check:ai   # chẩn đoán cấu hình Gemini (khoá có dùng được không, model nào đang mở)
 npm run test:sky   # mô hình hiển thị bầu trời (khúc xạ, phép chiếu, Ngân Hà, pha Trăng, tra cứu)
 npm run test:ui3d  # chạy giao diện ngắm trời 3D trong jsdom (lăn chuột/kéo/chọn thiên thể/đổi giờ)

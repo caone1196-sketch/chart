@@ -1,34 +1,24 @@
 import { useMemo } from "react";
 import type { Aspect, House, PlanetPosition } from "@/lib/astro";
 import { ZODIAC_SIGNS } from "@/lib/astro";
+import {
+  WHEEL_CENTER,
+  WHEEL_RETRO_OFFSET,
+  WHEEL_SIZE,
+  WHEEL_STROKES,
+  WHEEL_TEXT,
+  buildWheelLayout,
+  wheelPoint
+} from "@/lib/wheel-geometry";
 
-const anglePoint = (longitude: number, radius: number) => {
-  // Kinh độ hoàng đạo tăng ngược chiều kim đồng hồ, 0° Bạch Dương nằm bên trái (hướng Đông).
-  const angle = ((longitude + 90) * Math.PI) / 180;
-  return {
-    x: 250 + radius * Math.cos(angle),
-    y: 250 - radius * Math.sin(angle)
-  };
-};
-
-const buildPlanetRadiusMap = (planets: PlanetPosition[]) => {
-  const map = new Map<string, number>();
-  const sorted = [...planets].sort((a, b) => a.longitude - b.longitude);
-  let stack = 0;
-
-  sorted.forEach((planet, index) => {
-    if (index === 0) {
-      stack = 0;
-    } else {
-      const gap = planet.longitude - sorted[index - 1].longitude;
-      stack = gap < 8 ? Math.min(stack + 1, 4) : 0;
-    }
-    map.set(planet.key, 190 - stack * 14);
-  });
-
-  return map;
-};
-
+/**
+ * Vòng bản đồ sao natal.
+ *
+ * Toàn bộ toạ độ lấy từ `@/lib/wheel-geometry`: hình học được tính trước ở tầng lib nên
+ * không phần tử nào (kể cả chữ và nửa nét vẽ) vượt ra ngoài khung — đúng lỗi "bản đồ bị cắt
+ * lẹm" trên điện thoại Android. `tests/wheel.check.ts` soi lại chính SVG này để khẳng định
+ * điều đó, kể cả trường hợp 10 hành tinh dồn vào một độ.
+ */
 export default function ChartWheel({
   planets,
   aspects,
@@ -48,16 +38,31 @@ export default function ChartWheel({
   imumCoeli: number;
   highlightKeys?: string[];
 }) {
-  const radiusMap = useMemo(() => buildPlanetRadiusMap(planets), [planets]);
-  const byKey = useMemo(() => new Map(planets.map((planet) => [planet.key, planet])), [planets]);
+  const angles = useMemo(
+    () => [
+      { label: "AC" as const, longitude: ascendant },
+      { label: "DC" as const, longitude: descendant },
+      { label: "MC" as const, longitude: midheaven },
+      { label: "IC" as const, longitude: imumCoeli }
+    ],
+    [ascendant, descendant, midheaven, imumCoeli]
+  );
 
-  const ascOuter = anglePoint(ascendant, 232);
-  const dcOuter = anglePoint(descendant, 232);
-  const mcOuter = anglePoint(midheaven, 232);
-  const icOuter = anglePoint(imumCoeli, 232);
+  const layout = useMemo(
+    () => buildWheelLayout({ planets, houses, angles, highlightKeys }),
+    [planets, houses, angles, highlightKeys]
+  );
+
+  const byKey = useMemo(() => new Map(planets.map((planet) => [planet.key, planet])), [planets]);
+  const [glowCircle, bandCircle, outerCircle, innerCircle, aspectCircle] = layout.circles;
 
   return (
-    <svg viewBox="0 0 500 500" role="img" aria-label="Vòng bản đồ sao: 12 cung hoàng đạo, 12 nhà và vị trí các hành tinh" className="mx-auto block h-auto w-full max-w-[560px] touch-pan-y">
+    <svg
+      viewBox={`0 0 ${WHEEL_SIZE} ${WHEEL_SIZE}`}
+      role="img"
+      aria-label="Vòng bản đồ sao: 12 cung hoàng đạo, 12 nhà và vị trí các hành tinh"
+      className="mx-auto block h-auto w-full max-w-[36rem] touch-pan-y"
+    >
       <title>Vòng bản đồ sao natal</title>
       <defs>
         <radialGradient id="wheel-glow" cx="50%" cy="50%" r="50%">
@@ -66,46 +71,94 @@ export default function ChartWheel({
         </radialGradient>
       </defs>
 
-      <circle cx="250" cy="250" r="236" fill="url(#wheel-glow)" />
-      <circle cx="250" cy="250" r="230" fill="none" stroke="#475569" strokeWidth="1.5" />
-      <circle cx="250" cy="250" r="200" fill="none" stroke="#64748b" strokeWidth="1" strokeDasharray="3 4" />
-      <circle cx="250" cy="250" r="145" fill="none" stroke="#334155" strokeWidth="1" />
+      {/* Đĩa nền + các vòng đồng tâm (vành hoàng đạo vẽ bằng nét dày thành hình khuyên). */}
+      <circle cx={WHEEL_CENTER} cy={WHEEL_CENTER} r={glowCircle.radius} fill="url(#wheel-glow)" />
+      <circle cx={WHEEL_CENTER} cy={WHEEL_CENTER} r={bandCircle.radius} fill="none" stroke="#0c1526" strokeWidth={bandCircle.strokeWidth} />
+      <circle
+        cx={WHEEL_CENTER}
+        cy={WHEEL_CENTER}
+        r={outerCircle.radius}
+        fill="none"
+        stroke="#475569"
+        strokeWidth={WHEEL_STROKES.zodiacOuter}
+      />
+      <circle
+        cx={WHEEL_CENTER}
+        cy={WHEEL_CENTER}
+        r={innerCircle.radius}
+        fill="none"
+        stroke="#64748b"
+        strokeWidth={WHEEL_STROKES.zodiacInner}
+      />
+      <circle
+        cx={WHEEL_CENTER}
+        cy={WHEEL_CENTER}
+        r={aspectCircle.radius}
+        fill="none"
+        stroke="#334155"
+        strokeWidth={WHEEL_STROKES.aspect}
+      />
 
-      {ZODIAC_SIGNS.map((sign, index) => {
-        const start = anglePoint(index * 30, 230);
-        const end = anglePoint(index * 30, 145);
-        const mid = anglePoint(index * 30 + 15, 214);
-        return (
-          <g key={sign.name}>
-            <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke="#1e293b" strokeWidth="1" />
-            <text x={mid.x} y={mid.y} textAnchor="middle" dominantBaseline="middle" fill="#cbd5e1" fontSize="16">
-              {sign.symbol}
-            </text>
-          </g>
-        );
-      })}
+      {/* 12 cung: vạch chia + ký hiệu đặt giữa vành (không đè lên nhãn AC/DC/MC/IC). */}
+      {layout.signDividers.map((divider) => (
+        <line
+          key={`sign-${divider.longitude}`}
+          x1={divider.from.x}
+          y1={divider.from.y}
+          x2={divider.to.x}
+          y2={divider.to.y}
+          stroke="#1e293b"
+          strokeWidth={WHEEL_STROKES.signDivider}
+        />
+      ))}
+      {layout.signGlyphs.map((glyph) => (
+        <text
+          key={`glyph-${glyph.index}`}
+          x={glyph.point.x}
+          y={glyph.point.y}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#cbd5e1"
+          fontSize={WHEEL_TEXT.signGlyph}
+        >
+          {ZODIAC_SIGNS[glyph.index].symbol}
+        </text>
+      ))}
 
-      {houses.map((house) => {
-        const from = anglePoint(house.cusp, 145);
-        const to = anglePoint(house.cusp, 230);
-        const label = anglePoint(house.cusp + 15, 130);
-        return (
-          <g key={`house-${house.house}`}>
-            <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#1e293b" strokeWidth="1" />
-            <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" fill="#64748b" fontSize="12">
-              {house.house}
-            </text>
-          </g>
-        );
-      })}
+      {/* 12 nhà: vạch chia + số nhà. */}
+      {layout.houseDividers.map((divider) => (
+        <line
+          key={`house-${divider.house}`}
+          x1={divider.from.x}
+          y1={divider.from.y}
+          x2={divider.to.x}
+          y2={divider.to.y}
+          stroke="#1e293b"
+          strokeWidth={WHEEL_STROKES.houseCusp}
+        />
+      ))}
+      {layout.houseNumbers.map((number) => (
+        <text
+          key={`house-number-${number.house}`}
+          x={number.point.x}
+          y={number.point.y}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#64748b"
+          fontSize={WHEEL_TEXT.houseNumber}
+        >
+          {number.house}
+        </text>
+      ))}
 
+      {/* Đường góc chiếu (vẽ trước hành tinh để ký hiệu luôn nằm trên). */}
       {aspects.map((aspect) => {
         const fromPlanet = byKey.get(aspect.from);
         const toPlanet = byKey.get(aspect.to);
         if (!fromPlanet || !toPlanet) return null;
 
-        const from = anglePoint(fromPlanet.longitude, 130);
-        const to = anglePoint(toPlanet.longitude, 130);
+        const from = wheelPoint(fromPlanet.longitude, layout.aspectRadius);
+        const to = wheelPoint(toPlanet.longitude, layout.aspectRadius);
 
         return (
           <line
@@ -115,62 +168,104 @@ export default function ChartWheel({
             x2={to.x}
             y2={to.y}
             stroke={aspect.color}
-            strokeWidth="1.2"
+            strokeWidth={WHEEL_STROKES.aspect}
             strokeOpacity="0.55"
           />
         );
       })}
 
-      <line x1={ascOuter.x} y1={ascOuter.y} x2={dcOuter.x} y2={dcOuter.y} stroke="#22d3ee" strokeWidth="2" />
-      <line x1={mcOuter.x} y1={mcOuter.y} x2={icOuter.x} y2={icOuter.y} stroke="#f59e0b" strokeWidth="2" />
-
-      {[
-        { point: ascOuter, label: "AC", color: "#22d3ee" },
-        { point: dcOuter, label: "DC", color: "#22d3ee" },
-        { point: mcOuter, label: "MC", color: "#f59e0b" },
-        { point: icOuter, label: "IC", color: "#f59e0b" }
-      ].map((item) => (
-        <text key={item.label} x={item.point.x} y={item.point.y - 13} textAnchor="middle" fill={item.color} fontSize="12" fontWeight="700">
-          {item.label}
-        </text>
+      {/* Trục AC–DC (xanh) và MC–IC (hổ phách): chỉ nằm trong vành hoàng đạo. */}
+      {layout.angleAxes.map((axis) => (
+        <line
+          key={`axis-${axis.label}`}
+          x1={axis.from.x}
+          y1={axis.from.y}
+          x2={axis.to.x}
+          y2={axis.to.y}
+          stroke={axis.color === "amber" ? "#f59e0b" : "#22d3ee"}
+          strokeWidth={WHEEL_STROKES.angleAxis}
+        />
       ))}
 
-      {planets.map((planet) => {
-        const radius = radiusMap.get(planet.key) ?? 190;
-        const point = anglePoint(planet.longitude, radius);
-        const highlighted = highlightKeys.includes(planet.key);
-
+      {/* Hành tinh: vạch dẫn, đĩa, ký hiệu, huy hiệu nghịch hành. */}
+      {layout.planets.map((geometry) => {
+        const planet = byKey.get(geometry.key);
+        if (!planet) return null;
         return (
-          <g key={planet.key}>
+          <g key={geometry.key}>
             <line
-              x1={anglePoint(planet.longitude, 200).x}
-              y1={anglePoint(planet.longitude, 200).y}
-              x2={anglePoint(planet.longitude, radius + 12).x}
-              y2={anglePoint(planet.longitude, radius + 12).y}
+              x1={geometry.leader.from.x}
+              y1={geometry.leader.from.y}
+              x2={geometry.leader.to.x}
+              y2={geometry.leader.to.y}
               stroke={planet.color}
               strokeOpacity="0.35"
-              strokeWidth="1"
+              strokeWidth={WHEEL_STROKES.leader}
             />
-            <circle cx={point.x} cy={point.y} r={highlighted ? 15 : 13} fill="#0f172a" stroke={planet.color} strokeWidth={highlighted ? 2.4 : 1.2} />
+            <circle
+              cx={geometry.point.x}
+              cy={geometry.point.y}
+              r={geometry.disc}
+              fill="#0f172a"
+              stroke={planet.color}
+              strokeWidth={geometry.stroke}
+            />
             <text
-              x={point.x}
-              y={point.y}
+              x={geometry.point.x}
+              y={geometry.point.y}
               textAnchor="middle"
               dominantBaseline="middle"
               fill={planet.color}
-              fontSize="11"
+              fontSize={WHEEL_TEXT.planetGlyph}
               fontWeight="700"
             >
-              {planet.symbol}
+              {planet.glyph}
             </text>
             {planet.retrograde ? (
-              <text x={point.x + 14} y={point.y - 10} textAnchor="middle" fill="#fca5a5" fontSize="10" fontWeight="700">
+              <text
+                x={geometry.point.x + WHEEL_RETRO_OFFSET.x}
+                y={geometry.point.y + WHEEL_RETRO_OFFSET.y}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fill="#fca5a5"
+                fontSize={WHEEL_TEXT.retroBadge}
+                fontWeight="700"
+              >
                 R
               </text>
             ) : null}
           </g>
         );
       })}
+
+      {/* Nhãn AC/DC/MC/IC: vẽ sau cùng, có chip nền đục nên luôn đọc được. */}
+      {layout.angleLabels.map((label) => (
+        <g key={`label-${label.label}`}>
+          <rect
+            x={label.point.x - label.halfWidth}
+            y={label.point.y - label.halfHeight}
+            width={label.halfWidth * 2}
+            height={label.halfHeight * 2}
+            rx={5}
+            fill="#020617"
+            fillOpacity="0.92"
+            stroke={label.label === "MC" || label.label === "IC" ? "#f59e0b" : "#22d3ee"}
+            strokeOpacity="0.5"
+            strokeWidth={WHEEL_STROKES.chip}
+          />
+          <text
+            x={label.point.x}
+            y={label.point.y}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill={label.label === "MC" || label.label === "IC" ? "#f59e0b" : "#22d3ee"}
+            fontSize={WHEEL_TEXT.angleLabel}
+            fontWeight="700"
+          >
+            {label.label}
+          </text>
+        </g>
+      ))}
     </svg>
   );
 }
