@@ -6,6 +6,7 @@
  * model đầu lỗi 404 rồi rơi xuống model dự phòng, quota, Google lỗi 5xx.
  */
 import handler, {
+  backoffDelayMs,
   buildApiKeyList,
   buildHealthPayload,
   describeKey,
@@ -13,13 +14,16 @@ import handler, {
   healthHandler,
   isKeyRotationFailure,
   isModelUnavailable,
+  isTransientFailure,
   normalizeApiKey,
+  parseRetryDelayMs,
   probeKeys,
   resolveModels,
+  retrySettings,
   splitApiKeys
 } from "../api/_handler.js";
 
-type MockResponse = { status: number; body: unknown };
+type MockResponse = { status: number; body: unknown; headers?: Record<string, string>; networkError?: string };
 
 const failures: string[] = [];
 let checks = 0;
@@ -45,12 +49,13 @@ const mockFetch = (responses: MockResponse[], log?: string[]) => {
     if (log) log.push(String(url));
     const response = responses[Math.min(index, responses.length - 1)];
     index += 1;
+    if (response.networkError) throw new TypeError(response.networkError);
     return {
       ok: response.status >= 200 && response.status < 300,
       status: response.status,
       json: async () => response.body,
       text: async () => JSON.stringify(response.body),
-      headers: new Headers(),
+      headers: new Headers(response.headers || {}),
       ...(init ? {} : {})
     } as unknown as Response;
   };
@@ -106,12 +111,13 @@ const mockFetchKeys = (responses: MockResponse[]) => {
     void url;
     const response = responses[Math.min(index, responses.length - 1)];
     index += 1;
+    if (response.networkError) throw new TypeError(response.networkError);
     return {
       ok: response.status >= 200 && response.status < 300,
       status: response.status,
       json: async () => response.body,
       text: async () => JSON.stringify(response.body),
-      headers: new Headers()
+      headers: new Headers(response.headers || {})
     } as unknown as Response;
   };
   globalThis.fetch = fake as unknown as typeof fetch;
@@ -348,6 +354,190 @@ delete process.env.GEMINI_API_KEYS;
 mockFetch([{ status: 200, body: { candidates: [{ content: { parts: [] }, finishReason: "MAX_TOKENS" }] } }]);
 const empty = await callChat({ messages: [{ role: "user", content: "hỏi" }], chartReport: "dữ liệu" });
 expect("ai-chat", empty.payload.code, "GEMINI_EMPTY", "câu trả lời rỗng có mã riêng");
+
+/* ── 4b. Google lỗi tạm thời (5xx / rớt mạng): phải TỰ THỬ LẠI trước khi bỏ cuộc ──
+ *
+ * Lỗi người dùng báo: "Mô hình lớn chưa sẵn sàng (Máy chủ Google tạm thời lỗi. Đã thử 1 khoá:
+ * khoá #1 (GEMINI_UPSTREAM). Thử lại sau ít phút.)" — Google trả 503 "model is overloaded" đúng
+ * một lần là app rơi thẳng về bộ luận giải nội bộ, và thông báo không nói rõ đây KHÔNG phải
+ * lỗi khoá API. Nhóm bài kiểm này khoá hành vi mới: tự thử lại có chờ tăng dần, tôn trọng
+ * Retry-After, dừng đúng quỹ thời gian của Vercel Function, và báo `retryable` cho giao diện.
+ */
+
+const overloadBody = { error: { message: "The model is overloaded. Please try again later.", status: "UNAVAILABLE" } };
+
+// Chẩn đoán lỗi: 5xx phải nói rõ không phải lỗi khoá và đánh dấu là lỗi thử lại được.
+expect("lỗi tạm thời", explainGeminiError({ status: 503, data: overloadBody, model: "gemini-3.6-flash" }).code, "GEMINI_UPSTREAM", "5xx → mã GEMINI_UPSTREAM");
+expect("lỗi tạm thời", explainGeminiError({ status: 503, data: overloadBody }).retryable, true, "5xx là lỗi tạm thời → cho phép thử lại");
+expect("lỗi tạm thời", explainGeminiError({ status: 503, data: overloadBody }).httpStatus, 503, "giữ mã HTTP để người dùng tự tra");
+expect("lỗi tạm thời", explainGeminiError({ status: 503, data: overloadBody }).upstreamStatus, "UNAVAILABLE", "giữ tên trạng thái Google trả về");
+expect(
+  "lỗi tạm thời",
+  explainGeminiError({ status: 500, data: { error: { message: "Internal error encountered.", status: "INTERNAL" } } }).retryable,
+  true,
+  "500 INTERNAL cũng thuộc nhóm thử lại được"
+);
+expect("lỗi tạm thời", explainGeminiError({ status: 400, data: { error: { message: "API key not valid." } } }).retryable, false, "khoá sai → thử lại vô ích");
+expect("lỗi tạm thời", explainGeminiError({ networkError: new TypeError("fetch failed") }).retryable, true, "rớt mạng → thử lại được");
+ok();
+if (!explainGeminiError({ status: 503, data: overloadBody }).error.includes("không phải lỗi khoá")) {
+  fail("lỗi tạm thời", "thông báo 5xx phải khẳng định đây không phải lỗi khoá API");
+}
+expect("lỗi tạm thời", isTransientFailure("GEMINI_UPSTREAM"), true, "GEMINI_UPSTREAM thuộc nhóm lỗi tạm thời");
+expect("lỗi tạm thời", isTransientFailure("GEMINI_NETWORK"), true, "GEMINI_NETWORK thuộc nhóm lỗi tạm thời");
+expect("lỗi tạm thời", isTransientFailure("GEMINI_BAD_KEY"), false, "lỗi khoá không phải lỗi tạm thời");
+expect("lỗi tạm thời", isTransientFailure("GEMINI_EMPTY"), false, "bộ lọc an toàn không phải lỗi tạm thời");
+expect("lỗi tạm thời", isKeyRotationFailure("GEMINI_UPSTREAM"), true, "Google lỗi dai dẳng thì vẫn nên thử khoá khác");
+
+// Đọc đúng "chờ bao lâu" từ header Retry-After và RetryInfo.retryDelay của Google.
+expect("chờ bao lâu", parseRetryDelayMs(new Headers({ "retry-after": "7" }), {}), 7000, "đọc header Retry-After theo giây");
+expect("chờ bao lâu", parseRetryDelayMs(new Headers(), { error: { details: [{ retryDelay: "12.5s" }] } }), 12500, "đọc RetryInfo.retryDelay");
+expect("chờ bao lâu", parseRetryDelayMs(new Headers({ "retry-after": "0" }), {}), 0, "Retry-After 0 → chờ 0 giây");
+expect("chờ bao lâu", parseRetryDelayMs(new Headers(), {}), null, "Google không nói gì → null");
+expect("chờ bao lâu", parseRetryDelayMs(null, null), null, "không có header lẫn body → null");
+
+// Backoff: chờ tăng dần, có trần, tôn trọng mức Google yêu cầu, và đo được khi base = 0.
+const backoffSettings = retrySettings({ GEMINI_RETRY_BASE_MS: "500", GEMINI_RETRY_MAX_MS: "2000" } as unknown as NodeJS.ProcessEnv);
+const zeroSettings = retrySettings({ GEMINI_RETRY_BASE_MS: "0" } as unknown as NodeJS.ProcessEnv);
+expect("backoff", retrySettings({} as NodeJS.ProcessEnv).maxAttempts, 3, "mặc định gọi tối đa 3 lần cho mỗi (khoá, model)");
+expect("backoff", retrySettings({} as NodeJS.ProcessEnv).budgetMs, 45000, "quỹ thời gian mặc định 45s — nhỏ hơn maxDuration 60s của Vercel");
+expect("backoff", retrySettings({ GEMINI_MAX_ATTEMPTS: "abc" } as unknown as NodeJS.ProcessEnv).maxAttempts, 3, "biến rác → dùng mặc định");
+expect("backoff", retrySettings({ GEMINI_MAX_ATTEMPTS: "99" } as unknown as NodeJS.ProcessEnv).maxAttempts, 6, "kẹp số lần thử trong giới hạn an toàn");
+ok();
+if (backoffDelayMs({ retryIndex: 1, settings: backoffSettings, capMs: 60000 }) < 500) fail("backoff", "lần chờ đầu phải ≥ GEMINI_RETRY_BASE_MS");
+ok();
+if (backoffDelayMs({ retryIndex: 2, settings: backoffSettings, capMs: 60000 }) < 1000) fail("backoff", "lần chờ sau phải tăng dần (backoff)");
+ok();
+if (backoffDelayMs({ retryIndex: 9, settings: backoffSettings, capMs: 60000 }) > backoffSettings.maxDelayMs + 250) {
+  fail("backoff", "chờ không được vượt trần GEMINI_RETRY_MAX_MS (cộng jitter)");
+}
+expect("backoff", backoffDelayMs({ retryIndex: 3, settings: zeroSettings, capMs: 60000 }), 0, "base = 0 (chế độ test) → không chờ, không jitter");
+expect("backoff", backoffDelayMs({ retryIndex: 1, settings: zeroSettings, retryAfterMs: 3000, capMs: 60000 }), 3000, "Google bảo chờ 3s thì chờ đúng 3s");
+expect("backoff", backoffDelayMs({ retryIndex: 1, settings: zeroSettings, retryAfterMs: 90000, capMs: 5000 }), 5000, "không chờ lâu hơn quỹ thời gian còn lại");
+
+// Cấu hình một khoá + tắt thời gian chờ để bài kiểm chạy nhanh (chỉ đo số lần gọi).
+process.env.GEMINI_API_KEY = KEY;
+delete process.env.GEMINI_API_KEYS;
+process.env.GEMINI_RETRY_BASE_MS = "0";
+process.env.GEMINI_MAX_ATTEMPTS = "3";
+
+// 503 thoáng qua rồi hết: vẫn có câu trả lời Gemini, KHÔNG rơi về bộ luận giải nội bộ.
+const recovered = mockFetch([{ status: 503, body: overloadBody }, { status: 200, body: geminiReply("Trả lời sau khi Google hết quá tải.") }]);
+const recoveredResult = await callChat({ messages: [{ role: "user", content: "hỏi" }], chartReport: "x" });
+expect("thử lại", recoveredResult.status, 200, "503 thoáng qua → máy chủ tự thử lại và có câu trả lời");
+expect("thử lại", recoveredResult.payload.reply, "Trả lời sau khi Google hết quá tải.", "trả đúng nội dung của lượt thử lại");
+expect("thử lại", recoveredResult.payload.attempts, 2, "báo đã gọi Google 2 lần");
+expect("thử lại", recoveredResult.payload.retries, 1, "báo đã tự thử lại 1 lần");
+expect("thử lại", recoveredResult.payload.keyUsed, 1, "quá tải không phải lỗi khoá → không đổi khoá");
+expect("thử lại", recovered.count(), 2, "gọi đúng 2 lần rồi dừng, không nhân số lần gọi");
+ok();
+if (typeof recoveredResult.payload.retryNote !== "string" || !recoveredResult.payload.retryNote.includes("thử lại")) {
+  fail("thử lại", `câu trả lời thành công sau khi thử lại phải kèm ghi chú, nhận ${JSON.stringify(recoveredResult.payload.retryNote)}`);
+}
+
+// 503 dai dẳng: thử đủ số lần rồi báo lỗi rõ ràng + retryable để giao diện hiện nút “Thử lại”.
+const stuck = mockFetch([{ status: 503, body: overloadBody }]);
+const stuckResult = await callChat({ messages: [{ role: "user", content: "hỏi" }], chartReport: "x" });
+expect("thử lại", stuckResult.status, 502, "Google lỗi mãi → 502");
+expect("thử lại", stuckResult.payload.code, "GEMINI_UPSTREAM", "giữ mã lỗi GEMINI_UPSTREAM");
+expect("thử lại", stuckResult.payload.retryable, true, "báo lỗi này thử lại được");
+expect("thử lại", stuckResult.payload.httpStatus, 503, "kèm mã HTTP Google trả về");
+expect("thử lại", stuckResult.payload.upstreamStatus, "UNAVAILABLE", "kèm tên trạng thái UNAVAILABLE");
+expect("thử lại", stuckResult.payload.attempts, 3, "đã gọi đúng GEMINI_MAX_ATTEMPTS lần");
+expect("thử lại", stuckResult.payload.retries, 2, "trong đó 2 lần là thử lại");
+expect("thử lại", stuck.count(), 3, "số lần gọi mạng khớp số lần thử");
+expect("thử lại", stuckResult.payload.keyAttempts, [{ key: 1, code: "GEMINI_UPSTREAM" }], "ghi rõ khoá #1 lỗi gì (không lộ nội dung khoá)");
+ok();
+if (JSON.stringify(stuckResult.payload).includes(KEY)) fail("thử lại", "payload lỗi sau khi thử lại không được chứa nội dung khoá");
+ok();
+if (!String(stuckResult.payload.hint).includes("Thử lại")) fail("thử lại", "gợi ý phải chỉ người dùng chỗ bấm thử lại");
+ok();
+if (!String(stuckResult.payload.error).includes("503")) fail("thử lại", "thông báo phải nêu mã HTTP 503");
+
+// Tắt tự thử lại (GEMINI_MAX_ATTEMPTS=1) → hành vi giống hệt mã cũ: gọi đúng một lần.
+process.env.GEMINI_MAX_ATTEMPTS = "1";
+const noRetry = mockFetch([{ status: 503, body: overloadBody }]);
+const noRetryResult = await callChat({ messages: [{ role: "user", content: "hỏi" }], chartReport: "x" });
+expect("thử lại", noRetry.count(), 1, "GEMINI_MAX_ATTEMPTS=1 → chỉ gọi Google một lần");
+expect("thử lại", noRetryResult.payload.code, "GEMINI_UPSTREAM", "vẫn báo đúng mã lỗi");
+expect("thử lại", noRetryResult.payload.attempts, 1, "attempts = 1");
+expect("thử lại", noRetryResult.payload.retries, 0, "không thử lại lần nào");
+process.env.GEMINI_MAX_ATTEMPTS = "3";
+
+// Rớt kết nối giữa chừng (fetch ném lỗi) cũng được gọi lại.
+const networkRecovered = mockFetch([
+  { status: 0, body: {}, networkError: "fetch failed" },
+  { status: 200, body: geminiReply("Có câu trả lời sau khi kết nối lại.") }
+]);
+const networkResult = await callChat({ messages: [{ role: "user", content: "hỏi" }], chartReport: "x" });
+expect("thử lại", networkResult.status, 200, "rớt mạng thoáng qua → thử lại thành công");
+expect("thử lại", networkResult.payload.reply, "Có câu trả lời sau khi kết nối lại.", "trả nội dung lượt thử lại");
+expect("thử lại", networkRecovered.count(), 2, "gọi lại đúng một lần sau lỗi mạng");
+
+// Mất mạng thật sự: thử đủ lượt rồi báo GEMINI_NETWORK (vẫn retryable).
+const networkDead = mockFetch([{ status: 0, body: {}, networkError: "fetch failed" }]);
+const deadResult = await callChat({ messages: [{ role: "user", content: "hỏi" }], chartReport: "x" });
+expect("thử lại", deadResult.payload.code, "GEMINI_NETWORK", "hết lượt thử → GEMINI_NETWORK");
+expect("thử lại", deadResult.payload.retryable, true, "lỗi mạng cũng là lỗi thử lại được");
+expect("thử lại", networkDead.count(), 3, "thử đủ 3 lần trước khi kết luận");
+
+// 429 mà Google cho chờ ngắn và KHÔNG còn khoá nào khác → chờ rồi gọi lại (nhanh hơn rơi về bộ nội bộ).
+const quotaWait = mockFetch([
+  { status: 429, body: { error: { message: "Quota exceeded for quota metric 'GenerateContent requests' per minute.", status: "RESOURCE_EXHAUSTED" } }, headers: { "retry-after": "0" } },
+  { status: 200, body: geminiReply("Trả lời sau khi qua hạn mức phút.") }
+]);
+const quotaWaitResult = await callChat({ messages: [{ role: "user", content: "hỏi" }], chartReport: "x" });
+expect("quota", quotaWaitResult.status, 200, "429 chờ được → vẫn có câu trả lời Gemini");
+expect("quota", quotaWaitResult.payload.reply, "Trả lời sau khi qua hạn mức phút.", "đúng nội dung sau khi chờ");
+expect("quota", quotaWait.count(), 2, "chờ một nhịp rồi gọi lại, không gọi tràn lan");
+ok();
+if (quotaWaitResult.payload.retries < 1) fail("quota", "phải ghi nhận đã thử lại khi chờ quota");
+
+// 429 mà Google bắt chờ lâu hơn GEMINI_QUOTA_WAIT_MS → không ngồi chờ, nói rõ phải chờ bao lâu.
+const quotaLong = mockFetch([
+  { status: 429, body: { error: { message: "Quota exceeded for quota metric 'GenerateContent requests' per day.", status: "RESOURCE_EXHAUSTED" } }, headers: { "retry-after": "120" } }
+]);
+const quotaLongResult = await callChat({ messages: [{ role: "user", content: "hỏi" }], chartReport: "x" });
+expect("quota", quotaLong.count(), 1, "Google bắt chờ lâu → không gọi lại, trả lời ngay bằng bộ nội bộ");
+expect("quota", quotaLongResult.payload.code, "GEMINI_QUOTA", "mã lỗi quota");
+expect("quota", quotaLongResult.payload.retryable, true, "quota vẫn là lỗi thử lại được (sau khi hết phút/ngày)");
+ok();
+if (!String(quotaLongResult.payload.hint).includes("120")) fail("quota", "gợi ý phải nói Google yêu cầu chờ khoảng 120 giây");
+
+// GEMINI_MODEL_FALLBACKS (opt-in): model chính quá tải dai dẳng → thử model dự phòng.
+process.env.GEMINI_MODEL_FALLBACKS = "gemini-3.5-flash";
+process.env.GEMINI_MAX_ATTEMPTS = "2";
+expect("model dự phòng", resolveModels(), ["gemini-3.6-flash", "gemini-3.5-flash"], "chuỗi model = model chính + model dự phòng khai trong env");
+expect("model dự phòng", buildHealthPayload(process.env).modelFallbacks, ["gemini-3.5-flash"], "/api/health báo model dự phòng");
+const fallbackRun = mockFetch([
+  { status: 503, body: overloadBody },
+  { status: 503, body: overloadBody },
+  { status: 200, body: geminiReply("Trả lời bằng model dự phòng.") }
+]);
+const fallbackResult = await callChat({ messages: [{ role: "user", content: "hỏi" }], chartReport: "x" });
+expect("model dự phòng", fallbackResult.status, 200, "model chính quá tải → đổi sang model dự phòng và trả lời được");
+expect("model dự phòng", fallbackResult.payload.reply, "Trả lời bằng model dự phòng.", "đúng nội dung của model dự phòng");
+expect("model dự phòng", fallbackResult.payload.model, "gemini-3.5-flash", "báo đúng model đã trả lời");
+expect("model dự phòng", fallbackResult.payload.modelsTried, ["gemini-3.6-flash", "gemini-3.5-flash"], "ghi lại cả hai model đã thử");
+expect("model dự phòng", fallbackResult.payload.attempts, 3, "2 lần cho model chính + 1 lần cho model dự phòng");
+expect("model dự phòng", fallbackRun.count(), 3, "số lần gọi mạng khớp số lần thử");
+delete process.env.GEMINI_MODEL_FALLBACKS;
+delete process.env.GEMINI_MAX_ATTEMPTS;
+delete process.env.GEMINI_RETRY_BASE_MS;
+expect("model dự phòng", resolveModels().length, 1, "không khai GEMINI_MODEL_FALLBACKS → vẫn chỉ dùng đúng một model");
+
+// Cấu hình tự thử lại phải lộ ra ở /api/health để người dùng biết app sẽ cố mấy lần.
+expect("health", buildHealthPayload({ GEMINI_API_KEY: KEY } as unknown as NodeJS.ProcessEnv).retry.maxAttempts, 3, "health báo số lần tự thử lại");
+expect(
+  "health",
+  buildHealthPayload({ GEMINI_API_KEY: KEY, GEMINI_BUDGET_MS: "20000" } as unknown as NodeJS.ProcessEnv).retry.budgetMs,
+  20000,
+  "health phản ánh GEMINI_BUDGET_MS do người dùng đặt"
+);
+ok();
+if (buildHealthPayload({ GEMINI_API_KEY: KEY } as unknown as NodeJS.ProcessEnv).retry.budgetMs >= 60000) {
+  fail("health", "quỹ thời gian thử lại phải nhỏ hơn maxDuration 60s của Vercel Function");
+}
 
 /* ── 5. GET /api/health + probe ───────────────────────────────────────── */
 process.env.GEMINI_API_KEY = `  ${KEY}  `;

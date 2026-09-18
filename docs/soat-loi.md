@@ -354,3 +354,135 @@ Kết quả sau khi sửa: `npm test` 13 bộ + `test:wheel` 2.066 phép kiểm 
 tất cả 0 lỗi; `npm run typecheck` và `npm run build` sạch; ảnh kiểm bằng mắt ở
 `.cache/shots/wheel-*.png` (900px và 360px) cho thấy vòng tròn trọn vẹn, không phần tử nào chạm
 lưới vùng an toàn.
+
+---
+
+## 11. Lượt soát 18/09/2026 — “Máy chủ Google tạm thời lỗi (GEMINI_UPSTREAM)” làm mất câu trả lời của mô hình lớn
+
+Ngày soát: 18/09/2026 · phạm vi: `api/_handler.js`, `src/lib/ai.ts`, `src/App.tsx`,
+`src/components/ChatPanel.tsx`, `scripts/check-ai.mjs`, `.env.example` · nhánh `arena/01a0b487-chart`.
+
+Lỗi người dùng báo (nguyên văn dòng trạng thái của giao diện), kèm kết luận của người dùng là “lỗi key api”:
+
+> Mô hình lớn chưa sẵn sàng (Máy chủ Google tạm thời lỗi. Đã thử 1 khoá: khoá #1 (GEMINI_UPSTREAM).
+> Thử lại sau ít phút.) — đã trả lời bằng bộ luận giải nội bộ chạy trong trình duyệt.
+
+### 11.1 Chẩn đoán: đây KHÔNG phải lỗi khoá API
+
+`GEMINI_UPSTREAM` chỉ sinh ra ở đúng một nhánh của `explainGeminiError()`: `status >= 500`. Lỗi thuộc về
+khoá có mã riêng, không thể lẫn sang 5xx:
+
+| Mã lỗi | HTTP | Ý nghĩa | Có phải lỗi khoá? |
+| --- | --- | --- | --- |
+| `GEMINI_BAD_KEY` | 400 | Google từ chối khoá (dán sai, thiếu ký tự) | có |
+| `GEMINI_API_DISABLED` | 403 | Project chưa bật Generative Language API | có |
+| `GEMINI_KEY_RESTRICTED` | 403 | Khoá bị giới hạn referrer/IP nên server không dùng được | có |
+| `GEMINI_QUOTA` | 429 | Hết hạn mức theo phút/ngày của khoá (khoá vẫn hợp lệ) | một phần |
+| `GEMINI_MODEL_NOT_FOUND` | 404 | Model không tồn tại / chưa mở cho project của khoá | có |
+| **`GEMINI_UPSTREAM`** | **5xx** | **Máy chủ Google lỗi (hay gặp: `503 UNAVAILABLE — The model is overloaded`)** | **không** |
+| `GEMINI_NETWORK` | 0 | Máy chủ không kết nối được tới Google | không |
+
+Nghĩa là Google **đã nhận khoá**, đã bắt đầu sinh nội dung, rồi chính máy chủ của họ lỗi — tình huống rất
+thường gặp với khoá free-tier vào giờ cao điểm và chỉ kéo dài vài giây.
+
+### 11.2 Bốn khuyết điểm thật sự của mã cũ
+
+1. **Một cú 5xx thoáng qua làm mất luôn câu trả lời của mô hình lớn.** `generateReply()` gọi Google đúng
+   MỘT lần cho mỗi (khoá, model); không có bất kỳ cơ chế thử lại nào. `GEMINI_UPSTREAM` nằm trong
+   `isKeyRotationFailure()` nên *có* xoay khoá — nhưng người dùng chỉ khai 1 khoá thì không còn khoá nào
+   để xoay → thất bại ngay lập tức, rơi về bộ luận giải nội bộ.
+2. **Thông báo đổ oan cho khoá.** `src/lib/ai.ts` ghép cụm “Đã thử N khoá: khoá #1 (MÃ)” cho MỌI mã lỗi,
+   kể cả lỗi của máy chủ Google. Người đọc thấy chữ “khoá” + “GEMINI_…” thì kết luận “lỗi key api” và đi
+   tạo khoá mới — việc hoàn toàn vô ích với 503.
+3. **Không có cách thử lại.** Giao diện chỉ có nút “Gửi câu hỏi”: muốn hỏi lại phải gõ lại cả câu, trong
+   khi câu trả lời nội bộ đã nằm trong hội thoại (và đã lưu vào `localStorage`).
+4. **Không chẩn đoán được từ xa.** Thông báo không kèm mã HTTP lẫn số lần đã gọi; `npm run check:ai` chỉ
+   gọi `ListModels` (không tốn quota sinh nội dung) nên vẫn xanh rờn trong lúc `generateContent` đang 503 —
+   đúng tình huống khiến người dùng không biết tin vào đâu.
+
+### 11.3 Đã sửa
+
+**`api/_handler.js` (máy chủ)**
+- Thêm `callGeminiWithRetry()`: tự gọi lại khi gặp lỗi **tạm thời** (`GEMINI_UPSTREAM` 5xx, `GEMINI_NETWORK`),
+  chờ tăng dần `GEMINI_RETRY_BASE_MS × 2ⁿ` cộng jitter ≤ 250 ms, trần `GEMINI_RETRY_MAX_MS`, tối đa
+  `GEMINI_MAX_ATTEMPTS` lần (mặc định 3) cho **mỗi** cặp (khoá, model).
+- Trần thời gian cứng: `deadline = now + GEMINI_BUDGET_MS` (mặc định 45 s, nhỏ hơn `maxDuration: 60` trong
+  `vercel.json`); mỗi lượt gọi chỉ được dùng phần quỹ còn lại (`min(TIMEOUT_MS, remaining)`), và không bắt
+  đầu lượt mới nếu còn dưới `MIN_ATTEMPT_MS` = 4 s → function luôn kịp trả lời, không bị Vercel giết giữa chừng.
+- `parseRetryDelayMs()` đọc đúng yêu cầu chờ của Google: header `Retry-After` (giây hoặc HTTP-date) và
+  `error.details[].retryDelay` dạng `"12.5s"` (RetryInfo của `google.rpc`).
+- 429 xử lý riêng: **còn** khoá khác thì xoay ngay (nhanh hơn ngồi chờ), **hết** khoá rồi mới chờ — và chỉ
+  chờ khi Google báo chờ không lâu hơn `GEMINI_QUOTA_WAIT_MS` (mặc định 10 s; `0` = không bao giờ chờ).
+- `explainGeminiError()` trả thêm `retryable`, `httpStatus`, `upstreamStatus`, `attempts`; thông báo 5xx nói
+  thẳng “không phải lỗi khoá của bạn”, nêu `HTTP 503 · UNAVAILABLE`, và gợi ý bấm “Thử lại với Gemini”.
+- `generateReply()` trả thêm `attempts` / `retries` / `retryNote`; `/api/ai-chat` chuyển lên client
+  (502 kèm `retryable` + `httpStatus` + `attempts`, 200 kèm `retryNote` khi phải thử lại mới thành công).
+- Thêm `GEMINI_MODEL_FALLBACKS` (**opt-in**, mặc định rỗng nên app vẫn chỉ dùng đúng một model như thiết kế
+  cũ): khi model chính 5xx dai dẳng hoặc 404 thì thử model kế tiếp trước khi kết luận.
+- `/api/health` in thêm khối `retry` (maxAttempts / các mốc chờ / budgetMs) để người dùng thấy app sẽ cố mấy lần.
+
+**`src/lib/ai.ts` (trình duyệt)**
+- Thêm kiểu `AskFailure` (kèm `retryable`, `httpStatus`, `attempts`) và `isRetryableCode()`.
+- Chỉ nói “Đã thử N khoá: …” khi trong `keyAttempts` **thật sự** có mã thuộc về khoá
+  (`GEMINI_BAD_KEY` / `GEMINI_API_DISABLED` / `GEMINI_KEY_RESTRICTED` / `GEMINI_QUOTA` / `GEMINI_MODEL_NOT_FOUND`);
+  với 5xx thì nói “Đã gọi Google N lần bằng khoá #1 — lỗi thuộc về máy chủ Google, không phải lỗi khoá.”
+- Đọc khối `retry` từ `/api/health` (payload máy chủ bản cũ không có → `null`, giao diện không vỡ).
+
+**`src/App.tsx`**
+- `ask(text, { retry })`: bấm thử lại thì **không** thêm lại câu hỏi vào hội thoại, và khi Gemini trả lời được
+  thì **thay** câu trả lời nội bộ ở cuối hội thoại bằng câu trả lời Gemini (không nhân đôi, không phải gõ lại).
+- Tiêu đề trạng thái phân biệt rõ “Gemini tạm thời gián đoạn (không phải lỗi khoá API)” / “Máy chủ chưa có
+  khoá Gemini” / “Gemini đang bị giới hạn số yêu cầu”; chỉ lỗi `retryable` mới đặt `pendingRetry`.
+
+**`src/components/ChatPanel.tsx`**
+- Nút **“⟳ Thử lại với Gemini”** (chỉ hiện khi `canRetry`; đổi nhãn “Đang gọi lại Gemini…” khi đang chờ).
+- Dòng trạng thái có tông màu (`warn` / `ok` / `info`) thay vì luôn vàng.
+- Hộp thông tin bên trái nói rõ máy chủ tự thử lại tối đa mấy lần, trong bao nhiêu giây, và nhấn mạnh lỗi
+  kiểu này “không phải lỗi khoá API”. Các prop mới đều **tuỳ chọn** nên nơi gọi cũ không phải đổi.
+
+**`scripts/check-ai.mjs`**
+- Thêm cờ `--ask` (`npm run check:ai -- --ask`): gọi thật `generateContent` qua chính `generateReply()` mà
+  trình duyệt dùng, in số lần gọi / số lần thử lại / thời gian, rồi kết luận “lỗi TẠM THỜI phía Google
+  (không phải lỗi khoá)” hay “lỗi KHÔNG thuộc nhóm tạm thời”. Đây là cách 30 giây để trả lời câu hỏi
+  “lỗi này do khoá của mình hay do Google?”.
+- In thêm cấu hình tự thử lại và model dự phòng ở khối “Cấu hình”.
+- Probe hỏng không còn `process.exit(1)` ngay: vẫn in hết gợi ý và vẫn chạy `--ask`
+  (ListModels hỏng vì mạng/5xx không có nghĩa là khoá sai).
+
+### 11.4 Lỗi mới phát hiện nhờ viết test (đã sửa luôn trong lượt này)
+
+Nhánh **lỗi mạng** (fetch ném exception) của `callGeminiWithRetry()` lúc mới viết chỉ kiểm quỹ thời gian mà
+quên kiểm trần `GEMINI_MAX_ATTEMPTS`. Test giả lập “mất mạng hoàn toàn” đo được **1025 lời gọi** trong ~1,4 s
+thay vì 3: trên Vercel, một đợt rớt mạng sẽ khiến function bắn hàng nghìn yêu cầu tới Google suốt 45 giây
+rồi mới chịu trả lỗi. Đã thêm `attempts >= settings.maxAttempts` vào **cả hai** nhánh (5xx và lỗi mạng),
+và giữ phép kiểm `networkDead.count() === 3` trong `tests/ai-api.check.ts` để lỗi này không quay lại.
+
+### 11.5 Bất biến mới được khoá bằng test
+
+| Bất biến | Test |
+| --- | --- |
+| 503 thoáng qua → vẫn có câu trả lời Gemini, không đổi khoá, không rơi về bộ nội bộ | `npm run test:ai` |
+| 503 dai dẳng → gọi đúng `GEMINI_MAX_ATTEMPTS` lần, trả `retryable` + `httpStatus: 503` + `upstreamStatus` | `test:ai` |
+| `GEMINI_MAX_ATTEMPTS=1` → hành vi giống hệt mã cũ (gọi đúng một lần) | `test:ai` |
+| Rớt mạng → thử lại; mất mạng hoàn toàn → **đúng 3** lời gọi, không gọi vô hạn | `test:ai` |
+| 429 + `Retry-After` ngắn + hết khoá → chờ rồi gọi lại; `Retry-After` dài → không ngồi chờ, nói rõ phải chờ bao lâu | `test:ai` |
+| 429 khi **còn** khoá khác → xoay khoá ngay, không chờ (test cũ vẫn xanh) | `test:ai` |
+| Backoff tăng dần, có trần, tôn trọng `Retry-After`, không vượt quỹ thời gian còn lại | `test:ai` |
+| `GEMINI_BUDGET_MS` mặc định 45 s < `maxDuration` 60 s của Vercel Function | `test:ai` |
+| `GEMINI_MODEL_FALLBACKS`: model chính 5xx dai dẳng → thử model dự phòng; không khai → vẫn đúng 1 model | `test:ai` |
+| Payload (thành công lẫn lỗi) sau khi thử lại không bao giờ chứa nội dung khoá | `test:ai` |
+| Lỗi 5xx lên giao diện: có `retryable`, nói “không phải lỗi khoá”, **không** nói “Đã thử 1 khoá” | `npm run test:health-ui` |
+| Lỗi thuộc về khoá vẫn liệt kê từng khoá đã thử (hành vi cũ giữ nguyên) | `test:health-ui` |
+| `ChatPanel` hiện nút “Thử lại với Gemini” khi `canRetry`, không hiện khi lỗi khoá; prop mới là tuỳ chọn | `test:health-ui` |
+
+Kết quả sau khi sửa: `npm run test:ai` **190** phép kiểm (từ 113), `npm run test:health-ui` **61** phép kiểm
+(từ 38), toàn bộ `npm test` 13 bộ 0 lỗi, `npm run typecheck` sạch.
+
+### 11.6 Người dùng cần làm gì sau khi nhận bản sửa này
+
+1. **Deploy lại** (Vercel không tự lấy mã mới): `git push` rồi redeploy, hoặc `npx vercel --prod`.
+2. Không cần đổi khoá API — `GEMINI_UPSTREAM` không phải lỗi khoá. Muốn chắc: `npm run check:ai -- --ask`.
+3. Muốn gần như không bao giờ bị rơi về bộ nội bộ: khai 2–3 khoá
+   (`GEMINI_API_KEYS=khoá1,khoá2,khoá3`) và/hoặc `GEMINI_MODEL_FALLBACKS=gemini-3.5-flash`, rồi deploy lại.
+4. Muốn app trả lời nhanh hơn bằng bộ nội bộ thay vì chờ Google: đặt `GEMINI_MAX_ATTEMPTS=1`
+   (hành vi cũ) hoặc hạ `GEMINI_BUDGET_MS`.
