@@ -26,12 +26,15 @@ Web app tiếng Việt: **lập bản đồ sao (natal chart) → ngắm bầu t
 
    - Hai lớp: gọi **Google Gemini** qua `/api/ai-chat` (Vercel Serverless hoặc máy chủ dev) nếu máy chủ có khoá, nếu không thì dùng **bộ luận giải nội bộ** chạy hoàn toàn trên trình duyệt (đọc đúng vị trí hành tinh, nhà, góc chiếu, sao cố định, transit, pha Mặt Trăng, giờ mọc/lặn). Khoá API chỉ nằm ở biến môi trường máy chủ, không bao giờ nhúng vào bundle.
    - **Nhiều khoá + tự xoay khoá**: khai `GEMINI_API_KEYS=khoá1,khoá2,…` (hoặc `GEMINI_API_KEY` + `GEMINI_API_KEY_2…9`, tối đa 9 khoá). Gặp lỗi **thuộc về khoá** (khoá sai, khoá bị giới hạn referrer/IP, hết quota, model chưa mở cho project của khoá, Google lỗi 5xx) thì máy chủ tự thử khoá kế tiếp — vẫn chỉ dùng đúng model `gemini-3.6-flash`; lỗi không thuộc về khoá (bộ lọc an toàn, quá thời gian) thì không xoay để khỏi nhân số lần gọi. Câu trả lời ghi rõ đang dùng khoá thứ mấy; mọi phản hồi (kể cả `/api/health`) **không bao giờ chứa nội dung khoá** — chỉ số thứ tự, độ dài và 4 ký tự cuối.
-   - Nhận diện ý định câu hỏi (tính cách, sự nghiệp, tình cảm, tài chính, sức khỏe, gia đình, học tập, di chuyển, vận hạn, tương hợp, sao cố định, bầu trời, giải thích khái niệm…), trả lời có dẫn chứng dữ liệu và phần gợi ý hành động kèm khuyến cáo.
+   - **Tự thử lại khi Google chập chờn**: lỗi 5xx (hay gặp nhất là `503 The model is overloaded`) và rớt kết nối là lỗi **của máy chủ Google, không phải của khoá API**. Máy chủ tự gọi lại tối đa `GEMINI_MAX_ATTEMPTS` lần (mặc định 3) với thời gian chờ tăng dần kèm jitter, tôn trọng `Retry-After` / `RetryInfo.retryDelay` của Google, và luôn dừng trước `GEMINI_BUDGET_MS` (mặc định 45 giây) để kịp trả lời trong `maxDuration` 60 giây của Vercel Function. Hết lượt mới xoay khoá, rồi mới đổi model dự phòng (nếu có khai `GEMINI_MODEL_FALLBACKS`). Phản hồi lỗi kèm `retryable` + `httpStatus` nên giao diện hiện nút **“⟳ Thử lại với Gemini”** và nói rõ “không phải lỗi khoá API”; khi thử lại thành công, câu trả lời nội bộ bị **thay** bằng câu trả lời Gemini (không nhân đôi).
+   - 429 (hết hạn mức theo phút) được xử lý riêng: còn khoá khác thì **xoay ngay** (nhanh hơn chờ), hết khoá rồi mới ngồi chờ nếu Google báo chờ không lâu hơn `GEMINI_QUOTA_WAIT_MS` (mặc định 10 giây).
+   - Nhận diện ý định câu hỏi (tính cách, sự nghiệp, tình cảm, tài chính, sức khỏe, gia đình, học tập, di chuyển, vận hạn, tương hợp, sao cố định, bầu trời, giải thích khái niệm…), trả lời có dẫn chứng dữ liệu và phần gợi ý hành động kèm khuyến cáo. Bộ nội bộ luôn nêu **hệ nhà và hệ hoàng đạo** đang dùng, mô tả đúng vai trò Cung Mọc theo từng hệ nhà (Whole Sign / hệ lấy AC làm cusp nhà 1 / `equalMC`), và với Bọ Cạp - Bảo Bình - Song Ngư thì nêu **chủ tinh của cả hai phái** (hiện đại: Diêm Vương / Thiên Vương / Hải Vương · truyền thống như Hy Lạp cổ & Vệ Đà: Hỏa Tinh / Thổ Tinh / Mộc Tinh).
+   - **Dữ liệu gửi Gemini** (báo cáo văn bản do chính engine của app sinh ra, không có thông tin tài khoản): câu hỏi của bạn đặt **ngay đầu** báo cáo; nơi sinh + toạ độ + **giờ sinh địa phương** và mốc UTC; **hệ hoàng đạo và hệ nhà đang dùng** (kèm ayanamsa nếu là sidereal); AC/MC/IC/DC, cusp 12 nhà, 10 hành tinh, 10 điểm ảo/thiên thể thật (Bắc - Nam giao điểm, Lilith, Chiron, Ceres, Pallas, Juno, Vesta, Eris, Sedna) đã quy về đúng hệ quy chiếu; cân bằng nguyên tố - tính chất, pha Trăng lúc sinh; **chủ tinh bản đồ theo Cung Mọc** (Bọ Cạp/Bảo Bình/Song Ngư nêu **cả hai phái** hiện đại và truyền thống kèm vị trí thật, để mô hình không tự chọn một phái rồi nói như thể đó là đáp án duy nhất); góc chiếu xếp theo orb chặt dần; transit hiện tại (orb 4°); tối đa 6 sao cố định gần nhất; **bầu trời thật lúc hỏi** (mặt trời/mặt trăng mọc lặn, độ sáng Trăng, hành tinh đang nổi trên chân trời kèm chòm sao); và toàn bộ phần biến thể (Vệ Đà, Tứ Trụ, Tử Vi, Human Design, dự báo…). Báo cáo bị cắt ở `REPORT_CHAR_LIMIT` 16.000 ký tự (payload thật ~11-12 nghìn) và `SYSTEM_PROMPT` buộc mô hình chỉ luận từ số liệu có trong báo cáo, tự nêu hệ quy chiếu đang dùng, phân biệt ba mốc thời gian (sinh / hỏi / suy ra), không hứa hão khi trời không thấy được hành tinh, và không tư vấn y tế - pháp lý - đầu tư.
 
 4. **Biến thể bản đồ sao (mục 3b)**
    - **Hệ nhà**: bảng 12 cusp cho từng hệ, so sánh 12 hệ cạnh nhau (ô sáng là nhà đổi so với hệ đang chọn), Vertex/East Point.
    - **Hệ hoàng đạo**: cung Mặt Trời - Mặt Trăng - Cung Mọc theo cả 7 hệ, ayanamsa hiển thị tới 4 chữ số thập phân.
-   - **Điểm ảo**: 21 điểm (node, Lilith, tiểu hành tinh, TNO, hành tinh giả định) kèm ý nghĩa và nhà.
+   - **Điểm ảo**: 21 điểm (node, Lilith, tiểu hành tinh, TNO, hành tinh giả định) kèm ý nghĩa và nhà. Kinh độ hiển thị theo **đúng hệ hoàng đạo đang chọn** (sidereal thì đã trừ ayanamsa) nên khớp với bản đồ, cusp và báo cáo gửi AI.
    - **Hình mẫu & hình dạng**: Stellium, Grand Trine, T-Square, Grand Cross, Yod, Kite, Mystic Rectangle, Thor's Hammer; 7 hình dạng bản đồ (Bó/Bát/Xô/Đầu máy/Bập bênh/Toả/Nan hoa) và ưu thế bán cầu.
    - **Hy Lạp cổ**: phái bản đồ (ngày/đêm), 8 Lots (Fortune, Spirit, Eros, Necessity, Courage, Victory, Nemesis, Basis), phẩm chất hành tinh (nhà/vượng/tam hợp/giới hạn/decan), nhà "niềm vui", hành tinh góc.
    - **Dự báo**: hồi quy Mặt Trời (tìm lần kế tiếp), hồi quy Mặt Trăng, tiến triển thứ cấp, Solar Arc, bản đồ Rồng (draconic), Nhật tâm, 5 bản đồ Hài hoà (H4/H5/H7/H9/H16).
@@ -57,7 +60,9 @@ Các engine được kiểm chứng tự động với **Swiss Ephemeris** (`npm
 | Bản đồ sao (hiển thị) | 14.950 phép kiểm: khúc xạ/hấp thụ, phép chiếu & nghịch đảo, phóng to quanh con trỏ, **quy đổi lăn chuột & giới hạn dịch chuyển khung**, dựng khung 4 vĩ độ, Ngân Hà, pha Trăng, tra cứu | 0 lỗi (sai số nghịch đảo < 0,05°) |
 | Bầu trời 3D | 1.510 phép kiểm: hình học camera phối cảnh (chân trời thẳng, nghịch đảo < 1e-6 px), zoom quanh con trỏ nghiệm kín, quay ΔLST khớp khung dựng lại ≤ vài phần triệu độ, cắt mặt phẳng gần, lưới mặt đất, vệt sao, pha hành tinh theo tam giác khoảng cách, lưới xích đạo; kèm **vẽ thật trên canvas** và so sánh điểm ảnh (tất định từng byte) | 0 lỗi |
 | Vòng bản đồ sao natal | 2.066 phép kiểm: render thật `ChartWheel` rồi soi lại SVG (hộp bao từng phần tử kể cả nửa nét và chữ), 4 lá số thật, ca AC ở đỉnh vòng, vĩ độ 78°, 10 hành tinh dồn một độ, dữ liệu NaN/Infinity — kèm **đối chứng**: hình học cũ phải trượt đúng phép kiểm | 0 lỗi (mọi nét vẽ nằm trong vùng đệm 16/600 ≈ 2,7%) |
-| Lớp AI phía trình duyệt | 38 phép kiểm: đọc `/api/health` (một khoá, nhiều khoá, chưa có khoá, route trả HTML), xoay khoá khi trả lời, thông báo khi mọi khoá hỏng, và render `ChatPanel` để chắc giao diện hiện đúng số khoá / nguồn khai báo / ghi chú xoay khoá | 0 lỗi |
+| Lớp API Gemini (máy chủ) | 202 phép kiểm: chuẩn hoá khoá, nhiều khoá & thứ tự ưu tiên, mã lỗi Google, xoay khoá, **tự thử lại khi Google 5xx / rớt mạng / 429**, trần số lần thử, backoff + `Retry-After`, model dự phòng, `/api/health` + probe, **nhận diện khoá dán sai theo cấu trúc thay vì tiền tố `AIza`**, và ràng buộc không lộ nội dung khoá | 0 lỗi |
+| Dữ liệu gửi AI & cách luận | 1.158 phép kiểm: báo cáo **tự khai đúng** hệ nhà × hệ hoàng đạo (quét đủ 12 × 7 = 84 cặp, không còn nhãn ghi cứng), khai ayanamsa, ghi chú đổi hệ nhà ngoài vòng cực, câu hỏi nằm đầu và sống sót sau trần ký tự, khối bầu trời thật (có thì đưa, không có thì không bịa), điểm ảo quy về đúng hệ, đủ 12 cusp/giới tính/giờ sinh địa phương/sao cố định, góc chiếu xếp theo orb, `SYSTEM_PROMPT` dặn đúng những gì dữ liệu cho phép, bộ luận giải nội bộ nêu đúng biến môi trường + hệ quy chiếu, **chủ tinh hai phái** (bảng truyền thống khớp `DOMICILE` của mục Hy Lạp cổ, ba cung Bọ Cạp/Bảo Bình/Song Ngư nêu cả hai), và **không còn câu ghi cứng** “AC quyết định hệ thống nhà Whole Sign” (Placidus/equalMC/Whole Sign mỗi hệ một mô tả đúng) | 0 lỗi |
+| Lớp AI phía trình duyệt | 61 phép kiểm: đọc `/api/health` (một khoá, nhiều khoá, chưa có khoá, route trả HTML, cấu hình tự thử lại), xoay khoá khi trả lời, thông báo khi mọi khoá hỏng, **phân biệt lỗi Google với lỗi khoá**, và render `ChatPanel` để chắc giao diện hiện đúng số khoá / nguồn khai báo / ghi chú xoay khoá / nút “Thử lại với Gemini” | 0 lỗi |
 | Giao diện ngắm trời 3D | 1 lần chạy jsdom: gắn Sky3D, vòng rAF vẽ thật qua context giả, mô phỏng lăn chuột (không cuộn trang + trường nhìn đổi), kéo đổi hướng, phím cách tua, bấm chọn thiên thể → Hỏi AI → bỏ chọn, bật/tắt lớp, đổi ngày giờ, về giờ thực, toàn màn hình | 0 ngoại lệ, 0 console.error |
 
 ## Chạy dự án
@@ -73,8 +78,8 @@ npm test           # toàn bộ kiểm chứng số liệu + bản đồ sao + g
 npm run test:wheel       # vòng bản đồ sao natal không bị cắt lẹm (render SVG rồi soi hộp bao)
 npm run shot:wheel       # render vòng bản đồ sao ra PNG trong .cache/shots/ để kiểm bằng mắt
 npm run test:health-ui   # lớp AI phía trình duyệt đọc đúng payload nhiều khoá
-npm run check:ai         # chẩn đoán từng khoá Gemini bằng dòng lệnh
-npm run check:ai   # chẩn đoán cấu hình Gemini (khoá có dùng được không, model nào đang mở)
+npm run check:ai         # chẩn đoán cấu hình Gemini (khoá có dùng được không, model nào đang mở)
+npm run check:ai -- --ask # gọi thử generateContent như trình duyệt (phân biệt khoá hỏng với Google 5xx)
 npm run test:sky   # mô hình hiển thị bầu trời (khúc xạ, phép chiếu, Ngân Hà, pha Trăng, tra cứu)
 npm run test:ui3d  # chạy giao diện ngắm trời 3D trong jsdom (lăn chuột/kéo/chọn thiên thể/đổi giờ)
 npm run test:sky3d # hình học + bộ vẽ của khung ngắm 3D (kèm vẽ thật trên canvas Node)
@@ -86,7 +91,15 @@ npm run shot:sky3d # render 16 tình huống 3D ra PNG trong .cache/shots/
 | Biến | Mặc định | Ý nghĩa |
 | --- | --- | --- |
 | `GEMINI_API_KEY` | — | Bật lớp Gemini cho phần hỏi đáp (tạo miễn phí tại Google AI Studio) |
-| `GEMINI_MODEL` | `gemini-3.6-flash` | Tên mô hình Gemini — app chỉ dùng đúng một model này (không còn chuỗi model dự phòng) |
+| `GEMINI_API_KEYS` | — | Nhiều khoá ngăn bằng dấu phẩy/xuống dòng — máy chủ tự xoay khi một khoá lỗi/hết quota |
+| `GEMINI_API_KEY_2…9` | — | Cách khai thứ hai: từng biến cho mỗi khoá dự phòng |
+| `GEMINI_MODEL` | `gemini-3.6-flash` | Tên mô hình Gemini — mặc định app chỉ dùng đúng một model này |
+| `GEMINI_MODEL_FALLBACKS` | — (không có) | Model dự phòng, ngăn bằng dấu phẩy; chỉ dùng khi model chính bị Google báo quá tải/không mở cho khoá |
+| `GEMINI_MAX_ATTEMPTS` | `3` | Số lần gọi Google tối đa cho **mỗi** (khoá, model) khi gặp lỗi tạm thời 5xx / rớt mạng (đặt `1` để tắt tự thử lại) |
+| `GEMINI_RETRY_BASE_MS` | `800` | Thời gian chờ trước lần thử thứ hai; tăng gấp đôi mỗi lần, cộng jitter ≤ 250 ms |
+| `GEMINI_RETRY_MAX_MS` | `6000` | Trần của mỗi khoảng chờ |
+| `GEMINI_BUDGET_MS` | `45000` | Tổng quỹ thời gian cho cả chuỗi thử — phải nhỏ hơn `maxDuration` 60 s của Vercel Function |
+| `GEMINI_QUOTA_WAIT_MS` | `10000` | Chỉ ngồi chờ 429 khi Google báo chờ không lâu hơn mức này (và đã hết khoá để xoay); `0` = không bao giờ chờ |
 | `PORT` | `5173` | Cổng máy chủ dev/preview |
 
 Không có `GEMINI_API_KEY` thì app **vẫn hoạt động đầy đủ**: API trả mã `NO_API_KEY` và giao diện tự chuyển sang bộ luận giải nội bộ.
@@ -98,9 +111,18 @@ echo 'GEMINI_API_KEY=dán_khoá_của_bạn' > .env
 npm run check:ai   # chẩn đoán: khoá có dùng được không, model nào đang mở
 ```
 
-`npm run check:ai` gọi thẳng Google để biết khoá **thực sự** hoạt động, in ra model nên đặt, và
-phân biệt rõ ba tình huống rất khác nhau: máy chủ không nhận được biến, khoá bị Google từ chối,
-hay tên model không tồn tại.
+`npm run check:ai` gọi thẳng Google (ListModels — không tốn quota sinh nội dung) để biết khoá
+**thực sự** hoạt động, in ra model nên đặt, số lần máy chủ sẽ tự thử lại, và phân biệt rõ các tình
+huống rất khác nhau: máy chủ không nhận được biến, khoá bị Google từ chối, hay tên model không tồn tại.
+
+Thêm `--ask` để đi hết đường của trình duyệt (gọi thật `generateContent`, kèm cơ chế tự thử lại):
+
+```bash
+npm run check:ai -- --ask
+```
+
+Lệnh này là cách nhanh nhất để trả lời câu hỏi “lỗi này là do khoá của mình hay do Google?” —
+ListModels xanh nhưng `generateContent` đỏ 503 nghĩa là khoá tốt và Google đang quá tải.
 
 ## Cấu trúc
 
@@ -178,6 +200,37 @@ Trang web gọi `GET /api/health` để biết máy chủ có khoá hay chưa. N
 
 Khi Gemini trả lỗi, giao diện hiện nguyên văn lý do kèm gợi ý khắc phục, ví dụ:
 `Mô hình lớn chưa sẵn sàng (GEMINI_API_KEY không hợp lệ (Google từ chối khoá). Dán lại khoá mới từ … )`.
+
+### App báo “Máy chủ Google tạm thời lỗi … (GEMINI_UPSTREAM)” — có phải lỗi khoá?
+
+**Không.** Mã `GEMINI_UPSTREAM` chỉ sinh ra khi Google trả **5xx** — thường gặp nhất là
+`503 UNAVAILABLE: The model is overloaded. Please try again later.`, tức là phía máy chủ Google
+đang quá tải vài giây. Lỗi khoá API có mã riêng và nói rõ ngay trong thông báo:
+`GEMINI_BAD_KEY` (400), `GEMINI_API_DISABLED` / `GEMINI_KEY_RESTRICTED` (403), `GEMINI_QUOTA` (429),
+`GEMINI_MODEL_NOT_FOUND` (404). Đừng đi tạo khoá mới khi thấy `GEMINI_UPSTREAM`.
+
+Trước đây một cú 503 thoáng qua cũng đủ làm app rơi thẳng về bộ luận giải nội bộ, và câu
+“Đã thử 1 khoá: khoá #1 (GEMINI_UPSTREAM)” khiến người đọc tưởng khoá hỏng. Nay máy chủ:
+
+1. **Tự thử lại** tối đa `GEMINI_MAX_ATTEMPTS` lần (mặc định 3) với chờ tăng dần 0,8 s → 1,6 s → …
+   (cộng jitter, trần `GEMINI_RETRY_MAX_MS`), tôn trọng `Retry-After` của Google, và không bao giờ
+   vượt `GEMINI_BUDGET_MS` (mặc định 45 s < `maxDuration` 60 s của Vercel Function).
+2. Hết lượt mới **xoay khoá** (nếu có nhiều khoá), rồi mới đổi **model dự phòng**
+   (`GEMINI_MODEL_FALLBACKS`, mặc định không có).
+3. Trả về `retryable: true` + `httpStatus` + `attempts` để giao diện hiện nút
+   **“⟳ Thử lại với Gemini”**; bấm nút sẽ gửi lại đúng câu hỏi đó và **thay** câu trả lời nội bộ
+   bằng câu trả lời Gemini nếu lần này Google chịu trả lời.
+
+Kiểm tra trong 30 giây:
+
+```bash
+npm run check:ai -- --ask     # gọi thật generateContent: in số lần thử, mã lỗi, và kết luận
+```
+
+hoặc mở `https://<tên-miền>/api/health?probe=1`. Nếu `probe.ok = true` mà app vẫn thỉnh thoảng
+báo `GEMINI_UPSTREAM` thì đúng là Google chập chờn: chờ 1–2 phút rồi bấm “Thử lại với Gemini”.
+Muốn giảm xác suất bị rơi về bộ nội bộ, thêm 2–3 khoá (`GEMINI_API_KEYS=khoá1,khoá2`) và/hoặc
+khai `GEMINI_MODEL_FALLBACKS=gemini-3.5-flash` để có đường lui khi một model quá tải.
 
 ### `npm warn allow-scripts … esbuild`
 

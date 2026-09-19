@@ -11,7 +11,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import aiChatHandler, { buildApiKeyList, buildHealthPayload, healthHandler } from "../api/_handler.js";
+import aiChatHandler, { buildApiKeyList, buildHealthPayload, healthHandler, looksLikePastedWrong } from "../api/_handler.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -137,13 +137,13 @@ server.listen(port, host, () => {
   const mode = isProd ? "production (dist/)" : "development (Vite HMR)";
   const health = buildHealthPayload();
   const keys = buildApiKeyList();
-  const suspicious = keys.filter((value) => !value.startsWith("AIza")).length;
+  const suspicious = keys.filter((value) => looksLikePastedWrong(value)).length;
 
   console.log(`✦ Astral Chart VN đang chạy: http://${host}:${port} — ${mode}`);
   console.log(
     health.llm === "gemini"
       ? `  Trợ lý AI: Gemini (${health.model}) — ${keys.length} khoá${keys.length > 1 ? " (tự xoay khi hết quota/khoá lỗi)" : ""}${
-          suspicious ? `, ⚠ ${suspicious} khoá không giống khoá Google (thường bắt đầu bằng AIza)` : ""
+          suspicious ? `, ⚠ ${suspicious} khoá có dấu hiệu dán sai (quá ngắn hoặc còn ký tự lạ)` : ""
         }`
       : "  Trợ lý AI: bộ luận giải nội bộ (chưa có GEMINI_API_KEY / GEMINI_API_KEYS)"
   );

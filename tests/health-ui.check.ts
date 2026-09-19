@@ -12,7 +12,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ChatPanel from "../src/components/ChatPanel.tsx";
-import { askServerAi, checkServerHealth, isLocalFallback, type ServerHealth } from "../src/lib/ai.ts";
+import { askServerAi, checkServerHealth, isLocalFallback, isRetryableCode, type ServerHealth } from "../src/lib/ai.ts";
 
 const globalWindow = globalThis as unknown as { window?: { setTimeout: typeof setTimeout; clearTimeout: typeof clearTimeout } };
 globalWindow.window = { setTimeout, clearTimeout };
@@ -214,6 +214,7 @@ const mockFetch = (status: number, body: unknown) => {
     keysUsable: 2,
     keySources: ["GEMINI_API_KEYS", "GEMINI_API_KEY_2"],
     keyRotation: true,
+    retry: { maxAttempts: 3, budgetMs: 45000 },
     probeKeys: [
       { key: 1, ok: false, code: "GEMINI_BAD_KEY", error: "API key not valid" },
       { key: 2, ok: true, modelCount: 12, preferredModelAvailable: true }
@@ -252,6 +253,188 @@ const mockFetch = (status: number, body: unknown) => {
   assert(group, markup.includes("Đã tự xoay khoá Gemini"), "ghi chú xoay khoá hiện lên khung chat");
   ok();
   if (markup.includes("AIza")) fail(group, "giao diện không được chứa nội dung khoá");
+}
+
+
+/* ── 8. Google lỗi 5xx: thông báo phải nói rõ KHÔNG phải lỗi khoá và mời bấm thử lại ──
+ *
+ * Đây là lỗi người dùng báo: "Mô hình lớn chưa sẵn sàng (Máy chủ Google tạm thời lỗi. Đã thử
+ * 1 khoá: khoá #1 (GEMINI_UPSTREAM). Thử lại sau ít phút.)". Câu "Đã thử 1 khoá" khiến người
+ * dùng tưởng khoá API hỏng. Payload mới của máy chủ kèm `retryable` + `httpStatus`, và lớp
+ * trình duyệt phải đổi cách diễn đạt.
+ */
+
+{
+  const group = "Google lỗi tạm thời";
+  mockFetch(502, {
+    error: "Máy chủ Google đang quá tải (HTTP 503 · UNAVAILABLE) — không phải lỗi khoá của bạn.",
+    code: "GEMINI_UPSTREAM",
+    hint: "Máy chủ đã gọi Google 3 lần (tự thử lại 2 lần, chờ tăng dần) vẫn lỗi. Chờ 1–2 phút rồi bấm “Thử lại với Gemini”.",
+    detail: "The model is overloaded. Please try again later.",
+    model: "gemini-3.6-flash",
+    modelsTried: ["gemini-3.6-flash"],
+    keysConfigured: 1,
+    keyAttempts: [{ key: 1, code: "GEMINI_UPSTREAM" }],
+    retryable: true,
+    httpStatus: 503,
+    upstreamStatus: "UNAVAILABLE",
+    attempts: 3,
+    retries: 2
+  });
+
+  const result = await askServerAi({ messages: [{ role: "user", content: "hỏi" }], chartReport: "x", senderName: "Test" });
+  assert(group, isLocalFallback(result), "Google lỗi → vẫn rơi về bộ luận giải nội bộ");
+  if (isLocalFallback(result)) {
+    expect(group, result.code, "GEMINI_UPSTREAM", "giữ mã lỗi để giao diện chọn cách nói");
+    expect(group, result.retryable, true, "báo lỗi này thử lại được");
+    expect(group, result.httpStatus, 503, "đưa mã HTTP lên giao diện");
+    expect(group, result.attempts, 3, "cho biết máy chủ đã gọi Google mấy lần");
+    assert(group, result.error.includes("không phải lỗi khoá"), `phải khẳng định không phải lỗi khoá, nhận: ${result.error}`);
+    assert(group, !result.error.includes("Đã thử 1 khoá"), `không được nói "Đã thử 1 khoá" khi lỗi thuộc về Google, nhận: ${result.error}`);
+    assert(group, result.error.includes("máy chủ Google"), "nói rõ lỗi thuộc về máy chủ Google");
+  }
+  expect(group, isRetryableCode("GEMINI_UPSTREAM"), true, "GEMINI_UPSTREAM là lỗi mời bấm thử lại");
+  expect(group, isRetryableCode("GEMINI_BAD_KEY"), false, "khoá sai thì bấm thử lại vô ích");
+}
+
+/* ── 9. Lỗi THUỘC VỀ KHOÁ vẫn phải liệt kê từng khoá đã thử (hành vi cũ giữ nguyên) ── */
+
+{
+  const group = "lỗi thuộc về khoá";
+  mockFetch(502, {
+    error: "GEMINI_API_KEY không hợp lệ (Google từ chối khoá).",
+    code: "GEMINI_BAD_KEY",
+    keysConfigured: 2,
+    keyAttempts: [
+      { key: 1, code: "GEMINI_BAD_KEY" },
+      { key: 2, code: "GEMINI_QUOTA" }
+    ],
+    retryable: false,
+    httpStatus: 400,
+    attempts: 2
+  });
+
+  const result = await askServerAi({ messages: [{ role: "user", content: "hỏi" }], chartReport: "x", senderName: "Test" });
+  assert(group, isLocalFallback(result), "khoá hỏng → rơi về bộ nội bộ");
+  if (isLocalFallback(result)) {
+    assert(group, result.error.includes("Đã thử 2 khoá"), `lỗi khoá vẫn phải liệt kê các khoá đã thử, nhận: ${result.error}`);
+    expect(group, result.retryable, false, "khoá sai không phải lỗi thử lại được");
+  }
+}
+
+/* ── 10. /api/health đọc cấu hình tự thử lại của máy chủ ── */
+
+{
+  const group = "cấu hình thử lại";
+  mockFetch(200, {
+    ok: true,
+    llm: "gemini",
+    model: "gemini-3.6-flash",
+    modelFallbacks: [],
+    runtime: "vercel",
+    environment: "production",
+    region: "sin1",
+    key: { present: true, usable: true, length: 39, looksLikeGoogleKey: true },
+    keys: { total: 1, usable: 1, needsReview: 0, sources: ["GEMINI_API_KEY"], lengths: [39], rotation: false },
+    retry: { maxAttempts: 3, baseDelayMs: 800, maxDelayMs: 6000, budgetMs: 45000, quotaWaitMs: 10000 }
+  });
+
+  const health = await checkServerHealth(false);
+  assert(group, health.retry !== null, "đọc được cấu hình tự thử lại");
+  expect(group, health.retry?.maxAttempts, 3, "biết máy chủ thử lại tối đa 3 lần");
+  expect(group, health.retry?.budgetMs, 45000, "biết quỹ thời gian của máy chủ");
+
+  // Máy chủ chạy bản cũ (không có trường retry) → không được vỡ giao diện.
+  mockFetch(200, { ok: true, llm: "gemini", model: "gemini-3.6-flash", key: { present: true, length: 39 } });
+  const legacy = await checkServerHealth(false);
+  expect(group, legacy.retry, null, "payload cũ không có retry → null, giao diện không vỡ");
+}
+
+/* ── 11. Giao diện: nút “Thử lại với Gemini” chỉ hiện khi lỗi là tạm thời ── */
+
+{
+  const group = "nút thử lại";
+  const baseHealth: ServerHealth = {
+    reachable: true,
+    llm: "gemini",
+    model: "gemini-3.6-flash",
+    modelFallbacks: [],
+    runtime: "vercel",
+    environment: "production",
+    region: "sin1",
+    keyPresent: true,
+    keyLength: 39,
+    keyLooksValid: true,
+    keysTotal: 1,
+    keysUsable: 1,
+    keySources: ["GEMINI_API_KEY"],
+    keyRotation: false,
+    retry: { maxAttempts: 3, budgetMs: 45000 },
+    probeKeys: [],
+    probe: null,
+    error: null
+  };
+
+  const render = (props: Partial<Parameters<typeof ChatPanel>[0]>) =>
+    renderToStaticMarkup(
+      createElement(ChatPanel, {
+        messages: [
+          { role: "user", content: "Năm tới tôi có nên đổi việc không?" },
+          { role: "assistant", content: "Câu trả lời của bộ luận giải nội bộ." }
+        ],
+        question: "",
+        setQuestion: () => {},
+        onSend: () => {},
+        onClear: () => {},
+        isAsking: false,
+        status: "Gemini tạm thời gián đoạn (không phải lỗi khoá API) — đã trả lời bằng bộ luận giải nội bộ.",
+        engine: "local",
+        engineLabel: "bộ luận giải nội bộ",
+        serverLlm: "gemini",
+        serverHealth: baseHealth,
+        isCheckingServer: false,
+        onCheckServer: () => {},
+        senderName: "Test",
+        setSenderName: () => {},
+        hasChart: true,
+        ...props
+      })
+    );
+
+  const withRetry = render({ canRetry: true, onRetry: () => {} });
+  assert(group, withRetry.includes("Thử lại với Gemini"), "lỗi tạm thời → hiện nút gọi lại Gemini");
+  assert(group, withRetry.includes("không phải lỗi khoá API"), "nói rõ đây không phải lỗi khoá API");
+  assert(group, withRetry.includes("tự thử lại tối đa 3 lần"), "cho biết máy chủ đã tự thử lại mấy lần");
+
+  const withoutRetry = render({ canRetry: false });
+  ok();
+  if (withoutRetry.includes("Thử lại với Gemini")) fail(group, "khoá sai / chưa có khoá thì không được mời bấm thử lại");
+
+  const asking = render({ canRetry: true, onRetry: () => {}, isAsking: true });
+  assert(group, asking.includes("Đang gọi lại Gemini"), "đang gọi lại thì nút phải đổi nhãn");
+
+  // Props mới là tuỳ chọn: nơi gọi cũ (không truyền canRetry/onRetry) vẫn render được.
+  const legacy = renderToStaticMarkup(
+    createElement(ChatPanel, {
+      messages: [{ role: "assistant", content: "Chào bạn" }],
+      question: "",
+      setQuestion: () => {},
+      onSend: () => {},
+      onClear: () => {},
+      isAsking: false,
+      status: "Ghi chú cũ",
+      engine: null,
+      engineLabel: "",
+      serverLlm: "checking",
+      serverHealth: null,
+      isCheckingServer: false,
+      onCheckServer: () => {},
+      senderName: "Test",
+      setSenderName: () => {},
+      hasChart: false
+    })
+  );
+  assert(group, legacy.includes("Ghi chú cũ"), "nơi gọi cũ vẫn hiện dòng trạng thái");
 }
 
 console.log(`\n${failures.length ? "✘" : "✔"} Lớp AI phía trình duyệt: ${checks} phép kiểm, ${failures.length} lỗi.`);

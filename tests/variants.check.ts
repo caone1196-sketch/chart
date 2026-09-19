@@ -220,6 +220,46 @@ for (const frame of ["tropical", "lahiri", "faganBradley", "raman", "krishnamurt
   check(seen.size === answers.length, "bộ câu hỏi kiểm tra bị trùng");
 }
 
+// --- kinh độ "điểm ảo" phải quy về ĐÚNG hệ hoàng đạo đang hiển thị
+//     (thẻ Điểm ảo của VariantPanel đọc variant.sidereal; computeExtraPoints luôn trả nhiệt đới)
+{
+  for (const frame of ["tropical", "lahiri", "faganBradley", "krishnamurti", "galactic"] as ZodiacFrameId[]) {
+    const chart = calculateChart(utcDate, latitude, longitude, "Hà Nội", "Asia/Ho_Chi_Minh", 7, {
+      houseSystem: "placidus",
+      zodiacFrame: frame
+    });
+    const variant = buildVariantChart({
+      chart,
+      localDate,
+      localHour: 14.5,
+      gender: "nữ",
+      houseSystem: "placidus",
+      zodiacFrame: frame
+    });
+    const ayan = variant.ayanamsaValue;
+    check(variant.extraPoints.length > 0, `${frame}: phải có danh sách điểm ảo để kiểm`);
+    for (const point of variant.extraPoints) {
+      const shown = variant.sidereal[point.key];
+      check(typeof shown === "number", `${frame}: thiếu kinh độ đã quy đổi cho ${point.key} (${point.label})`);
+      if (typeof shown === "number") {
+        check(
+          angDiff(shown, wrap(point.longitude - ayan)) < 1e-6,
+          `${frame}/${point.key}: kinh độ hiển thị (${shown.toFixed(4)}) phải bằng nhiệt đới (${point.longitude.toFixed(
+            4
+          )}) trừ ayanamsa ${ayan.toFixed(4)}°`
+        );
+      }
+      // Nhà là hình học: đổi hệ quy chiếu (trừ cùng một hằng số ở cả kinh độ lẫn cusp) không đổi nhà.
+      check(point.house >= 1 && point.house <= 12, `${frame}/${point.key}: số nhà phải nằm trong 1..12`);
+    }
+    if (frame === "tropical") {
+      check(ayan === 0, "tropical: ayanamsa phải bằng 0");
+    } else {
+      check(ayan > 0, `${frame}: hệ sidereal phải có ayanamsa > 0`);
+    }
+  }
+}
+
 if (problems.length) {
   console.error(`✘ ${problems.length} vấn đề về biến thể bản đồ sao:`);
   for (const problem of problems.slice(0, 25)) console.error(`  - ${problem}`);
@@ -229,3 +269,4 @@ if (problems.length) {
 console.log("✔ Lớp biến thể bản đồ sao: 7 hệ hoàng đạo × 12 hệ nhà chạy đúng, số liệu nhất quán.");
 console.log("✔ Vệ Đà, Tứ Trụ, Tử Vi, Maya, Human Design, điểm ảo, hình mẫu và báo cáo đều tạo được.");
 console.log("✔ Bộ trả lời nội bộ trả lời đúng các câu hỏi về biến thể.");
+console.log("✔ Kinh độ điểm ảo quy về đúng hệ hoàng đạo đang hiển thị (nhiệt đới/sidereal).");

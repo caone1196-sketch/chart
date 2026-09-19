@@ -1,6 +1,7 @@
 import { Body, PairLongitude, SiderealTime, SunPosition } from "astronomy-engine";
-import { armcToMc, computeHouses, houseOfLongitude, type HouseSystemId } from "@/lib/houses";
-import { ayanamsa, type ZodiacFrameId } from "@/lib/zodiac";
+import { HOUSE_SYSTEMS, armcToMc, computeHouses, houseOfLongitude, type HouseSystemId } from "@/lib/houses";
+import { ZODIAC_FRAMES, ayanamsa, type ZodiacFrameId } from "@/lib/zodiac";
+import { signRulersOf } from "@/lib/knowledge";
 import { calcObliquity, normalizeDegree, signedSeparation } from "@/lib/mathx";
 
 export { calcObliquity, normalizeDegree, signedSeparation };
@@ -14,7 +15,7 @@ export type PlanetPosition = {
   color: string;
   longitude: number;
   retrograde: boolean;
-  /** Nhà (Whole Sign) mà hành tinh nằm trong đó, tính từ cung Mọc. */
+  /** Nhà mà hành tinh nằm trong đó, tính theo HỆ NHÀ đang chọn (từ cusp nhiệt đới). */
   house: number;
   speed: number;
 };
@@ -97,6 +98,11 @@ export type GeocodeResult = {
   provider: "nominatim" | "open-meteo" | "thủ công";
 };
 
+/**
+ * 12 cung hoàng đạo. Trường `ruler` là chủ tinh theo phái HIỆN ĐẠI, viết bằng tên tiếng Anh và
+ * chỉ để tra cứu nhanh; bảng dùng để LUẬN là `SIGN_RULERS_MODERN` / `SIGN_RULERS_TRADITIONAL`
+ * trong `knowledge.ts` (có cả hai phái, vì Bọ Cạp / Bảo Bình / Song Ngư mỗi phái một đáp án).
+ */
 export const ZODIAC_SIGNS = [
   { name: "Bạch Dương", symbol: "Ar", latin: "Aries", element: "fire", modality: "cardinal", ruler: "Mars" },
   { name: "Kim Ngưu", symbol: "Ta", latin: "Taurus", element: "earth", modality: "fixed", ruler: "Venus" },
@@ -533,8 +539,64 @@ export const formatReportTimestamp = (date: Date) =>
     timeZone: "UTC"
   }).format(date);
 
-/** Bản mô tả chart dạng văn bản để gửi kèm câu hỏi cho mô hình ngôn ngữ. */
-export const buildChartReport = (chart: ChartData, senderName: string, question: string, transitLines: string[] = []) => {
+/** Trần ký tự của câu hỏi khi nhúng vào báo cáo (máy chủ còn cắt cả báo cáo theo trần riêng). */
+export const REPORT_QUESTION_LIMIT = 2000;
+
+/**
+ * Dữ liệu bổ sung cho báo cáo gửi AI. Tất cả đều tuỳ chọn để nơi gọi cũ không phải đổi.
+ */
+export type ChartReportExtra = {
+  /** Giới tính người dùng khai trong form — Tứ Trụ / Tử Vi / dasha luận khác nhau theo giới tính. */
+  gender?: string;
+  /** Ngày giờ sinh ĐỊA PHƯƠNG đúng như người dùng nhập (kèm múi giờ) để AI đối chiếu với mốc UTC. */
+  localBirth?: string;
+  /**
+   * Điểm ảo (Bắc giao, Lilith, Chiron, Part of Fortune, tiểu hành tinh…).
+   * Kinh độ đưa vào phải là NHIỆT ĐỚI (đúng như `computeExtraPoints` trả về): hàm này tự quy về
+   * hệ hoàng đạo đang chọn. `house` giữ nguyên vì nhà là đại lượng hình học, không đổi theo hệ.
+   */
+  extraPoints?: Array<{ label: string; longitude: number; house: number; meaning?: string }>;
+  /** Các dòng dữ liệu bầu trời thực tế lúc hỏi (xem `skyObservationLines` trong `sky.ts`). */
+  skyLines?: string[];
+  /** Các dòng sao cố định trùng những điểm quan trọng của bản đồ. */
+  fixedStarLines?: string[];
+};
+
+/**
+ * Bản mô tả chart dạng văn bản để gửi kèm câu hỏi cho mô hình ngôn ngữ.
+ *
+ * Hai nguyên tắc sống còn (đều đã từng bị vi phạm):
+ *
+ *  1. Báo cáo phải TỰ KHAI hệ hoàng đạo và hệ nhà đang dùng. Trước đây hai dòng này bị ghi cứng
+ *     `Hệ thống nhà: Whole Sign (toàn cung)` và `VỊ TRÍ HÀNH TINH (tropical, geocentric)` trong khi
+ *     người dùng chọn được 12 hệ nhà và 7 hệ hoàng đạo. Ở hệ Lahiri, mọi kinh độ ĐÃ trừ ayanamsa
+ *     ~23,8° (gần trọn một cung) mà báo cáo vẫn nhận là nhiệt đới → mô hình lớn luận sai hẳn một
+ *     cung, và mâu thuẫn với chính mục biến thể (nơi có khai ayanamsa) trong cùng một prompt.
+ *
+ *  2. CÂU HỎI đặt ngay ĐẦU báo cáo. Máy chủ cắt báo cáo theo trần ký tự; trước đây câu hỏi nằm ở
+ *     cuối nên báo cáo dài (phần biến thể Tử Vi/Vệ Đà/Human Design rất dài) là mất câu hỏi.
+ */
+export const buildChartReport = (
+  chart: ChartData,
+  senderName: string,
+  question: string,
+  transitLines: string[] = [],
+  extra: ChartReportExtra = {}
+) => {
+  const sidereal = chart.zodiacFrame !== "tropical";
+  const frameInfo = ZODIAC_FRAMES.find((frame) => frame.id === chart.zodiacFrame);
+  const houseInfo = HOUSE_SYSTEMS.find((system) => system.id === chart.houseSystem);
+  const frameLabel = frameInfo?.label ?? chart.zodiacFrame;
+  const houseLabel = houseInfo?.label ?? chart.houseSystem;
+  // Vài mô tả hệ nhà đã kết thúc bằng dấu chấm → bỏ chấm cuối để nối câu không thành "..".
+  const houseIdea = houseInfo?.idea.trim().replace(/[.]\s*$/, "") ?? "";
+
+  const trimmedQuestion = question.trim();
+  const questionBlock =
+    trimmedQuestion.length > REPORT_QUESTION_LIMIT
+      ? `${trimmedQuestion.slice(0, REPORT_QUESTION_LIMIT)}… [câu hỏi đã bị cắt ngắn còn ${REPORT_QUESTION_LIMIT} ký tự]`
+      : trimmedQuestion || "(người dùng không nhập câu hỏi — hãy luận tổng quan bản đồ)";
+
   const planetLines = chart.planets
     .map(
       (planet) =>
@@ -545,8 +607,14 @@ export const buildChartReport = (chart: ChartData, senderName: string, question:
   const aspectLines = chart.aspects
     .map(
       (aspect) =>
-        `- ${aspect.fromLabel} - ${aspect.toLabel}: ${aspect.type} | góc thực ${aspect.separation.toFixed(2)}° | orb ${aspect.orb.toFixed(2)}° | ${aspect.trend}`
+        `- ${aspect.fromLabel} - ${aspect.toLabel}: ${aspect.type} | góc thực ${aspect.separation.toFixed(2)}° | orb ${aspect.orb.toFixed(
+          2
+        )}° (giới hạn ${aspect.orbLimit.toFixed(0)}°) | ${aspect.trend}`
     )
+    .join("\n");
+
+  const pointLines = (extra.extraPoints ?? [])
+    .map((point) => `- ${point.label}: ${displayAngle(normalizeDegree(point.longitude - chart.ayanamsa))} | Nhà ${point.house}`)
     .join("\n");
 
   const elementLine = (Object.keys(chart.elements) as string[])
@@ -556,33 +624,75 @@ export const buildChartReport = (chart: ChartData, senderName: string, question:
     .map((key) => `${MODALITY_VI[key] ?? key} ${chart.modalities[key]}`)
     .join(", ");
 
-  return [
+  const cuspLine = chart.houses.map((house) => `nhà ${house.house} ${displayAngle(house.cusp)}`).join(" · ");
+
+  // Chủ tinh (domicile) theo Cung Mọc. Ba cung Bọ Cạp, Bảo Bình, Song Ngư có chủ tinh KHÁC nhau
+  // giữa phái hiện đại và phái truyền thống (Hy Lạp cổ, Vệ Đà) — báo cáo phải đưa cả hai kèm vị
+  // trí thật, nếu không mô hình lớn sẽ tự chọn một phái rồi nói như thể đó là đáp án duy nhất.
+  const signNameAt = (longitude: number) => ZODIAC_SIGNS[Math.floor(normalizeDegree(longitude) / 30)].name;
+  const rulers = signRulersOf(signNameAt(chart.ascendant));
+  const rulerText = (key?: string) => {
+    if (!key) return "không xác định";
+    const planet = chart.planets.find((item) => item.key === key);
+    const label = planet?.label ?? PLANETS.find((item) => item.key === key)?.label ?? key;
+    return planet ? `${label} ở ${signNameAt(planet.longitude)} (nhà ${planet.house})` : `${label} (không có trong danh sách hành tinh)`;
+  };
+  const rulerLine = `Chủ tinh bản đồ (domicile) theo Cung Mọc ${signNameAt(chart.ascendant)}: ${
+    rulers.differs
+      ? `phái HIỆN ĐẠI = ${rulerText(rulers.modern)}; phái TRUYỀN THỐNG (Hy Lạp cổ, Vệ Đà) = ${rulerText(
+          rulers.traditional
+        )} — cung này hai phái gán cho hai hành tinh khác nhau, phải nói rõ bạn luận theo phái nào`
+      : `${rulerText(rulers.modern)} (hai phái hiện đại và truyền thống cùng chọn hành tinh này)`
+  }`;
+
+  const header = [
     "BÁO CÁO BẢN ĐỒ SAO GỬI AI LUẬN GIẢI",
     "",
-    `Người yêu cầu: ${senderName}`,
+    `Người yêu cầu: ${senderName}${extra.gender ? ` · giới tính khai trong form: ${extra.gender}` : ""}`,
     `Nơi sinh: ${chart.locationLabel}`,
     `Toạ độ: ${chart.latitude.toFixed(4)}, ${chart.longitude.toFixed(4)}`,
+    extra.localBirth ? `Ngày giờ sinh địa phương (như người dùng nhập): ${extra.localBirth}` : "",
     `Mốc thời gian UTC: ${formatReportTimestamp(chart.utcDate)} UTC`,
     `Múi giờ: ${chart.timezoneId ?? "thủ công"} (${formatOffset(chart.timezoneOffset)})`,
-    `Pha Mặt Trăng: ${chart.moonPhase} (góc ${chart.moonPhaseAngle.toFixed(1)}°)`,
-    `Cung Mọc (AC): ${displayAngle(chart.ascendant)} | Thiên Đỉnh (MC): ${displayAngle(chart.midheaven)}`,
-    `IC: ${displayAngle(chart.imumCoeli)} | DC: ${displayAngle(chart.descendant)}`,
-    `Cân bằng nguyên tố: ${elementLine}`,
-    `Cân bằng tính chất: ${modalityLine}`,
-    `Hệ thống nhà: Whole Sign (toàn cung)`,
-    "",
-    "VỊ TRÍ HÀNH TINH (tropical, geocentric)",
-    planetLines,
-    "",
-    "GÓC CHIẾU TRONG BẢN ĐỒ",
-    aspectLines || "- Không có góc chiếu trong ngưỡng orb.",
-    "",
-    "TRANSIT HIỆN TẠI LÊN BẢN ĐỒ (orb <= 4°)",
-    transitLines.length ? transitLines.join("\n") : "- Không có transit nổi bật trong ngưỡng orb.",
-    "",
-    "CÂU HỎI CẦN LUẬN GIẢI",
-    question
-  ].join("\n");
+    `HỆ HOÀNG ĐẠO đang dùng: ${frameLabel} — ${
+      sidereal
+        ? `ayanamsa ${chart.ayanamsa.toFixed(4)}° ĐÃ ĐƯỢC TRỪ vào mọi kinh độ bên dưới (đây là số liệu sidereal, KHÔNG phải nhiệt đới)`
+        : "ayanamsa 0°, mọi kinh độ bên dưới là nhiệt đới (tropical)"
+    }.`,
+    `HỆ THỐNG NHÀ đang dùng: ${houseLabel}${houseIdea ? ` — ${houseIdea}` : ""}. Số "Nhà n" của từng hành tinh bên dưới tính theo hệ này.`,
+    chart.houseNote ? `LƯU Ý về hệ nhà: ${chart.houseNote}` : ""
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+
+  const blocks = [
+    header,
+    `CÂU HỎI CẦN LUẬN GIẢI\n${questionBlock}`,
+    `CÁC TRỤC CHÍNH (kinh độ theo hệ hoàng đạo đang dùng)\nCung Mọc (AC): ${displayAngle(
+      chart.ascendant
+    )} | Thiên Đỉnh (MC): ${displayAngle(chart.midheaven)}\nIC: ${displayAngle(chart.imumCoeli)} | DC: ${displayAngle(
+      chart.descendant
+    )}\nPha Mặt Trăng lúc sinh: ${chart.moonPhase} (góc ${chart.moonPhaseAngle.toFixed(1)}°)\nCusp 12 nhà: ${cuspLine}\n${rulerLine}`,
+    `CÂN BẰNG TỔNG\nNguyên tố: ${elementLine}\nTính chất: ${modalityLine}`,
+    `VỊ TRÍ HÀNH TINH (${sidereal ? "sidereal" : "tropical"}, geocentric)\n${planetLines}`,
+    pointLines
+      ? `ĐIỂM ẢO & TIỂU HÀNH TINH (kinh độ cùng hệ hoàng đạo đang dùng; số nhà là hình học nên không đổi theo hệ)\n${pointLines}`
+      : "",
+    `GÓC CHIẾU TRONG BẢN ĐỒ (đã xếp theo orb chặt dần — orb càng nhỏ thì ảnh hưởng càng mạnh)\n${
+      aspectLines || "- Không có góc chiếu trong ngưỡng orb."
+    }`,
+    `TRANSIT HIỆN TẠI LÊN BẢN ĐỒ (orb <= 4°)\n${
+      transitLines.length ? transitLines.join("\n") : "- Không có transit nổi bật trong ngưỡng orb."
+    }`,
+    extra.fixedStarLines?.length ? `SAO CỐ ĐỊNH TRÙNG CÁC ĐIỂM CỦA BẢN ĐỒ\n${extra.fixedStarLines.join("\n")}` : "",
+    extra.skyLines?.length
+      ? `BẦU TRỜI THỰC TẾ LÚC NGƯỜI DÙNG HỎI (số liệu quan sát: dùng cho câu hỏi "tối nay thấy gì", mọc/lặn, pha Trăng)\n${extra.skyLines.join(
+          "\n"
+        )}`
+      : ""
+  ].filter((block) => block.trim() !== "");
+
+  return blocks.join("\n\n");
 };
 
 export const transitToLines = (hits: TransitHit[]) =>

@@ -354,3 +354,312 @@ Kết quả sau khi sửa: `npm test` 13 bộ + `test:wheel` 2.066 phép kiểm 
 tất cả 0 lỗi; `npm run typecheck` và `npm run build` sạch; ảnh kiểm bằng mắt ở
 `.cache/shots/wheel-*.png` (900px và 360px) cho thấy vòng tròn trọn vẹn, không phần tử nào chạm
 lưới vùng an toàn.
+
+---
+
+## 11. Lượt soát 18/09/2026 — “Máy chủ Google tạm thời lỗi (GEMINI_UPSTREAM)” làm mất câu trả lời của mô hình lớn
+
+Ngày soát: 18/09/2026 · phạm vi: `api/_handler.js`, `src/lib/ai.ts`, `src/App.tsx`,
+`src/components/ChatPanel.tsx`, `scripts/check-ai.mjs`, `.env.example` · nhánh `arena/01a0b487-chart`.
+
+Lỗi người dùng báo (nguyên văn dòng trạng thái của giao diện), kèm kết luận của người dùng là “lỗi key api”:
+
+> Mô hình lớn chưa sẵn sàng (Máy chủ Google tạm thời lỗi. Đã thử 1 khoá: khoá #1 (GEMINI_UPSTREAM).
+> Thử lại sau ít phút.) — đã trả lời bằng bộ luận giải nội bộ chạy trong trình duyệt.
+
+### 11.1 Chẩn đoán: đây KHÔNG phải lỗi khoá API
+
+`GEMINI_UPSTREAM` chỉ sinh ra ở đúng một nhánh của `explainGeminiError()`: `status >= 500`. Lỗi thuộc về
+khoá có mã riêng, không thể lẫn sang 5xx:
+
+| Mã lỗi | HTTP | Ý nghĩa | Có phải lỗi khoá? |
+| --- | --- | --- | --- |
+| `GEMINI_BAD_KEY` | 400 | Google từ chối khoá (dán sai, thiếu ký tự) | có |
+| `GEMINI_API_DISABLED` | 403 | Project chưa bật Generative Language API | có |
+| `GEMINI_KEY_RESTRICTED` | 403 | Khoá bị giới hạn referrer/IP nên server không dùng được | có |
+| `GEMINI_QUOTA` | 429 | Hết hạn mức theo phút/ngày của khoá (khoá vẫn hợp lệ) | một phần |
+| `GEMINI_MODEL_NOT_FOUND` | 404 | Model không tồn tại / chưa mở cho project của khoá | có |
+| **`GEMINI_UPSTREAM`** | **5xx** | **Máy chủ Google lỗi (hay gặp: `503 UNAVAILABLE — The model is overloaded`)** | **không** |
+| `GEMINI_NETWORK` | 0 | Máy chủ không kết nối được tới Google | không |
+
+Nghĩa là Google **đã nhận khoá**, đã bắt đầu sinh nội dung, rồi chính máy chủ của họ lỗi — tình huống rất
+thường gặp với khoá free-tier vào giờ cao điểm và chỉ kéo dài vài giây.
+
+### 11.2 Bốn khuyết điểm thật sự của mã cũ
+
+1. **Một cú 5xx thoáng qua làm mất luôn câu trả lời của mô hình lớn.** `generateReply()` gọi Google đúng
+   MỘT lần cho mỗi (khoá, model); không có bất kỳ cơ chế thử lại nào. `GEMINI_UPSTREAM` nằm trong
+   `isKeyRotationFailure()` nên *có* xoay khoá — nhưng người dùng chỉ khai 1 khoá thì không còn khoá nào
+   để xoay → thất bại ngay lập tức, rơi về bộ luận giải nội bộ.
+2. **Thông báo đổ oan cho khoá.** `src/lib/ai.ts` ghép cụm “Đã thử N khoá: khoá #1 (MÃ)” cho MỌI mã lỗi,
+   kể cả lỗi của máy chủ Google. Người đọc thấy chữ “khoá” + “GEMINI_…” thì kết luận “lỗi key api” và đi
+   tạo khoá mới — việc hoàn toàn vô ích với 503.
+3. **Không có cách thử lại.** Giao diện chỉ có nút “Gửi câu hỏi”: muốn hỏi lại phải gõ lại cả câu, trong
+   khi câu trả lời nội bộ đã nằm trong hội thoại (và đã lưu vào `localStorage`).
+4. **Không chẩn đoán được từ xa.** Thông báo không kèm mã HTTP lẫn số lần đã gọi; `npm run check:ai` chỉ
+   gọi `ListModels` (không tốn quota sinh nội dung) nên vẫn xanh rờn trong lúc `generateContent` đang 503 —
+   đúng tình huống khiến người dùng không biết tin vào đâu.
+
+### 11.3 Đã sửa
+
+**`api/_handler.js` (máy chủ)**
+- Thêm `callGeminiWithRetry()`: tự gọi lại khi gặp lỗi **tạm thời** (`GEMINI_UPSTREAM` 5xx, `GEMINI_NETWORK`),
+  chờ tăng dần `GEMINI_RETRY_BASE_MS × 2ⁿ` cộng jitter ≤ 250 ms, trần `GEMINI_RETRY_MAX_MS`, tối đa
+  `GEMINI_MAX_ATTEMPTS` lần (mặc định 3) cho **mỗi** cặp (khoá, model).
+- Trần thời gian cứng: `deadline = now + GEMINI_BUDGET_MS` (mặc định 45 s, nhỏ hơn `maxDuration: 60` trong
+  `vercel.json`); mỗi lượt gọi chỉ được dùng phần quỹ còn lại (`min(TIMEOUT_MS, remaining)`), và không bắt
+  đầu lượt mới nếu còn dưới `MIN_ATTEMPT_MS` = 4 s → function luôn kịp trả lời, không bị Vercel giết giữa chừng.
+- `parseRetryDelayMs()` đọc đúng yêu cầu chờ của Google: header `Retry-After` (giây hoặc HTTP-date) và
+  `error.details[].retryDelay` dạng `"12.5s"` (RetryInfo của `google.rpc`).
+- 429 xử lý riêng: **còn** khoá khác thì xoay ngay (nhanh hơn ngồi chờ), **hết** khoá rồi mới chờ — và chỉ
+  chờ khi Google báo chờ không lâu hơn `GEMINI_QUOTA_WAIT_MS` (mặc định 10 s; `0` = không bao giờ chờ).
+- `explainGeminiError()` trả thêm `retryable`, `httpStatus`, `upstreamStatus`, `attempts`; thông báo 5xx nói
+  thẳng “không phải lỗi khoá của bạn”, nêu `HTTP 503 · UNAVAILABLE`, và gợi ý bấm “Thử lại với Gemini”.
+- `generateReply()` trả thêm `attempts` / `retries` / `retryNote`; `/api/ai-chat` chuyển lên client
+  (502 kèm `retryable` + `httpStatus` + `attempts`, 200 kèm `retryNote` khi phải thử lại mới thành công).
+- Thêm `GEMINI_MODEL_FALLBACKS` (**opt-in**, mặc định rỗng nên app vẫn chỉ dùng đúng một model như thiết kế
+  cũ): khi model chính 5xx dai dẳng hoặc 404 thì thử model kế tiếp trước khi kết luận.
+- `/api/health` in thêm khối `retry` (maxAttempts / các mốc chờ / budgetMs) để người dùng thấy app sẽ cố mấy lần.
+
+**`src/lib/ai.ts` (trình duyệt)**
+- Thêm kiểu `AskFailure` (kèm `retryable`, `httpStatus`, `attempts`) và `isRetryableCode()`.
+- Chỉ nói “Đã thử N khoá: …” khi trong `keyAttempts` **thật sự** có mã thuộc về khoá
+  (`GEMINI_BAD_KEY` / `GEMINI_API_DISABLED` / `GEMINI_KEY_RESTRICTED` / `GEMINI_QUOTA` / `GEMINI_MODEL_NOT_FOUND`);
+  với 5xx thì nói “Đã gọi Google N lần bằng khoá #1 — lỗi thuộc về máy chủ Google, không phải lỗi khoá.”
+- Đọc khối `retry` từ `/api/health` (payload máy chủ bản cũ không có → `null`, giao diện không vỡ).
+
+**`src/App.tsx`**
+- `ask(text, { retry })`: bấm thử lại thì **không** thêm lại câu hỏi vào hội thoại, và khi Gemini trả lời được
+  thì **thay** câu trả lời nội bộ ở cuối hội thoại bằng câu trả lời Gemini (không nhân đôi, không phải gõ lại).
+- Tiêu đề trạng thái phân biệt rõ “Gemini tạm thời gián đoạn (không phải lỗi khoá API)” / “Máy chủ chưa có
+  khoá Gemini” / “Gemini đang bị giới hạn số yêu cầu”; chỉ lỗi `retryable` mới đặt `pendingRetry`.
+
+**`src/components/ChatPanel.tsx`**
+- Nút **“⟳ Thử lại với Gemini”** (chỉ hiện khi `canRetry`; đổi nhãn “Đang gọi lại Gemini…” khi đang chờ).
+- Dòng trạng thái có tông màu (`warn` / `ok` / `info`) thay vì luôn vàng.
+- Hộp thông tin bên trái nói rõ máy chủ tự thử lại tối đa mấy lần, trong bao nhiêu giây, và nhấn mạnh lỗi
+  kiểu này “không phải lỗi khoá API”. Các prop mới đều **tuỳ chọn** nên nơi gọi cũ không phải đổi.
+
+**`scripts/check-ai.mjs`**
+- Thêm cờ `--ask` (`npm run check:ai -- --ask`): gọi thật `generateContent` qua chính `generateReply()` mà
+  trình duyệt dùng, in số lần gọi / số lần thử lại / thời gian, rồi kết luận “lỗi TẠM THỜI phía Google
+  (không phải lỗi khoá)” hay “lỗi KHÔNG thuộc nhóm tạm thời”. Đây là cách 30 giây để trả lời câu hỏi
+  “lỗi này do khoá của mình hay do Google?”.
+- In thêm cấu hình tự thử lại và model dự phòng ở khối “Cấu hình”.
+- Probe hỏng không còn `process.exit(1)` ngay: vẫn in hết gợi ý và vẫn chạy `--ask`
+  (ListModels hỏng vì mạng/5xx không có nghĩa là khoá sai).
+
+### 11.4 Lỗi mới phát hiện nhờ viết test (đã sửa luôn trong lượt này)
+
+Nhánh **lỗi mạng** (fetch ném exception) của `callGeminiWithRetry()` lúc mới viết chỉ kiểm quỹ thời gian mà
+quên kiểm trần `GEMINI_MAX_ATTEMPTS`. Test giả lập “mất mạng hoàn toàn” đo được **1025 lời gọi** trong ~1,4 s
+thay vì 3: trên Vercel, một đợt rớt mạng sẽ khiến function bắn hàng nghìn yêu cầu tới Google suốt 45 giây
+rồi mới chịu trả lỗi. Đã thêm `attempts >= settings.maxAttempts` vào **cả hai** nhánh (5xx và lỗi mạng),
+và giữ phép kiểm `networkDead.count() === 3` trong `tests/ai-api.check.ts` để lỗi này không quay lại.
+
+### 11.5 Bất biến mới được khoá bằng test
+
+| Bất biến | Test |
+| --- | --- |
+| 503 thoáng qua → vẫn có câu trả lời Gemini, không đổi khoá, không rơi về bộ nội bộ | `npm run test:ai` |
+| 503 dai dẳng → gọi đúng `GEMINI_MAX_ATTEMPTS` lần, trả `retryable` + `httpStatus: 503` + `upstreamStatus` | `test:ai` |
+| `GEMINI_MAX_ATTEMPTS=1` → hành vi giống hệt mã cũ (gọi đúng một lần) | `test:ai` |
+| Rớt mạng → thử lại; mất mạng hoàn toàn → **đúng 3** lời gọi, không gọi vô hạn | `test:ai` |
+| 429 + `Retry-After` ngắn + hết khoá → chờ rồi gọi lại; `Retry-After` dài → không ngồi chờ, nói rõ phải chờ bao lâu | `test:ai` |
+| 429 khi **còn** khoá khác → xoay khoá ngay, không chờ (test cũ vẫn xanh) | `test:ai` |
+| Backoff tăng dần, có trần, tôn trọng `Retry-After`, không vượt quỹ thời gian còn lại | `test:ai` |
+| `GEMINI_BUDGET_MS` mặc định 45 s < `maxDuration` 60 s của Vercel Function | `test:ai` |
+| `GEMINI_MODEL_FALLBACKS`: model chính 5xx dai dẳng → thử model dự phòng; không khai → vẫn đúng 1 model | `test:ai` |
+| Payload (thành công lẫn lỗi) sau khi thử lại không bao giờ chứa nội dung khoá | `test:ai` |
+| Lỗi 5xx lên giao diện: có `retryable`, nói “không phải lỗi khoá”, **không** nói “Đã thử 1 khoá” | `npm run test:health-ui` |
+| Lỗi thuộc về khoá vẫn liệt kê từng khoá đã thử (hành vi cũ giữ nguyên) | `test:health-ui` |
+| `ChatPanel` hiện nút “Thử lại với Gemini” khi `canRetry`, không hiện khi lỗi khoá; prop mới là tuỳ chọn | `test:health-ui` |
+
+Kết quả sau khi sửa: `npm run test:ai` **190** phép kiểm (từ 113), `npm run test:health-ui` **61** phép kiểm
+(từ 38), toàn bộ `npm test` 13 bộ 0 lỗi, `npm run typecheck` sạch.
+
+### 11.6 Người dùng cần làm gì sau khi nhận bản sửa này
+
+1. **Deploy lại** (Vercel không tự lấy mã mới): `git push` rồi redeploy, hoặc `npx vercel --prod`.
+2. Không cần đổi khoá API — `GEMINI_UPSTREAM` không phải lỗi khoá. Muốn chắc: `npm run check:ai -- --ask`.
+3. Muốn gần như không bao giờ bị rơi về bộ nội bộ: khai 2–3 khoá
+   (`GEMINI_API_KEYS=khoá1,khoá2,khoá3`) và/hoặc `GEMINI_MODEL_FALLBACKS=gemini-3.5-flash`, rồi deploy lại.
+4. Muốn app trả lời nhanh hơn bằng bộ nội bộ thay vì chờ Google: đặt `GEMINI_MAX_ATTEMPTS=1`
+   (hành vi cũ) hoặc hạ `GEMINI_BUDGET_MS`.
+
+## 12. Lượt soát 19/09/2026 — “dữ liệu gửi AI và cách luận có chuẩn không”
+
+Ngày soát: 19/09/2026 · phạm vi: `src/lib/astro.ts` (`buildChartReport`), `src/App.tsx` (`ask()`),
+`api/_handler.js` (`SYSTEM_PROMPT`, trần ký tự, `maxOutputTokens`, `/api/health`), `src/lib/interpret.ts`
+(`sourceNote`), `src/lib/sky.ts` (`skyObservationLines`), `src/components/VariantPanel.tsx` ·
+nhánh `arena/01a0b487-chart`.
+
+Cách soát: dựng lại **đúng** payload mà `App.tsx` gửi lên `/api/ai-chat` bằng một công cụ offline
+(`.cache/dump-payload.ts`, không nằm trong git) với lá số ví dụ 00:30 11/11/1996 tại Hà Nội, ở hai cấu hình
+(Placidus + nhiệt đới và Placidus + Lahiri), rồi in ra soi từng dòng. Đối chiếu song song với
+`/api/health` của bản đang chạy thật (`chartbysun.vercel.app`).
+
+Kết luận ngắn: **số liệu thiên văn thì chuẩn** (engine đã khoá bằng Swiss Ephemeris), nhưng **báo cáo gửi
+mô hình lớn từng tự mô tả SAI chính dữ liệu nó chứa và thiếu dữ liệu mà `SYSTEM_PROMPT` hứa hẹn**. Đây là
+lớp lỗi nguy hiểm nhất: mô hình lớn không nghi ngờ nhãn sai, nó luận rất tự tin theo nhãn đó.
+
+### 12.1 Báo cáo nói sai về hệ quy chiếu (nghiêm trọng nhất)
+
+| Dòng trong báo cáo | Mã cũ (sai) | Thực tế engine | Mã mới |
+| --- | --- | --- | --- |
+| Hệ nhà | `Hệ thống nhà: Whole Sign (toàn cung)` — **chuỗi ghi cứng** | người dùng chọn được 12 hệ (`chart.houseSystem` = `placidus`, `koch`, …) | `HỆ THỐNG NHÀ đang dùng: Placidus (thời gian bán cung) — … Số "Nhà n" bên dưới tính theo hệ này.` |
+| Hệ hoàng đạo | `VỊ TRÍ HÀNH TINH (tropical, geocentric)` — **ghi cứng** | ở hệ Lahiri mọi kinh độ **đã trừ ayanamsa 23,8132°** (gần trọn một cung) | `HỆ HOÀNG ĐẠO đang dùng: Vệ Đà - Lahiri (Chitrapaksha) — ayanamsa 23.8132° ĐÃ ĐƯỢC TRỪ vào mọi kinh độ bên dưới (đây là số liệu sidereal, KHÔNG phải nhiệt đới).` + nhãn `(sidereal, geocentric)` |
+| Ayanamsa | không khai ở báo cáo chính | `chart.ayanamsa` có sẵn | đã khai tới 4 chữ số |
+| `houseNote` (Placidus ngoài vòng cực phải đổi hệ) | chỉ có trong báo cáo biến thể | có ở `chart.houseNote` | đã đưa vào báo cáo chính |
+
+Hệ quả cụ thể với lá số ví dụ: Cung Mọc thật (Lahiri) là **Sư Tử 6°59**, báo cáo cũ dán nhãn “tropical” nên
+mô hình lớn sẽ luận **Xử Nữ** — sai hẳn một cung, và mâu thuẫn với chính mục biến thể trong cùng một
+prompt (mục đó có khai ayanamsa). Nay cả hai đều nhất quán.
+
+### 12.2 `SYSTEM_PROMPT` hứa một đằng, dữ liệu gửi một nẻo
+
+Prompt dặn mô hình trả lời được “tối nay nhìn lên trời thấy hành tinh nào”, nhưng các khối
+`skySnapshot` / `riseSet` / `fixedStars` **chỉ** được dùng trong bộ luận giải nội bộ
+(`answerLocally`, chạy trên trình duyệt) — không bao giờ nằm trong báo cáo gửi Gemini. Mô hình chỉ còn
+cách đoán mò hoặc bịa giờ mọc/lặn.
+
+Đã thêm vào `buildChartReport` (tham số `extra`, tuỳ chọn nên không phá chữ ký cũ):
+
+- `skyLines` — hàm mới `skyObservationLines(sky, riseSet)` trong `src/lib/sky.ts`: mốc quan sát + bán cầu,
+  giờ Mặt Trời/Mặt Trăng mọc lặn, Mặt Trời đang trên hay dưới chân trời, pha và độ sáng Trăng, danh sách
+  hành tinh **đang nổi trên 5°** kèm độ cao/hướng/chòm sao (trời trống thì nói thẳng
+  “đừng hứa là nhìn thấy được”), và vị trí hành tinh trên trời thật. Dòng này **tự khai** là kinh độ
+  nhiệt đới của trời thật, không đổi theo hệ hoàng đạo người dùng chọn — nếu không, người xem sidereal sẽ
+  thấy hai bộ cung khác nhau trong cùng một báo cáo.
+- `fixedStarLines` — tối đa `AI_FIXED_STAR_LIMIT = 6` sao cố định gần nhất, kèm chòm, cấp sao, orb và ý nghĩa.
+- `extraPoints` — 10 **thiên thể thật** (`AI_EXTRA_POINT_KEYS`: Bắc giao điểm thật, Nam giao điểm, Lilith,
+  Chiron, Ceres, Pallas, Juno, Vesta, Eris, Sedna). Kinh độ nhiệt đới từ `computeExtraPoints` được quy về
+  đúng hệ đang xem (trừ `chart.ayanamsa`), còn **số nhà giữ nguyên** vì nhà là hình học. Các điểm giả định
+  trường phái Hamburg cố tình **không** gửi: không có thiên thể thật, dễ bị mô hình luận như hành tinh.
+- `cuspLine` — đủ 12 cusp theo hệ nhà đang chọn (trước chỉ có AC/MC/IC/DC).
+- `gender`, `localBirth` — giới tính khai trong form và **giờ sinh địa phương** như người dùng nhập
+  (máy chủ chỉ giữ mốc UTC nên mô hình rất dễ suy diễn sai múi giờ, lệch 7 tiếng ở Việt Nam).
+- Góc chiếu được **xếp theo orb chặt dần** và ghi rõ giới hạn orb, kèm dặn trong prompt: orb nhỏ nói mạnh,
+  orb sát giới hạn nói nhẹ.
+
+### 12.3 Trần ký tự cắt mất dữ liệu, câu hỏi nằm ở cuối
+
+Đo được trên lá số ví dụ (payload = báo cáo chính + báo cáo biến thể):
+
+| Cấu hình | Mã cũ | Mã mới | Trần cũ 9.000 | Trần mới `REPORT_CHAR_LIMIT` 16.000 |
+| --- | --- | --- | --- | --- |
+| Placidus + nhiệt đới | 7.921 ký tự | 11.067 ký tự | **mất 2.067** | mất 0 |
+| Placidus + Lahiri | 9.336 ký tự | 11.678 ký tự | **mất 2.678** | mất 0 |
+
+Phần bị mất là **đuôi báo cáo biến thể** (Tử Vi, Human Design, dự báo) — tức đúng phần người dùng hỏi tới
+khi chọn câu hỏi về biến thể. Tệ hơn: mã cũ đặt câu hỏi ở **cuối** báo cáo, nên báo cáo càng dài thì câu
+hỏi càng dễ bị cắt; mô hình nhận một đống số liệu mà không biết phải trả lời gì.
+
+Đã sửa: câu hỏi chuyển lên **ngay đầu** (đo được ở ký tự thứ 668/11.067), giới hạn
+`REPORT_QUESTION_LIMIT = 2.000` ký tự (cắt kèm ghi chú để phần dữ liệu không bị đẩy ra ngoài), trần nâng
+lên `REPORT_CHAR_LIMIT = 16.000` (đã `export` để test dùng chung một con số với mã chạy thật),
+`maxOutputTokens` 4.096 → 8.192 cho yêu cầu “luận chi tiết từng nhà”.
+
+### 12.4 `/api/health` báo động giả về khoá API
+
+Bản đang chạy thật trả về: khoá dài **53** ký tự, `usable: true`, nhưng `looksLikeGoogleKey: false` và
+`needsReview: 1` — vì heuristic cũ chỉ nhận khoá “đúng chuẩn” khi bắt đầu bằng `AIza`. Kiểm
+`/api/health?probe=1` trên chính bản đó: `ok: true`, `status: 200`, `modelCount: 41`, model
+`gemini-3.6-flash` dùng được → **khoá hoàn toàn hợp lệ**, cờ “cần xem lại” là báo động giả (Google đã
+phát hành định dạng khoá không còn tiền tố `AIza`). Người dùng thấy cờ đó lại đi tạo khoá mới, vô ích.
+
+Đã thay bằng `looksLikePastedWrong(value)` (đã `export`): đáng ngờ khi **ngắn hơn 20 ký tự** hoặc chứa ký
+tự ngoài `[A-Za-z0-9_-]` (dấu cách, ngoặc, dấu bằng, chữ `sk-…` của nhà cung cấp khác, cả câu lệnh bị dán
+nhầm). `/api/health` nay trả `key.looksLikeGoogleKey` = “không có dấu hiệu dán sai”, thêm
+`key.aizaPrefixed` và `keys.aizaPrefixed` chỉ để tham khảo; `scripts/check-ai.mjs` và `server/index.mjs`
+đổi thông điệp từ “khoá không bắt đầu bằng AIza” thành “khoá có dấu hiệu dán sai”.
+
+### 12.5 Bộ luận giải nội bộ chỉ sai biến môi trường
+
+`sourceNote` trong `src/lib/interpret.ts` bảo người dùng “chưa cấu hình `OPENAI_API_KEY`” trong khi app này
+dùng `GEMINI_API_KEY` / `GEMINI_API_KEYS` → người đọc đi tìm một biến không tồn tại. Đã sửa thành
+`GEMINI_API_KEY(S)`, đồng thời mọi câu trả lời nội bộ nay **nêu rõ hệ nhà và hệ hoàng đạo/ayanamsa** đang
+dùng (trước đây trả lời “Mặt Trời Bọ Cạp” mà không nói đó là nhiệt đới hay sidereal).
+
+### 12.6 Hiển thị lệch hệ quy chiếu ở thẻ “Điểm ảo”
+
+`VariantPanel` luôn in `point.longitude` của `computeExtraPoints` — vốn **luôn là nhiệt đới** — kể cả khi
+người dùng đang xem Lahiri, nên thẻ này lệch ~23,8° so với bản đồ, cusp và báo cáo gửi AI. Đã đổi sang
+`variant.sidereal[point.key]` và ghi chú “kinh độ đã quy về … (trừ ayanamsa …)”.
+
+### 12.7 Sửa tiếp trong cùng lượt soát: chủ tinh hai phái & câu ghi cứng “AC quyết định hệ thống nhà Whole Sign”
+
+Hai chỗ còn lại của **cùng một loại lỗi** (khẳng định cứng một phái / một hệ) nằm trong bộ luận giải nội bộ
+`src/lib/interpret.ts`:
+
+**a) Chủ tinh (domicile) chỉ theo phái hiện đại, không ghi chú phái.** Bảng cũ `SIGN_RULER` gán Bọ Cạp →
+Diêm Vương, Bảo Bình → Thiên Vương, Song Ngư → Hải Vương. Không sai theo phái hiện đại, nhưng app này còn
+mục **Hy Lạp cổ** (`essentialDignity` trong `hellenistic.ts`, bảng `DOMICILE` 7 hành tinh cổ điển) và mục
+**Vệ Đà** — cả hai đều dùng Hỏa Tinh / Thổ Tinh / Mộc Tinh cho đúng ba cung đó. Người dùng hỏi “vì sao Bọ
+Cạp do Diêm Vương cai quản” sẽ thấy hai mục trong app nói hai đằng mà không mục nào giải thích.
+
+- Bảng chủ tinh nay quy về **một chỗ** trong `knowledge.ts`: `SIGN_RULERS_MODERN`, `SIGN_RULERS_TRADITIONAL`
+  và `signRulersOf(signName)` (9 cung hai phái trùng nhau, đúng 3 cung khác nhau).
+- Bộ luận giải nội bộ: với 3 cung đó nêu **cả hai** kèm vị trí thật của từng hành tinh — “hiện đại là Diêm
+  Vương Tinh nằm ở Nhân Mã (nhà 1) → …; truyền thống (phái Hy Lạp cổ và Vệ Đà dùng trong app này) là Hỏa
+  Tinh nằm ở Xử Nữ (nhà 10) → …” và nhắc chọn phái khi kết luận; 9 cung còn lại giữ nguyên câu chữ cũ.
+- Báo cáo gửi Gemini thêm dòng `Chủ tinh bản đồ (domicile) theo Cung Mọc …: phái HIỆN ĐẠI = … ; phái TRUYỀN
+  THỐNG (Hy Lạp cổ, Vệ Đà) = …` để mô hình lớn không tự chọn phái rồi nói như thể đó là đáp án duy nhất;
+  `SYSTEM_PROMPT` thêm luật tương ứng.
+- Test khoá: bảng truyền thống phải **khớp** bảng `DOMICILE` mà `essentialDignity` đang chấm điểm (so cả 12
+  cung), đúng 3 cung có `differs`, và quét 24 giờ × 2 hệ hoàng đạo để chắc bắt được cả Bọ Cạp, Bảo Bình,
+  Song Ngư trong báo cáo lẫn câu trả lời nội bộ (fixture cố định chỉ ra 2 cung nên không đủ).
+
+**b) “Cung Mọc … quyết định hệ thống nhà Whole Sign”** — câu ghi cứng cho MỌI hệ, sai hai lần: người dùng
+có thể đang xem Placidus/Koch…, và với `equalMC` (Chia bằng nhau từ Thiên Đỉnh, lấy MC làm cusp nhà 10) thì
+AC **không** phải cusp nhà 1 — đo ở lá số mẫu: AC Xử Nữ 0°48, cusp nhà 1 Xử Nữ 0°39, **lệch 0,1538°**.
+Whole Sign cũng không lấy AC làm cusp: cusp nhà 1 là 0° của cung chứa AC (lệch 0,81° ở lá số mẫu).
+
+Nay `acBullet()` mô tả đúng từng trường hợp: Whole Sign (“lấy trọn cung chứa AC làm nhà 1, cusp nhà 1 là
+đầu cung, AC nằm bên trong nhà 1”), hệ lấy AC làm cusp nhà 1 (“là cusp nhà 1 trong hệ Placidus …”), và hệ
+không lấy (“cusp nhà 1 nằm ở …, lệch AC 0,15° nên AC không phải mốc bắt đầu nhà 1”). `sourceNote` cũng thôi
+in id kỹ thuật (`placidus`, `lahiri`) mà dùng nhãn thật của engine, ayanamsa 4 chữ số.
+
+### 12.8 Giới hạn còn lại (có chủ ý, không phải lỗi)
+
+- Điểm giả định Hamburg (Cupido…Poseidon, Isis-Transpluto, Selena) không gửi mô hình lớn.
+- `ZODIAC_SIGNS[].ruler` trong `astro.ts` vẫn giữ tên chủ tinh **hiện đại** bằng tiếng Anh (chỉ để tra
+  cứu, không hiển thị ở đâu); bảng dùng để luận là `SIGN_RULERS_MODERN` / `SIGN_RULERS_TRADITIONAL` trong
+  `knowledge.ts` — đã ghi chú ngay trên hằng số để không ai nhầm đó là nguồn thứ ba.
+- Khối bầu trời chỉ có khi toạ độ hợp lệ (`skySnapshot`/`riseSet` khác `null`); không có thì báo cáo
+  **không** bịa mục đó (test khoá cả hai chiều).
+- Sao cố định gửi tối đa 6, câu hỏi tối đa 2.000 ký tự, báo cáo tối đa 16.000 ký tự.
+
+### 12.9 Bất biến mới được khoá bằng test (`npm run test:ai-payload`)
+
+| Bất biến | Test |
+| --- | --- |
+| Báo cáo khai **đúng nhãn** của hệ nhà và hệ hoàng đạo đang chọn — quét đủ 12 × 7 = **84 cặp** | `npm run test:ai-payload` |
+| Không cặp nào còn ghi cứng “Whole Sign” khi đang dùng hệ khác; sidereal thì không được nhận là `(tropical, geocentric)` | `test:ai-payload` |
+| Hệ sidereal phải khai đúng giá trị ayanamsa của engine và in đúng Cung Mọc sidereal | `test:ai-payload` |
+| Mô tả hệ nhà nối câu không sinh dấu chấm đôi | `test:ai-payload` |
+| Placidus ở vĩ độ 78° phải kèm `houseNote`; không có note thì không được bịa dòng lưu ý | `test:ai-payload` |
+| Câu hỏi nằm đầu báo cáo và **vẫn còn** sau khi cắt ở `REPORT_CHAR_LIMIT`; payload đầy đủ lọt trần | `test:ai-payload` |
+| Câu hỏi dài quá `REPORT_QUESTION_LIMIT` bị cắt kèm ghi chú | `test:ai-payload` |
+| Có `skyLines` thì mới có mục bầu trời (giờ mọc/lặn, độ sáng Trăng, bán cầu); không có thì không bịa; trời trống phải nói thẳng | `test:ai-payload` |
+| Khối bầu trời tự khai là kinh độ **trời thật (nhiệt đới)**, không đổi theo hệ sidereal | `test:ai-payload` |
+| Điểm ảo in theo đúng hệ đang xem (sidereal = nhiệt đới − ayanamsa) và **giữ nguyên số nhà** | `test:ai-payload`, `test:variants` |
+| Đủ 12 cusp, giới tính, giờ sinh địa phương, sao cố định; góc chiếu xếp orb tăng dần | `test:ai-payload` |
+| `SYSTEM_PROMPT` dặn: chỉ dùng dữ liệu trong báo cáo, tự nêu hệ quy chiếu, tách ba mốc thời gian, tôn trọng orb, không tư vấn y tế/pháp lý, không nhắc nhà cung cấp khác | `test:ai-payload` |
+| Bộ luận giải nội bộ **không** nhắc `OPENAI_API_KEY` và nêu **nhãn thật** của hệ nhà + hệ hoàng đạo + ayanamsa | `test:ai-payload` |
+| Bảng chủ tinh truyền thống **khớp** bảng `DOMICILE` của `essentialDignity` (cả 12 cung); đúng 3 cung Bọ Cạp/Bảo Bình/Song Ngư có hai chủ tinh | `test:ai-payload` |
+| Báo cáo + câu trả lời nội bộ nêu **cả hai phái** kèm vị trí thật khi Cung Mọc ở 3 cung đó (quét 24 giờ × 2 hệ hoàng đạo); 9 cung còn lại không bị nhồi chữ “phái” | `test:ai-payload` |
+| Không còn câu ghi cứng “AC quyết định hệ thống nhà Whole Sign”: Placidus → “là cusp nhà 1”, equalMC → nêu độ lệch thật, Whole Sign → “lấy trọn cung chứa AC” | `test:ai-payload` |
+| Khoá hợp lệ nhưng không có tiền tố `AIza` (53 ký tự) **không** bị coi là dán sai; khoá ngắn/có khoảng trắng/dán kèm `sk-` thì bị | `test:ai` |
+
+Kết quả sau khi sửa: `npm run test:ai-payload` **1.158** phép kiểm (bộ mới), `npm run test:ai` **202** (từ 190),
+`npm run test:variants` thêm nhóm kiểm kinh độ điểm ảo theo hệ; toàn bộ `npm test` **14 bộ, 0 lỗi**,
+`npm run typecheck` và `npm run build` sạch.
+
+### 12.10 Người dùng cần làm gì sau khi nhận bản sửa này
+
+1. **Deploy lại** — bản đang chạy ở `chartbysun.vercel.app` vẫn là mã cũ (chưa có cả phần tự thử lại của
+   lượt soát 11), nên mọi sửa đổi ở trên chưa có hiệu lực trên trang thật.
+2. Sau khi deploy, mở `/api/health`: `needsReview` phải là **0** với khoá 53 ký tự đang dùng; muốn chắc khoá
+   gọi được thì thêm `?probe=1` (chỉ gọi `ListModels`, không tốn quota sinh nội dung).
+3. Không cần đổi khoá API, không cần thêm biến môi trường mới — mọi thay đổi đều nằm trong mã.

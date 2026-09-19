@@ -148,6 +148,50 @@ export const SIGN_TRAITS: Record<string, { core: string; strength: string; shado
   }
 };
 
+/**
+ * Chủ tinh (domicile) của 12 cung theo HAI phái — và PHẢI nói rõ đang dùng phái nào.
+ *
+ * Chín cung đầu hai phái trùng nhau. Ba cung còn lại là điểm tranh luận kinh điển:
+ * Bọ Cạp, Bảo Bình, Song Ngư — phái HIỆN ĐẠI (từ thế kỷ 19-20, sau khi tìm ra Thiên Vương,
+ * Hải Vương, Diêm Vương) gán cho hành tinh vòng ngoài; phái TRUYỀN THỐNG (Hy Lạp cổ, trung cổ,
+ * và Vệ Đà/Jyotish) vẫn giữ hành tinh cổ điển. App này có cả mục Hy Lạp cổ (`essentialDignity`
+ * trong `hellenistic.ts`) và mục Vệ Đà dùng bảng truyền thống, nên mọi câu trả lời nhắc tới chủ
+ * tinh của ba cung đó phải nêu rõ phái — nếu không hai mục trong app trông như tự mâu thuẫn
+ * (trước đây bộ luận giải nội bộ chỉ nói "Bọ Cạp do Diêm Vương cai quản", không ghi chú gì).
+ */
+export const SIGN_RULERS_MODERN: Record<string, string> = {
+  "Bạch Dương": "mars",
+  "Kim Ngưu": "venus",
+  "Song Tử": "mercury",
+  "Cự Giải": "moon",
+  "Sư Tử": "sun",
+  "Xử Nữ": "mercury",
+  "Thiên Bình": "venus",
+  "Bọ Cạp": "pluto",
+  "Nhân Mã": "jupiter",
+  "Ma Kết": "saturn",
+  "Bảo Bình": "uranus",
+  "Song Ngư": "neptune"
+};
+
+/** Chủ tinh truyền thống (7 hành tinh cổ điển) — phải khớp bảng `DOMICILE` trong `hellenistic.ts`. */
+export const SIGN_RULERS_TRADITIONAL: Record<string, string> = {
+  ...SIGN_RULERS_MODERN,
+  "Bọ Cạp": "mars",
+  "Bảo Bình": "saturn",
+  "Song Ngư": "jupiter"
+};
+
+/**
+ * Chủ tinh của một cung theo cả hai phái. `differs` = true với đúng ba cung Bọ Cạp, Bảo Bình,
+ * Song Ngư — chỉ khi đó câu trả lời mới cần phân trần "hiện đại hay truyền thống".
+ */
+export const signRulersOf = (signName: string) => {
+  const modern = SIGN_RULERS_MODERN[signName];
+  const traditional = SIGN_RULERS_TRADITIONAL[signName];
+  return { modern, traditional, differs: Boolean(modern && traditional && modern !== traditional) };
+};
+
 export const HOUSE_THEMES: Record<number, { name: string; topics: string; advice: string }> = {
   1: { name: "Nhà 1 - Bản thân", topics: "ngoại hình, phong thái, cách bạn bắt đầu mọi việc", advice: "đầu tư vào sự hiện diện và sức khỏe nền tảng" },
   2: { name: "Nhà 2 - Tài sản", topics: "tiền do bạn tự kiếm, giá trị bản thân, kỹ năng sinh lời", advice: "xây kỹ năng hiếm để tăng giá trị bản thân" },

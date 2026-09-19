@@ -18,6 +18,13 @@ const serverStatusClass: Record<ServerLlmState, string> = {
   unreachable: "text-rose-300"
 };
 
+/** Tông màu dòng trạng thái dưới khung chat: cảnh báo lỗi, tin vui, hay ghi chú thường. */
+const statusToneClass: Record<"info" | "ok" | "warn", string> = {
+  info: "text-slate-400",
+  ok: "text-emerald-300",
+  warn: "text-amber-200"
+};
+
 const renderInline = (text: string, keyPrefix: string) => {
   const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
   return parts.map((part, index) =>
@@ -77,6 +84,11 @@ export type ChatPanelProps = {
   onClear: () => void;
   isAsking: boolean;
   status: string;
+  /** Tông màu của dòng trạng thái (mặc định "warn" để giữ đúng màu vàng như trước). */
+  statusTone?: "info" | "ok" | "warn";
+  /** Lỗi vừa gặp là lỗi tạm thời → mời người dùng bấm gọi lại Gemini. */
+  canRetry?: boolean;
+  onRetry?: () => void;
   engine: ChatEngine | null;
   engineLabel: string;
   serverLlm: ServerLlmState;
@@ -96,6 +108,9 @@ export default function ChatPanel({
   onClear,
   isAsking,
   status,
+  statusTone = "warn",
+  canRetry = false,
+  onRetry,
   engine,
   engineLabel,
   serverLlm,
@@ -155,6 +170,13 @@ export default function ChatPanel({
               </span>
             ) : null}
           </p>
+          {serverHealth?.retry && serverHealth.retry.maxAttempts > 1 ? (
+            <p className="mt-1 text-slate-400">
+              Khi Google lỗi tạm thời (5xx / quá tải), máy chủ tự thử lại tối đa {serverHealth.retry.maxAttempts} lần (chờ tăng dần, trong{" "}
+              {Math.round(serverHealth.retry.budgetMs / 1000)} giây) trước khi rơi về bộ luận giải nội bộ — lỗi kiểu này{" "}
+              <span className="text-slate-300">không phải lỗi khoá API</span>.
+            </p>
+          ) : null}
           {serverLlm === "unreachable" ? (
             <p className="mt-2 text-rose-300">
               {serverHealth?.error || "Không gọi được route /api/health."} Nếu đang chạy trên Vercel, hãy kiểm tra{" "}
@@ -256,7 +278,21 @@ export default function ChatPanel({
           </div>
         </div>
 
-        {status ? <p className="mt-2 text-xs text-amber-200">{status}</p> : null}
+        {status || canRetry ? (
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            {status ? <p className={`min-w-0 flex-1 text-xs ${statusToneClass[statusTone]}`}>{status}</p> : <span className="flex-1" />}
+            {canRetry && onRetry ? (
+              <button
+                type="button"
+                onClick={onRetry}
+                disabled={isAsking}
+                className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-lg border border-sky-300/60 bg-sky-400/15 px-3 py-1.5 text-xs font-semibold text-sky-100 transition hover:bg-sky-400/25 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isAsking ? "Đang gọi lại Gemini…" : "⟳ Thử lại với Gemini"}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="mt-4 space-y-3">
           <textarea

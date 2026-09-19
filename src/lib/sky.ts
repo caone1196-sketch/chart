@@ -491,3 +491,57 @@ export const riseSetForDay = (date: Date, latitude: number, longitude: number, t
     timeZoneLabel: timeZoneId ?? "giờ máy của bạn"
   };
 };
+
+/* ------------------------------------------------- báo cáo bầu trời gửi AI */
+
+/** Kết quả của `riseSetForDay` — khai báo kiểu tối thiểu để hàm dưới không phụ thuộc thứ tự định nghĩa. */
+export type RiseSetInfo = {
+  sunRise: string;
+  sunSet: string;
+  moonRise: string;
+  moonSet: string;
+  timeZoneLabel: string;
+};
+
+/**
+ * Dữ liệu bầu trời THỰC TẾ tại thời điểm người dùng hỏi, dạng các dòng ngắn để đưa vào báo cáo
+ * gửi mô hình ngôn ngữ lớn.
+ *
+ * Vì sao cần: SYSTEM_PROMPT của máy chủ hứa "có thể trả lời hành tinh nào thấy tối nay, pha Mặt
+ * Trăng, chòm sao nào đang mọc dựa trên dữ liệu được cung cấp", nhưng trước đây khối dữ liệu này
+ * CHỈ có ở bộ luận giải nội bộ (`skySection` trong interpret.ts) — báo cáo gửi Gemini không hề có.
+ * Kết quả là với câu hỏi quan sát, mô hình lớn không có số liệu và buộc phải đoán.
+ */
+export const skyObservationLines = (sky: SkySnapshot, riseSet: RiseSetInfo): string[] => {
+  const lines: string[] = [];
+  const stamp = `${sky.date.toLocaleString("vi-VN", { hour12: false })} (${riseSet.timeZoneLabel})`;
+  lines.push(
+    `- Thời điểm quan sát: ${stamp} · vĩ độ ${sky.latitude.toFixed(2)}°, kinh độ ${sky.longitude.toFixed(2)}° · ${sky.hemi} bán cầu.`
+  );
+  lines.push(
+    `- Mặt Trời: mọc ${riseSet.sunRise}, lặn ${riseSet.sunSet}; ngay lúc này ở ${sky.sunAltitude.toFixed(0)}° ${
+      sky.sunAltitude > 0 ? "TRÊN chân trời (trời còn sáng, khó thấy sao)" : "DƯỚI chân trời (trời tối)"
+    }.`
+  );
+  lines.push(
+    `- Mặt Trăng: ${sky.moonPhase}, độ sáng khoảng ${(sky.moonIllumination * 100).toFixed(0)}%, mọc ${riseSet.moonRise}, lặn ${riseSet.moonSet}.`
+  );
+
+  const visible = sky.visibleNow.slice(0, 6);
+  lines.push(
+    visible.length
+      ? `- Thấy được ngay lúc này (cao trên 5°): ${visible
+          .map((item) => `${item.label} cao ${item.alt.toFixed(0)}°, hướng ${compass(item.az)}, chòm ${item.constellation}`)
+          .join("; ")}.`
+      : "- Ngay lúc này không có hành tinh nào nổi trên 5° — đừng hứa với người dùng là nhìn thấy được."
+  );
+
+  const moving = sky.planets.filter((planet) => planet.key !== "sun");
+  lines.push(
+    `- Vị trí hành tinh trên TRỜI THẬT hiện tại (kinh độ NHIỆT ĐỚI theo chòm sao thực — KHÔNG phụ thuộc hệ hoàng đạo người dùng chọn trong bản đồ): ${moving
+      .map((planet) => `${planet.label} ${signPositionOf(planet.lon)}${planet.retrograde ? " (nghịch hành)" : ""}`)
+      .join(" · ")}.`
+  );
+
+  return lines;
+};

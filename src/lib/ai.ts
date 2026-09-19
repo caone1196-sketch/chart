@@ -18,6 +18,26 @@ export type AskResult = {
   keyRotations?: number;
   /** Ghi chú ẩn danh khi phải xoay khoá (không chứa nội dung khoá). */
   keyNote?: string | null;
+  /** Tổng số lần máy chủ gọi Google và số lần phải tự thử lại vì lỗi tạm thời (5xx / rớt mạng). */
+  attempts?: number;
+  retries?: number;
+  /** Ghi chú khi có câu trả lời nhờ tự thử lại (để người dùng biết Google vừa chập chờn). */
+  retryNote?: string | null;
+};
+
+/** Lỗi khi gọi /api/ai-chat — kèm đủ thông tin để giao diện quyết định có nên mời bấm thử lại. */
+export type AskFailure = {
+  error: string;
+  code: string;
+  hint?: string;
+  /** Lỗi tạm thời phía Google (5xx / rớt mạng / quota theo phút) → bấm thử lại có thể được. */
+  retryable?: boolean;
+  /** Mã HTTP Google trả về (null khi máy chủ không nói). */
+  httpStatus?: number | null;
+  /** Số lần máy chủ đã gọi Google cho câu hỏi này (kể cả các lần tự thử lại). */
+  attempts?: number;
+  /** Câu hỏi nên gửi lại khi người dùng bấm “Thử lại với Gemini”. */
+  retryQuestion?: string;
 };
 
 export type AskPayload = {
@@ -48,6 +68,8 @@ export type ServerHealth = {
   keySources: string[];
   /** Có nhiều hơn 1 khoá → máy chủ tự xoay khi khoá lỗi / hết quota. */
   keyRotation: boolean;
+  /** Máy chủ tự thử lại mấy lần khi Google lỗi tạm thời (5xx) — null nếu máy chủ chạy bản cũ. */
+  retry: { maxAttempts: number; budgetMs: number } | null;
   /** Kết quả kiểm tra từng khoá khi gọi ?probe=1. */
   probeKeys: Array<{
     key: number;
@@ -102,6 +124,12 @@ const postJson = async (url: string, body: unknown) => {
       keyRotations?: number;
       keyNote?: string | null;
       keyAttempts?: Array<{ key: number; code: string }>;
+      retryable?: boolean;
+      httpStatus?: number | null;
+      upstreamStatus?: string | null;
+      attempts?: number | null;
+      retries?: number;
+      retryNote?: string | null;
     } = {};
 
     try {
@@ -136,6 +164,7 @@ export const checkServerHealth = async (probe = false): Promise<ServerHealth> =>
     keysUsable: 0,
     keySources: [],
     keyRotation: false,
+    retry: null,
     probeKeys: [],
     probe: null,
     error: null
@@ -185,6 +214,13 @@ export const checkServerHealth = async (probe = false): Promise<ServerHealth> =>
       keysUsable,
       keySources: Array.isArray(keys.sources) ? (keys.sources as string[]) : [],
       keyRotation: keys.rotation === true || keysTotal > 1,
+      retry:
+        payload.retry && typeof payload.retry === "object"
+          ? {
+              maxAttempts: Number((payload.retry as Record<string, unknown>).maxAttempts ?? 0),
+              budgetMs: Number((payload.retry as Record<string, unknown>).budgetMs ?? 0)
+            }
+          : null,
       probeKeys: probedKeys,
       probe: payload.probe && typeof payload.probe === "object" ? (payload.probe as ServerHealth["probe"]) : null,
       error: null
@@ -207,18 +243,39 @@ export const checkServerHealth = async (probe = false): Promise<ServerHealth> =>
  * Nếu máy chủ chưa cấu hình API key (hoặc lỗi mạng), trả về lỗi để lớp gọi
  * chuyển sang bộ luận giải nội bộ. Trường `hint` cho biết cần sửa gì.
  */
-export const askServerAi = async (payload: AskPayload): Promise<AskResult | { error: string; code: string; hint?: string }> => {
+/** Mã lỗi THUỘC VỀ KHOÁ — chỉ khi đó mới nói "đã thử N khoá" để người dùng không đổ oan cho khoá. */
+const KEY_CODES = ["GEMINI_BAD_KEY", "GEMINI_API_DISABLED", "GEMINI_KEY_RESTRICTED", "GEMINI_QUOTA", "GEMINI_MODEL_NOT_FOUND"];
+
+/** Lỗi tạm thời phía Google/mạng → giao diện nên mời bấm “Thử lại với Gemini”. */
+export const isRetryableCode = (code?: string) =>
+  code === "GEMINI_UPSTREAM" || code === "GEMINI_NETWORK" || code === "GEMINI_QUOTA" || code === "SERVER_ERROR" || code === "NETWORK";
+
+export const askServerAi = async (payload: AskPayload): Promise<AskResult | AskFailure> => {
   try {
     const { ok, status, payload: data } = await postJson("/api/ai-chat", payload);
 
     if (!ok || !data.reply) {
-      const tried = Array.isArray(data.keyAttempts) && data.keyAttempts.length
-        ? ` Đã thử ${data.keyAttempts.length} khoá: ${data.keyAttempts
-            .map((attempt) => `khoá #${attempt.key} (${attempt.code})`)
-            .join(", ")}.`
+      const attempts = data.keyAttempts || [];
+      const aboutKeys = attempts.some((attempt) => KEY_CODES.includes(attempt.code));
+      // Google lỗi 5xx mà lại nói "đã thử 1 khoá" thì người dùng tưởng khoá API hỏng
+      // (và đi tạo khoá mới vô ích) — phải phân biệt rõ lỗi của khoá và lỗi của máy chủ Google.
+      const tried = attempts.length
+        ? aboutKeys
+          ? ` Đã thử ${attempts.length} khoá: ${attempts.map((attempt) => `khoá #${attempt.key} (${attempt.code})`).join(", ")}.`
+          : ` Đã gọi Google ${typeof data.attempts === "number" && data.attempts > 1 ? `${data.attempts} lần` : "một lần"} bằng ${attempts
+              .map((attempt) => `khoá #${attempt.key}`)
+              .join(", ")} — lỗi thuộc về máy chủ Google, không phải lỗi khoá.`
         : "";
-      const note = data.hint ? `${data.error || `Máy chủ AI trả về mã ${status}.`}${tried} ${data.hint}` : `${data.error ?? ""}${tried}`;
-      return { error: note || `Máy chủ AI trả về mã ${status}.`, code: data.code || "SERVER_ERROR", hint: data.hint };
+      const headline = data.error || `Máy chủ AI trả về mã ${status}.`;
+      const note = data.hint ? `${headline}${tried} ${data.hint}` : `${headline}${tried}`;
+      return {
+        error: note || `Máy chủ AI trả về mã ${status}.`,
+        code: data.code || "SERVER_ERROR",
+        hint: data.hint,
+        retryable: data.retryable === true || isRetryableCode(data.code),
+        httpStatus: typeof data.httpStatus === "number" ? data.httpStatus : null,
+        attempts: typeof data.attempts === "number" ? data.attempts : undefined
+      };
     }
 
     return {
@@ -228,16 +285,20 @@ export const askServerAi = async (payload: AskPayload): Promise<AskResult | { er
       keyUsed: typeof data.keyUsed === "number" ? data.keyUsed : undefined,
       keysConfigured: typeof data.keysConfigured === "number" ? data.keysConfigured : undefined,
       keyRotations: typeof data.keyRotations === "number" ? data.keyRotations : undefined,
-      keyNote: data.keyNote ?? null
+      keyNote: data.keyNote ?? null,
+      attempts: typeof data.attempts === "number" ? data.attempts : undefined,
+      retries: typeof data.retries === "number" ? data.retries : undefined,
+      retryNote: data.retryNote ?? null
     };
   } catch (error) {
-    const message =
-      error instanceof Error && error.name === "AbortError"
-        ? "Máy chủ AI phản hồi quá chậm."
-        : "Không kết nối được tới máy chủ AI.";
-    return { error: message, code: "NETWORK" };
+    const timeout = error instanceof Error && error.name === "AbortError";
+    return {
+      error: timeout ? "Máy chủ AI phản hồi quá chậm." : "Không kết nối được tới máy chủ AI.",
+      code: "NETWORK",
+      retryable: true
+    };
   }
 };
 
-export const isLocalFallback = (value: AskResult | { error: string; code: string }): value is { error: string; code: string } =>
+export const isLocalFallback = (value: AskResult | AskFailure): value is AskFailure =>
   typeof (value as { error?: string }).error === "string" && !(value as AskResult).reply;

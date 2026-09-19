@@ -19,6 +19,7 @@ import {
   displayAngle,
   formatLocalDate,
   formatLocalTime,
+  formatReportTimestamp,
   getOffsetHours,
   localSiderealDegrees,
   transitToLines,
@@ -28,13 +29,26 @@ import {
 import { askServerAi, checkServerHealth, type ChatEngine, type ChatTurn, type ServerHealth } from "@/lib/ai";
 import { geocodePlace } from "@/lib/geocode";
 import { answerLocally } from "@/lib/interpret";
-import { computeSkySnapshot, findFixedStarHits, riseSetForDay, type FixedStarHit } from "@/lib/sky";
+import { computeSkySnapshot, findFixedStarHits, riseSetForDay, skyObservationLines, type FixedStarHit } from "@/lib/sky";
 
 const STORAGE_FORM = "astral-chart-vn:form";
 const STORAGE_CHAT = "astral-chart-vn:chat";
 
+/**
+ * Điểm ảo đưa vào báo cáo gửi mô hình lớn: chỉ thiên thể thật + hai giao điểm + Lilith/Chiron.
+ * Bỏ nhóm hành tinh giả định (Hamburg/Uranian) để khỏi phình prompt bằng những điểm mà chính
+ * giao diện cũng ghi rõ là "không có thiên thể thật".
+ */
+const AI_EXTRA_POINT_KEYS = ["trueNode", "southNode", "lilith", "chiron", "ceres", "pallas", "juno", "vesta", "eris", "sedna"];
+
+/** Số sao cố định tối đa đưa vào báo cáo (đã xếp theo orb chặt dần). */
+const AI_FIXED_STAR_LIMIT = 6;
+
 /** Trạng thái lớp AI phía máy chủ hiển thị trên giao diện. */
 type ServerLlmState = "checking" | "gemini" | "local" | "unreachable";
+
+/** Tông màu của dòng trạng thái dưới khung chat: tin vui, ghi chú thường, hay cảnh báo lỗi. */
+type StatusTone = "info" | "ok" | "warn";
 
 const defaultForm = (): BirthFormValues => {
   const now = new Date();
@@ -104,6 +118,9 @@ export default function App() {
   const [serverLlm, setServerLlm] = useState<ServerLlmState>("checking");
   const [serverHealth, setServerHealth] = useState<ServerHealth | null>(null);
   const [isCheckingServer, setIsCheckingServer] = useState(false);
+  /** Câu hỏi nên gửi lại khi người dùng bấm “Thử lại với Gemini” (chỉ đặt khi lỗi là tạm thời). */
+  const [pendingRetry, setPendingRetry] = useState<string | null>(null);
+  const [statusTone, setStatusTone] = useState<StatusTone>("info");
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -272,8 +289,14 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const ask = async (text?: string) => {
+  /**
+   * Gửi câu hỏi cho lớp AI. `options.retry = true` khi người dùng bấm “Thử lại với Gemini”:
+   * câu hỏi đã nằm sẵn trong hội thoại nên không thêm lần nữa, và câu trả lời nội bộ của lượt
+   * trước được THAY bằng câu trả lời của Gemini (không nhân đôi câu trả lời cho một câu hỏi).
+   */
+  const ask = async (text?: string, options?: { retry?: boolean }) => {
     const value = (text ?? question).trim();
+    const isRetry = options?.retry === true;
     if (!chart) {
       setStatus("Hãy tạo bản đồ sao trước khi trò chuyện với AI.");
       return;
@@ -284,15 +307,35 @@ export default function App() {
     }
 
     const userTurn: ChatTurn = { role: "user", content: value };
-    const history = [...chatMessages, userTurn].filter((turn) => turn.content !== INTRO_MESSAGE.content);
-    setChatMessages((previous) => [...previous, userTurn]);
+    const history = (isRetry ? chatMessages : [...chatMessages, userTurn])
+      .filter((turn) => turn.content !== INTRO_MESSAGE.content)
+      // Bấm “Thử lại”: bỏ câu trả lời của bộ luận giải nội bộ ở cuối, để Gemini tự trả lời lại
+      // câu hỏi đó từ đầu thay vì “nhại” theo bản nội bộ vừa sinh ra.
+      .filter((turn, index, all) => !(isRetry && index === all.length - 1 && turn.role === "assistant"));
+    if (!isRetry) setChatMessages((previous) => [...previous, userTurn]);
     setQuestion("");
     setIsAsking(true);
     setStatus("");
-    setEngine(null);
+    setStatusTone("info");
+    setPendingRetry(null);
+    if (!isRetry) setEngine(null);
 
     const report = [
-      buildChartReport(chart, senderName.trim() || "Người dùng", value, transitToLines(transits)),
+      buildChartReport(chart, senderName.trim() || "Người dùng", value, transitToLines(transits), {
+        gender: form.gender,
+        // Mốc sinh theo giờ ĐỊA PHƯƠNG nơi sinh (máy chủ chỉ nhận UTC nên dễ bị AI suy diễn sai múi giờ).
+        localBirth: `${formatReportTimestamp(new Date(chart.utcDate.getTime() + chart.timezoneOffset * 3600000))} (giờ địa phương nơi sinh)`,
+        extraPoints: (variant?.extraPoints ?? []).filter((point) => AI_EXTRA_POINT_KEYS.includes(point.key)),
+        // Bầu trời THẬT lúc hỏi: trước đây chỉ bộ luận giải nội bộ có, còn Gemini thì phải đoán mò
+        // dù SYSTEM_PROMPT hứa trả lời được "tối nay thấy hành tinh nào".
+        skyLines: skySnapshot && riseSet ? skyObservationLines(skySnapshot, riseSet) : undefined,
+        fixedStarLines: fixedStars.slice(0, AI_FIXED_STAR_LIMIT).map(
+          (star) =>
+            `- ${star.starName} (${star.constellation}, cấp sao ${star.starMag.toFixed(
+              1
+            )}) trùng ${star.natalLabel} với orb ${star.orb.toFixed(2)}° — ${star.meaning}`
+        )
+      }),
       variant ? variantReport(variant) : ""
     ]
       .filter(Boolean)
@@ -327,17 +370,49 @@ export default function App() {
             }`
           : "mô hình lớn"
       );
-      setStatus(result.keyNote ? `Đã tự xoay khoá Gemini: ${result.keyNote}` : "");
+      const notes = [
+        result.retryNote ? (isRetry ? "Đã gọi lại Gemini thành công." : result.retryNote) : "",
+        result.keyNote ? `Đã tự xoay khoá Gemini: ${result.keyNote}` : ""
+      ].filter(Boolean);
+      setStatus(notes.join(" "));
+      setStatusTone(notes.length ? "ok" : "info");
       setServerLlm("gemini");
       void refreshServerHealth(false);
-      setChatMessages((previous) => [...previous, { role: "assistant", content: result.reply }]);
+      setChatMessages((previous) => {
+        if (!isRetry) return [...previous, { role: "assistant", content: result.reply }];
+        const next = [...previous];
+        // Thay câu trả lời nội bộ (của lượt bị Google lỗi) bằng câu trả lời Gemini.
+        if (next.length && next[next.length - 1].role === "assistant") {
+          next[next.length - 1] = { role: "assistant", content: result.reply };
+        } else {
+          next.push({ role: "assistant", content: result.reply });
+        }
+        return next;
+      });
     } else {
       const message = "error" in result ? result.error : "Không gọi được mô hình lớn.";
+      const code = "code" in result ? result.code : "";
+      const retryable = "retryable" in result && result.retryable === true;
+      // Google lỗi 5xx / rớt mạng là chuyện của máy chủ Google — nói rõ để người dùng
+      // không tưởng khoá API của mình hỏng rồi đi tạo khoá mới.
+      const headline =
+        code === "NO_API_KEY"
+          ? "Máy chủ chưa có khoá Gemini"
+          : code === "GEMINI_UPSTREAM" || code === "GEMINI_NETWORK"
+            ? "Gemini tạm thời gián đoạn (không phải lỗi khoá API)"
+            : code === "GEMINI_QUOTA"
+              ? "Gemini đang bị giới hạn số yêu cầu"
+              : "Mô hình lớn chưa sẵn sàng";
+      const tail = isRetry
+        ? "vẫn chưa gọi lại được Gemini; câu trả lời của bộ luận giải nội bộ ở trên vẫn được giữ."
+        : "đã trả lời bằng bộ luận giải nội bộ chạy trong trình duyệt.";
       setEngine("local");
       setEngineLabel("bộ luận giải nội bộ");
-      if ("code" in result && result.code === "NO_API_KEY") setServerLlm("local");
-      setStatus(`Mô hình lớn chưa sẵn sàng (${message}) — đã trả lời bằng bộ luận giải nội bộ chạy trong trình duyệt.`);
-      setChatMessages((previous) => [...previous, { role: "assistant", content: fallback() }]);
+      if (code === "NO_API_KEY") setServerLlm("local");
+      setStatus(`${headline} (${message}) — ${tail}`);
+      setStatusTone("warn");
+      if (retryable) setPendingRetry(value);
+      if (!isRetry) setChatMessages((previous) => [...previous, { role: "assistant", content: fallback() }]);
     }
 
     setIsAsking(false);
@@ -659,10 +734,17 @@ export default function App() {
             onClear={() => {
               setChatMessages([INTRO_MESSAGE]);
               setStatus("");
+              setStatusTone("info");
+              setPendingRetry(null);
               setEngine(null);
             }}
             isAsking={isAsking}
             status={status}
+            statusTone={statusTone}
+            canRetry={Boolean(pendingRetry)}
+            onRetry={() => {
+              if (pendingRetry) void ask(pendingRetry, { retry: true });
+            }}
             engine={engine}
             engineLabel={engineLabel}
             serverLlm={serverLlm}
