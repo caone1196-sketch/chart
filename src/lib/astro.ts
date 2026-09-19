@@ -1,6 +1,7 @@
 import { Body, PairLongitude, SiderealTime, SunPosition } from "astronomy-engine";
 import { HOUSE_SYSTEMS, armcToMc, computeHouses, houseOfLongitude, type HouseSystemId } from "@/lib/houses";
 import { ZODIAC_FRAMES, ayanamsa, type ZodiacFrameId } from "@/lib/zodiac";
+import { signRulersOf } from "@/lib/knowledge";
 import { calcObliquity, normalizeDegree, signedSeparation } from "@/lib/mathx";
 
 export { calcObliquity, normalizeDegree, signedSeparation };
@@ -97,6 +98,11 @@ export type GeocodeResult = {
   provider: "nominatim" | "open-meteo" | "thủ công";
 };
 
+/**
+ * 12 cung hoàng đạo. Trường `ruler` là chủ tinh theo phái HIỆN ĐẠI, viết bằng tên tiếng Anh và
+ * chỉ để tra cứu nhanh; bảng dùng để LUẬN là `SIGN_RULERS_MODERN` / `SIGN_RULERS_TRADITIONAL`
+ * trong `knowledge.ts` (có cả hai phái, vì Bọ Cạp / Bảo Bình / Song Ngư mỗi phái một đáp án).
+ */
 export const ZODIAC_SIGNS = [
   { name: "Bạch Dương", symbol: "Ar", latin: "Aries", element: "fire", modality: "cardinal", ruler: "Mars" },
   { name: "Kim Ngưu", symbol: "Ta", latin: "Taurus", element: "earth", modality: "fixed", ruler: "Venus" },
@@ -620,6 +626,25 @@ export const buildChartReport = (
 
   const cuspLine = chart.houses.map((house) => `nhà ${house.house} ${displayAngle(house.cusp)}`).join(" · ");
 
+  // Chủ tinh (domicile) theo Cung Mọc. Ba cung Bọ Cạp, Bảo Bình, Song Ngư có chủ tinh KHÁC nhau
+  // giữa phái hiện đại và phái truyền thống (Hy Lạp cổ, Vệ Đà) — báo cáo phải đưa cả hai kèm vị
+  // trí thật, nếu không mô hình lớn sẽ tự chọn một phái rồi nói như thể đó là đáp án duy nhất.
+  const signNameAt = (longitude: number) => ZODIAC_SIGNS[Math.floor(normalizeDegree(longitude) / 30)].name;
+  const rulers = signRulersOf(signNameAt(chart.ascendant));
+  const rulerText = (key?: string) => {
+    if (!key) return "không xác định";
+    const planet = chart.planets.find((item) => item.key === key);
+    const label = planet?.label ?? PLANETS.find((item) => item.key === key)?.label ?? key;
+    return planet ? `${label} ở ${signNameAt(planet.longitude)} (nhà ${planet.house})` : `${label} (không có trong danh sách hành tinh)`;
+  };
+  const rulerLine = `Chủ tinh bản đồ (domicile) theo Cung Mọc ${signNameAt(chart.ascendant)}: ${
+    rulers.differs
+      ? `phái HIỆN ĐẠI = ${rulerText(rulers.modern)}; phái TRUYỀN THỐNG (Hy Lạp cổ, Vệ Đà) = ${rulerText(
+          rulers.traditional
+        )} — cung này hai phái gán cho hai hành tinh khác nhau, phải nói rõ bạn luận theo phái nào`
+      : `${rulerText(rulers.modern)} (hai phái hiện đại và truyền thống cùng chọn hành tinh này)`
+  }`;
+
   const header = [
     "BÁO CÁO BẢN ĐỒ SAO GỬI AI LUẬN GIẢI",
     "",
@@ -647,7 +672,7 @@ export const buildChartReport = (
       chart.ascendant
     )} | Thiên Đỉnh (MC): ${displayAngle(chart.midheaven)}\nIC: ${displayAngle(chart.imumCoeli)} | DC: ${displayAngle(
       chart.descendant
-    )}\nPha Mặt Trăng lúc sinh: ${chart.moonPhase} (góc ${chart.moonPhaseAngle.toFixed(1)}°)\nCusp 12 nhà: ${cuspLine}`,
+    )}\nPha Mặt Trăng lúc sinh: ${chart.moonPhase} (góc ${chart.moonPhaseAngle.toFixed(1)}°)\nCusp 12 nhà: ${cuspLine}\n${rulerLine}`,
     `CÂN BẰNG TỔNG\nNguyên tố: ${elementLine}\nTính chất: ${modalityLine}`,
     `VỊ TRÍ HÀNH TINH (${sidereal ? "sidereal" : "tropical"}, geocentric)\n${planetLines}`,
     pointLines

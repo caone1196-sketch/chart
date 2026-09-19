@@ -10,8 +10,11 @@ import {
   PLANET_KEYWORDS,
   SIGN_TRAITS,
   normalizeVietnamese,
+  signRulersOf,
   type Intent
 } from "@/lib/knowledge";
+import { HOUSE_SYSTEMS } from "@/lib/houses";
+import { ZODIAC_FRAMES } from "@/lib/zodiac";
 import type { FixedStarHit, SkySnapshot } from "@/lib/sky";
 import { compass, signPositionOf } from "@/lib/sky";
 import type { VariantChart } from "@/lib/chart-variants";
@@ -55,20 +58,9 @@ const signNameOf = (longitude: number) => {
   return names[Math.floor(normalizeDegree(longitude) / 30)] ?? "không rõ";
 };
 
-const SIGN_RULER: Record<string, string> = {
-  "Bạch Dương": "mars",
-  "Kim Ngưu": "venus",
-  "Song Tử": "mercury",
-  "Cự Giải": "moon",
-  "Sư Tử": "sun",
-  "Xử Nữ": "mercury",
-  "Thiên Bình": "venus",
-  "Bọ Cạp": "pluto",
-  "Nhân Mã": "jupiter",
-  "Ma Kết": "saturn",
-  "Bảo Bình": "uranus",
-  "Song Ngư": "neptune"
-};
+/** Nhãn thật của hệ nhà / hệ hoàng đạo đang chọn (không in thẳng id kỹ thuật cho người dùng). */
+const houseSystemName = (id: string) => HOUSE_SYSTEMS.find((system) => system.id === id)?.label ?? id;
+const zodiacFrameName = (id: string) => ZODIAC_FRAMES.find((frame) => frame.id === id)?.label ?? id;
 
 const houseLabel = (house: number) => HOUSE_THEMES[house]?.name ?? `Nhà ${house}`;
 const houseTopics = (house: number) => HOUSE_THEMES[house]?.topics ?? "lĩnh vực liên quan";
@@ -97,15 +89,43 @@ const tightestAspects = (chart: ChartData, limit = 3, filter?: (aspect: Aspect) 
 const aspectsTouching = (chart: ChartData, keys: string[], limit = 4) =>
   chart.aspects.filter((aspect) => keys.includes(aspect.from) || keys.includes(aspect.to)).slice(0, limit);
 
-/** Hành tinh chủ quản của một cung và vị trí thực tế của nó trong bản đồ. */
-const rulerLine = (chart: ChartData, signName: string, context: string) => {
-  const rulerKey = SIGN_RULER[signName];
-  const ruler = chart.planets.find((planet) => planet.key === rulerKey);
-  if (!ruler) return `${context} ở ${signName}: hành tinh chủ quản là ${PLANET_KEYWORDS[rulerKey]?.label ?? rulerKey}.`;
+/** Vị trí thực tế của một hành tinh chủ tinh trong bản đồ (kèm nơi năng lượng được dẫn tới). */
+const rulerPosition = (chart: ChartData, key?: string) => {
+  if (!key) return "không xác định";
+  const label = PLANET_KEYWORDS[key]?.label ?? key;
+  const planet = chart.planets.find((item) => item.key === key);
+  if (!planet) return `${label} (không có trong bản đồ này)`;
+  return `${label} nằm ở ${signNameOf(planet.longitude)} (nhà ${planet.house}) → năng lượng dẫn tới ${houseTopics(
+    planet.house
+  )}`;
+};
 
-  return `${context} ở ${signName}, chủ quản là ${PLANET_KEYWORDS[ruler.key]?.label} — hành tinh này của bạn nằm ở ${signNameOf(
-    ruler.longitude
-  )} (nhà ${ruler.house}), nên năng lượng được dẫn tới ${houseTopics(ruler.house)}.`;
+/**
+ * Hành tinh chủ quản của một cung và vị trí thực tế của nó trong bản đồ.
+ *
+ * Bọ Cạp, Bảo Bình, Song Ngư có chủ tinh KHÁC nhau giữa phái hiện đại và phái truyền thống
+ * (Hy Lạp cổ, Vệ Đà — hai mục đó trong app này dùng bảng truyền thống). Trước đây dòng này chỉ
+ * nêu một đáp án theo phái hiện đại, khiến hai mục trong app trông như tự mâu thuẫn; nay nêu cả
+ * hai kèm vị trí thật của từng hành tinh, và nhắc người đọc chọn phái khi kết luận.
+ */
+const rulerLine = (chart: ChartData, signName: string, context: string) => {
+  const rulers = signRulersOf(signName);
+  if (!rulers.modern) return `${context} ở ${signName}: chưa có bảng chủ tinh cho cung này.`;
+
+  if (!rulers.differs) {
+    const ruler = chart.planets.find((planet) => planet.key === rulers.modern);
+    if (!ruler) return `${context} ở ${signName}: hành tinh chủ quản là ${PLANET_KEYWORDS[rulers.modern]?.label ?? rulers.modern}.`;
+
+    return `${context} ở ${signName}, chủ quản là ${PLANET_KEYWORDS[ruler.key]?.label} — hành tinh này của bạn nằm ở ${signNameOf(
+      ruler.longitude
+    )} (nhà ${ruler.house}), nên năng lượng được dẫn tới ${houseTopics(ruler.house)}.`;
+  }
+
+  return (
+    `${context} ở ${signName} có HAI chủ tinh tuỳ phái: hiện đại là ${rulerPosition(chart, rulers.modern)}; ` +
+    `truyền thống (phái Hy Lạp cổ và Vệ Đà dùng trong app này) là ${rulerPosition(chart, rulers.traditional)}. ` +
+    `Đọc cả hai và nói rõ bạn đang theo phái nào khi kết luận.`
+  );
 };
 
 const balanceLine = (chart: ChartData) => {
@@ -245,6 +265,32 @@ const houseSpecificSection = (chart: ChartData, question: string) => {
   );
 };
 
+/**
+ * Dòng giải thích Cung Mọc, nói ĐÚNG vai trò của AC trong hệ nhà người dùng đang chọn.
+ *
+ * Trước đây dòng này ghi cứng "AC … quyết định hệ thống nhà Whole Sign" cho MỌI hệ — sai hai lần:
+ * người dùng có thể đang xem Placidus/Koch/…, và với "Chia bằng nhau từ Thiên Đỉnh" (equalMC) thì
+ * AC KHÔNG phải cusp nhà 1 (MC mới là cusp nhà 10). Whole Sign cũng không lấy AC làm cusp: cusp
+ * nhà 1 là 0° của cung chứa AC, còn AC nằm bên trong nhà 1.
+ */
+const acBullet = (chart: ChartData) => {
+  const systemName = houseSystemName(chart.houseSystem);
+  const cusp = chart.houses[0]?.cusp;
+  const gap =
+    typeof cusp === "number" && Number.isFinite(cusp) ? Math.abs(normalizeDegree(cusp - chart.ascendant + 180) - 180) : 0;
+  const base = `Cung Mọc (AC) ${displayAngle(chart.ascendant)} là điểm cung hoàng đạo mọc ở chân trời phía đông lúc bạn sinh`;
+
+  if (chart.houseSystem === "wholeSign") {
+    return `- ${base} — hệ ${systemName} lấy trọn cung chứa AC làm nhà 1, nên cusp nhà 1 là ${displayAngle(
+      cusp ?? chart.ascendant
+    )} (đầu cung) còn AC nằm bên trong nhà 1.`;
+  }
+  if (gap < 0.01) return `- ${base} — là cusp nhà 1 trong hệ ${systemName} bạn đang dùng.`;
+  return `- ${base} — trong hệ ${systemName} bạn đang dùng thì cusp nhà 1 nằm ở ${displayAngle(
+    cusp ?? chart.ascendant
+  )}, lệch AC ${gap.toFixed(2)}° nên AC không phải mốc bắt đầu nhà 1.`;
+};
+
 const recommendations = (intents: Intent[], chart: ChartData, transits: TransitHit[]) => {
   const suggestions: string[] = [];
   const applying = transits.filter((hit) => hit.applying).slice(0, 2);
@@ -375,8 +421,8 @@ const sourceNote = (input: LocalAnswerInput) => {
     `(${chart.locationLabel}, ${chart.utcDate.toUTCString()}) — không cần API key nên luôn hoạt động. ` +
     `Nếu máy chủ có GEMINI_API_KEY (hoặc GEMINI_API_KEYS), hệ thống sẽ tự chuyển sang Gemini để trả lời linh hoạt hơn; ` +
     `kiểm tra bằng /api/health hoặc \`npm run check:ai\`. ` +
-    `Hệ đang dùng: ${chart.houseSystem !== "wholeSign" ? chart.houseSystem : "Whole Sign"} · ${
-      chart.zodiacFrame === "tropical" ? "hoàng đạo nhiệt đới" : `hoàng đạo sidereal ${chart.zodiacFrame} (ayanamsa ${chart.ayanamsa.toFixed(2)}°)`
+    `Hệ đang dùng: ${houseSystemName(chart.houseSystem)} · ${zodiacFrameName(chart.zodiacFrame)}${
+      chart.zodiacFrame === "tropical" ? "" : ` (ayanamsa ${chart.ayanamsa.toFixed(4)}° đã trừ vào mọi kinh độ)`
     }. ` +
     `Chiêm tinh là hệ thống tham khảo về xu hướng và tính cách, không thay thế quyết định y tế, tài chính hay pháp lý.`
   );
@@ -584,7 +630,7 @@ export const answerLocally = (input: LocalAnswerInput): string => {
     sections.push(
       [
         "**Giải thích nhanh các khái niệm trong bản đồ của bạn**",
-        `- Cung Mọc (AC) ${displayAngle(chart.ascendant)} là điểm cung hoàng đạo mọc ở chân trời phía đông lúc bạn sinh — quyết định hệ thống nhà Whole Sign.`,
+        acBullet(chart),
         `- Thiên Đỉnh (MC) ${displayAngle(chart.midheaven)} là đỉnh cao sự nghiệp và hình ảnh xã hội.`,
         `- Nhà là 12 lĩnh vực của đời sống; nhà 1 bắt đầu từ cung Mọc và đi ngược chiều kim đồng hồ theo thứ tự các cung hoàng đạo.`,
         `- ${rulerLine(chart, signNameOf(chart.ascendant), "Cung Mọc (AC)")}`,

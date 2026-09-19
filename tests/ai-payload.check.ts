@@ -26,8 +26,11 @@ import {
   localSiderealDegrees,
   normalizeDegree,
   transitToLines,
+  ZODIAC_SIGNS,
   type ChartData
 } from "../src/lib/astro.ts";
+import { PLANET_KEYWORDS, SIGN_RULERS_MODERN, SIGN_RULERS_TRADITIONAL, signRulersOf } from "../src/lib/knowledge.ts";
+import { essentialDignity } from "../src/lib/hellenistic.ts";
 import { HOUSE_SYSTEMS, type HouseSystemId } from "../src/lib/houses.ts";
 import { ZODIAC_FRAMES, type ZodiacFrameId } from "../src/lib/zodiac.ts";
 import { buildVariantChart, variantReport } from "../src/lib/chart-variants.ts";
@@ -61,8 +64,13 @@ const BIRTH_UTC = new Date(Date.UTC(1996, 10, 10, 17, 30));
 const NOW = new Date(Date.UTC(2026, 8, 18, 12, 0));
 const QUESTION = "Năm tới tôi có nên đổi việc không?";
 
-const build = (houseSystem: HouseSystemId, zodiacFrame: ZodiacFrameId, latitude = LAT, longitude = LON): ChartData =>
-  calculateChart(BIRTH_UTC, latitude, longitude, PLACE, "Asia/Ho_Chi_Minh", OFFSET, { houseSystem, zodiacFrame });
+const build = (
+  houseSystem: HouseSystemId,
+  zodiacFrame: ZodiacFrameId,
+  latitude = LAT,
+  longitude = LON,
+  utcDate: Date = BIRTH_UTC
+): ChartData => calculateChart(utcDate, latitude, longitude, PLACE, "Asia/Ho_Chi_Minh", OFFSET, { houseSystem, zodiacFrame });
 
 const variantOf = (chart: ChartData, houseSystem: HouseSystemId, zodiacFrame: ZodiacFrameId) => {
   const localDate = new Date(chart.utcDate.getTime() + chart.timezoneOffset * 3600 * 1000);
@@ -310,14 +318,150 @@ const skyLines = skyObservationLines(sky, riseSet);
 
     assert(group, !answer.includes("OPENAI"), "bộ luận giải nội bộ không được bảo người dùng cấu hình OPENAI_API_KEY");
     assert(group, answer.includes("GEMINI_API_KEY"), "phải chỉ đúng biến GEMINI_API_KEY");
-    assert(group, answer.includes("placidus") || answer.includes("Placidus"), "câu trả lời nội bộ phải nói rõ hệ nhà đang dùng");
-    assert(
-      group,
-      frame === "tropical" ? answer.includes("nhiệt đới") : answer.includes("lahiri") && answer.includes("ayanamsa"),
-      `câu trả lời nội bộ phải nói rõ hệ hoàng đạo đang dùng (${frame})`
-    );
+    const houseLabel = HOUSE_SYSTEMS.find((system) => system.id === "placidus")?.label ?? "";
+    const frameLabel = ZODIAC_FRAMES.find((item) => item.id === frame)?.label ?? "";
+    assert(group, answer.includes(houseLabel), `câu trả lời nội bộ phải nêu nhãn hệ nhà thật (“${houseLabel}”), không in id kỹ thuật`);
+    assert(group, answer.includes(frameLabel), `câu trả lời nội bộ phải nêu nhãn hệ hoàng đạo thật (“${frameLabel}”)`);
+    if (frame !== "tropical") {
+      assert(group, answer.includes(chart.ayanamsa.toFixed(4)), "hệ sidereal phải khai đúng giá trị ayanamsa đang trừ vào kinh độ");
+    }
     assert(group, answer.length > 400, "câu trả lời nội bộ phải có nội dung đáng kể");
   }
+}
+
+/* ── 9. Chủ tinh (domicile): ba cung có HAI đáp án tuỳ phái phải nêu cả hai ── */
+
+const SIGN_NAMES = ZODIAC_SIGNS.map((sign) => sign.name);
+const signNameAt = (longitude: number) => SIGN_NAMES[Math.floor(normalizeDegree(longitude) / 30)];
+/** Duyệt 24 giờ trong ngày để tìm lá số có Cung Mọc rơi vào từng cung (fixture cố định chỉ ra 2 cung). */
+const chartsByHour = (frame: ZodiacFrameId, houseSystem: HouseSystemId = "placidus") =>
+  Array.from({ length: 24 }, (_, hour) =>
+    build(houseSystem, frame, LAT, LON, new Date(BIRTH_UTC.getTime() + hour * 3600 * 1000))
+  );
+
+{
+  const group = "chủ tinh hai phái";
+
+  for (const name of SIGN_NAMES) {
+    assert(group, Boolean(SIGN_RULERS_MODERN[name]), `${name}: thiếu chủ tinh phái hiện đại`);
+    assert(group, Boolean(SIGN_RULERS_TRADITIONAL[name]), `${name}: thiếu chủ tinh phái truyền thống`);
+  }
+
+  // Bảng truyền thống của bộ luận giải PHẢI khớp bảng domicile mà mục Hy Lạp cổ đang chấm điểm,
+  // nếu không hai mục trong cùng một app sẽ nói hai đằng về cùng một cung.
+  SIGN_NAMES.forEach((name, index) => {
+    const dignity = essentialDignity(SIGN_RULERS_TRADITIONAL[name], index * 30 + 15, "day");
+    expect(
+      group,
+      dignity.domicile,
+      index,
+      `chủ tinh truyền thống của ${name} (${SIGN_RULERS_TRADITIONAL[name]}) phải trùng bảng domicile của hellenistic.ts`
+    );
+  });
+
+  const dual = SIGN_NAMES.filter((name) => signRulersOf(name).differs).sort();
+  expect(
+    group,
+    dual,
+    ["Bọ Cạp", "Bảo Bình", "Song Ngư"].sort(),
+    "chỉ Bọ Cạp, Bảo Bình, Song Ngư mới có chủ tinh khác nhau giữa hai phái"
+  );
+
+  // Báo cáo gửi AI: mọi cặp hệ nhà × hệ hoàng đạo đều phải có dòng chủ tinh theo Cung Mọc.
+  for (const system of HOUSE_SYSTEMS) {
+    for (const frame of ZODIAC_FRAMES) {
+      const chart = build(system.id, frame.id);
+      const report = buildChartReport(chart, "Người kiểm tra", QUESTION, []);
+      const acSign = signNameAt(chart.ascendant);
+      const where = `${system.id} + ${frame.id}`;
+      assert(
+        group,
+        report.includes(`Chủ tinh bản đồ (domicile) theo Cung Mọc ${acSign}:`),
+        `${where}: báo cáo phải nêu chủ tinh theo Cung Mọc ${acSign}`
+      );
+      if (!signRulersOf(acSign).differs) {
+        assert(group, !report.includes("phái HIỆN ĐẠI"), `${where}: cung ${acSign} chỉ có một chủ tinh thì không cần phân trần hai phái`);
+      }
+    }
+  }
+
+  // Quét 24 giờ để chắc chắn bắt được lá số có Cung Mọc ở cả ba cung hai chủ tinh.
+  const seenDual = new Set<string>();
+  for (const frame of ["tropical", "lahiri"] as ZodiacFrameId[]) {
+    for (const chart of chartsByHour(frame)) {
+      const acSign = signNameAt(chart.ascendant);
+      const rulers = signRulersOf(acSign);
+      if (!rulers.differs) continue;
+      seenDual.add(acSign);
+      const report = buildChartReport(chart, "Người kiểm tra", QUESTION, []);
+      assert(group, report.includes("phái HIỆN ĐẠI") && report.includes("phái TRUYỀN THỐNG"), `${acSign}: phải nêu cả hai phái`);
+      assert(group, report.includes("Hy Lạp cổ") && report.includes("Vệ Đà"), `${acSign}: phải nói rõ phái truyền thống là phái nào`);
+      const modern = chart.planets.find((planet) => planet.key === rulers.modern);
+      const traditional = chart.planets.find((planet) => planet.key === rulers.traditional);
+      assert(group, Boolean(modern && traditional), `${acSign}: cả hai chủ tinh phải có trong bảng hành tinh của app`);
+      if (modern && traditional) {
+        assert(group, report.includes(`${modern.label} ở ${signNameAt(modern.longitude)} (nhà ${modern.house})`), `${acSign}: phải nêu vị trí chủ tinh hiện đại`);
+        assert(
+          group,
+          report.includes(`${traditional.label} ở ${signNameAt(traditional.longitude)} (nhà ${traditional.house})`),
+          `${acSign}: phải nêu vị trí chủ tinh truyền thống`
+        );
+      }
+      assert(group, report.length < REPORT_CHAR_LIMIT, "thêm dòng chủ tinh vẫn phải lọt trần ký tự");
+    }
+  }
+  expect(group, [...seenDual].sort(), ["Bọ Cạp", "Bảo Bình", "Song Ngư"].sort(), "phải quét được đủ ba cung hai chủ tinh");
+
+  // Bộ luận giải nội bộ cũng phải nêu cả hai, và không được khẳng định cứng hệ nhà.
+  const scorpio = chartsByHour("tropical").find((chart) => signNameAt(chart.ascendant) === "Bọ Cạp");
+  assert(group, Boolean(scorpio), "phải dựng được lá số có Cung Mọc Bọ Cạp để kiểm");
+  if (scorpio) {
+    const answer = answerLocally({
+      question: "Cung Mọc của tôi nghĩa là gì?",
+      chart: scorpio,
+      senderName: "Người kiểm tra",
+      now: NOW,
+      sky,
+      transits: computeTransits(scorpio, NOW, 4),
+      fixedStars: [],
+      variant: variantOf(scorpio, "placidus", "tropical"),
+      riseSet
+    });
+    assert(group, answer.includes("HAI chủ tinh"), "Cung Mọc Bọ Cạp: bộ nội bộ phải nói có hai chủ tinh");
+    assert(group, answer.includes(PLANET_KEYWORDS.pluto.label), "phải nêu chủ tinh hiện đại (Diêm Vương)");
+    assert(group, answer.includes(PLANET_KEYWORDS.mars.label), "phải nêu chủ tinh truyền thống (Hỏa Tinh)");
+    assert(group, answer.includes("là cusp nhà 1 trong hệ Placidus"), "Placidus: phải nói AC chính là cusp nhà 1 của hệ đang dùng");
+    assert(group, !answer.includes("quyết định hệ thống nhà Whole Sign"), "không được khẳng định cứng Whole Sign khi người dùng chọn hệ khác");
+    assert(group, answer.includes(HOUSE_SYSTEMS.find((system) => system.id === "placidus")?.label ?? ""), "phải nêu nhãn hệ nhà đang dùng");
+  }
+
+  // Hai hệ còn lại: AC KHÔNG phải cusp nhà 1 (equalMC lấy MC làm cusp nhà 10; Whole Sign lấy
+  // trọn cung chứa AC) → câu trả lời phải mô tả đúng từng hệ thay vì một câu ghi cứng.
+  const localAnswer = (chart: ChartData, system: HouseSystemId) =>
+    answerLocally({
+      question: "Giải thích bản đồ sao của tôi",
+      chart,
+      senderName: "Người kiểm tra",
+      now: NOW,
+      sky,
+      transits: [],
+      fixedStars: [],
+      variant: variantOf(chart, system, "tropical"),
+      riseSet
+    });
+
+  const equalMc = build("equalMC", "tropical");
+  const equalGap = Math.abs(normalizeDegree(equalMc.houses[0].cusp - equalMc.ascendant + 180) - 180);
+  assert(group, equalGap > 0.01, "lá số mẫu ở hệ equalMC phải có cusp nhà 1 lệch cung Mọc (không thì phép kiểm dưới đây vô nghĩa)");
+  const equalAnswer = localAnswer(equalMc, "equalMC");
+  assert(group, equalAnswer.includes("AC không phải mốc bắt đầu nhà 1"), "equalMC: phải nói rõ AC không phải cusp nhà 1");
+  assert(group, equalAnswer.includes(`lệch AC ${equalGap.toFixed(2)}°`), "equalMC: phải nêu độ lệch thật giữa cusp nhà 1 và AC");
+  assert(group, !equalAnswer.includes("quyết định hệ thống nhà Whole Sign"), "equalMC: không được khẳng định AC quyết định nhà 1");
+
+  const whole = build("wholeSign", "tropical");
+  const wholeAnswer = localAnswer(whole, "wholeSign");
+  assert(group, wholeAnswer.includes("lấy trọn cung chứa AC làm nhà 1"), "Whole Sign: phải mô tả đúng cách hệ này lấy nhà 1");
+  assert(group, !wholeAnswer.includes("quyết định hệ thống nhà Whole Sign"), "không còn câu ghi cứng cũ ở bất kỳ hệ nào");
 }
 
 console.log(`\n${failures.length ? "✘" : "✔"} Dữ liệu gửi AI & cách luận: ${checks} phép kiểm, ${failures.length} lỗi.`);

@@ -587,18 +587,50 @@ dùng (trước đây trả lời “Mặt Trời Bọ Cạp” mà không nói 
 người dùng đang xem Lahiri, nên thẻ này lệch ~23,8° so với bản đồ, cusp và báo cáo gửi AI. Đã đổi sang
 `variant.sidereal[point.key]` và ghi chú “kinh độ đã quy về … (trừ ayanamsa …)”.
 
-### 12.7 Giới hạn còn lại (có chủ ý, không phải lỗi)
+### 12.7 Sửa tiếp trong cùng lượt soát: chủ tinh hai phái & câu ghi cứng “AC quyết định hệ thống nhà Whole Sign”
 
-- `SIGN_RULER` trong `interpret.ts` chỉ theo chủ tinh **hiện đại** (Thiên Vương/Hải Vương/Diêm Vương cai
-  Bảo Bình/Song Ngư/Bọ Cạp) và chưa ghi chú đó là phái hiện đại — khác với chủ tinh truyền thống mà Vệ Đà
-  dùng. Không sai, nhưng người dùng hỏi “vì sao Bọ Cạp do Diêm Vương cai quản” sẽ thấy hai câu trả lời khác
-  nhau giữa hai mục.
+Hai chỗ còn lại của **cùng một loại lỗi** (khẳng định cứng một phái / một hệ) nằm trong bộ luận giải nội bộ
+`src/lib/interpret.ts`:
+
+**a) Chủ tinh (domicile) chỉ theo phái hiện đại, không ghi chú phái.** Bảng cũ `SIGN_RULER` gán Bọ Cạp →
+Diêm Vương, Bảo Bình → Thiên Vương, Song Ngư → Hải Vương. Không sai theo phái hiện đại, nhưng app này còn
+mục **Hy Lạp cổ** (`essentialDignity` trong `hellenistic.ts`, bảng `DOMICILE` 7 hành tinh cổ điển) và mục
+**Vệ Đà** — cả hai đều dùng Hỏa Tinh / Thổ Tinh / Mộc Tinh cho đúng ba cung đó. Người dùng hỏi “vì sao Bọ
+Cạp do Diêm Vương cai quản” sẽ thấy hai mục trong app nói hai đằng mà không mục nào giải thích.
+
+- Bảng chủ tinh nay quy về **một chỗ** trong `knowledge.ts`: `SIGN_RULERS_MODERN`, `SIGN_RULERS_TRADITIONAL`
+  và `signRulersOf(signName)` (9 cung hai phái trùng nhau, đúng 3 cung khác nhau).
+- Bộ luận giải nội bộ: với 3 cung đó nêu **cả hai** kèm vị trí thật của từng hành tinh — “hiện đại là Diêm
+  Vương Tinh nằm ở Nhân Mã (nhà 1) → …; truyền thống (phái Hy Lạp cổ và Vệ Đà dùng trong app này) là Hỏa
+  Tinh nằm ở Xử Nữ (nhà 10) → …” và nhắc chọn phái khi kết luận; 9 cung còn lại giữ nguyên câu chữ cũ.
+- Báo cáo gửi Gemini thêm dòng `Chủ tinh bản đồ (domicile) theo Cung Mọc …: phái HIỆN ĐẠI = … ; phái TRUYỀN
+  THỐNG (Hy Lạp cổ, Vệ Đà) = …` để mô hình lớn không tự chọn phái rồi nói như thể đó là đáp án duy nhất;
+  `SYSTEM_PROMPT` thêm luật tương ứng.
+- Test khoá: bảng truyền thống phải **khớp** bảng `DOMICILE` mà `essentialDignity` đang chấm điểm (so cả 12
+  cung), đúng 3 cung có `differs`, và quét 24 giờ × 2 hệ hoàng đạo để chắc bắt được cả Bọ Cạp, Bảo Bình,
+  Song Ngư trong báo cáo lẫn câu trả lời nội bộ (fixture cố định chỉ ra 2 cung nên không đủ).
+
+**b) “Cung Mọc … quyết định hệ thống nhà Whole Sign”** — câu ghi cứng cho MỌI hệ, sai hai lần: người dùng
+có thể đang xem Placidus/Koch…, và với `equalMC` (Chia bằng nhau từ Thiên Đỉnh, lấy MC làm cusp nhà 10) thì
+AC **không** phải cusp nhà 1 — đo ở lá số mẫu: AC Xử Nữ 0°48, cusp nhà 1 Xử Nữ 0°39, **lệch 0,1538°**.
+Whole Sign cũng không lấy AC làm cusp: cusp nhà 1 là 0° của cung chứa AC (lệch 0,81° ở lá số mẫu).
+
+Nay `acBullet()` mô tả đúng từng trường hợp: Whole Sign (“lấy trọn cung chứa AC làm nhà 1, cusp nhà 1 là
+đầu cung, AC nằm bên trong nhà 1”), hệ lấy AC làm cusp nhà 1 (“là cusp nhà 1 trong hệ Placidus …”), và hệ
+không lấy (“cusp nhà 1 nằm ở …, lệch AC 0,15° nên AC không phải mốc bắt đầu nhà 1”). `sourceNote` cũng thôi
+in id kỹ thuật (`placidus`, `lahiri`) mà dùng nhãn thật của engine, ayanamsa 4 chữ số.
+
+### 12.8 Giới hạn còn lại (có chủ ý, không phải lỗi)
+
 - Điểm giả định Hamburg (Cupido…Poseidon, Isis-Transpluto, Selena) không gửi mô hình lớn.
+- `ZODIAC_SIGNS[].ruler` trong `astro.ts` vẫn giữ tên chủ tinh **hiện đại** bằng tiếng Anh (chỉ để tra
+  cứu, không hiển thị ở đâu); bảng dùng để luận là `SIGN_RULERS_MODERN` / `SIGN_RULERS_TRADITIONAL` trong
+  `knowledge.ts` — đã ghi chú ngay trên hằng số để không ai nhầm đó là nguồn thứ ba.
 - Khối bầu trời chỉ có khi toạ độ hợp lệ (`skySnapshot`/`riseSet` khác `null`); không có thì báo cáo
   **không** bịa mục đó (test khoá cả hai chiều).
 - Sao cố định gửi tối đa 6, câu hỏi tối đa 2.000 ký tự, báo cáo tối đa 16.000 ký tự.
 
-### 12.8 Bất biến mới được khoá bằng test (`npm run test:ai-payload`)
+### 12.9 Bất biến mới được khoá bằng test (`npm run test:ai-payload`)
 
 | Bất biến | Test |
 | --- | --- |
@@ -614,14 +646,17 @@ người dùng đang xem Lahiri, nên thẻ này lệch ~23,8° so với bản �
 | Điểm ảo in theo đúng hệ đang xem (sidereal = nhiệt đới − ayanamsa) và **giữ nguyên số nhà** | `test:ai-payload`, `test:variants` |
 | Đủ 12 cusp, giới tính, giờ sinh địa phương, sao cố định; góc chiếu xếp orb tăng dần | `test:ai-payload` |
 | `SYSTEM_PROMPT` dặn: chỉ dùng dữ liệu trong báo cáo, tự nêu hệ quy chiếu, tách ba mốc thời gian, tôn trọng orb, không tư vấn y tế/pháp lý, không nhắc nhà cung cấp khác | `test:ai-payload` |
-| Bộ luận giải nội bộ **không** nhắc `OPENAI_API_KEY` và có nêu hệ nhà + hệ quy chiếu | `test:ai-payload` |
+| Bộ luận giải nội bộ **không** nhắc `OPENAI_API_KEY` và nêu **nhãn thật** của hệ nhà + hệ hoàng đạo + ayanamsa | `test:ai-payload` |
+| Bảng chủ tinh truyền thống **khớp** bảng `DOMICILE` của `essentialDignity` (cả 12 cung); đúng 3 cung Bọ Cạp/Bảo Bình/Song Ngư có hai chủ tinh | `test:ai-payload` |
+| Báo cáo + câu trả lời nội bộ nêu **cả hai phái** kèm vị trí thật khi Cung Mọc ở 3 cung đó (quét 24 giờ × 2 hệ hoàng đạo); 9 cung còn lại không bị nhồi chữ “phái” | `test:ai-payload` |
+| Không còn câu ghi cứng “AC quyết định hệ thống nhà Whole Sign”: Placidus → “là cusp nhà 1”, equalMC → nêu độ lệch thật, Whole Sign → “lấy trọn cung chứa AC” | `test:ai-payload` |
 | Khoá hợp lệ nhưng không có tiền tố `AIza` (53 ký tự) **không** bị coi là dán sai; khoá ngắn/có khoảng trắng/dán kèm `sk-` thì bị | `test:ai` |
 
-Kết quả sau khi sửa: `npm run test:ai-payload` **872** phép kiểm (bộ mới), `npm run test:ai` **202** (từ 190),
+Kết quả sau khi sửa: `npm run test:ai-payload` **1.158** phép kiểm (bộ mới), `npm run test:ai` **202** (từ 190),
 `npm run test:variants` thêm nhóm kiểm kinh độ điểm ảo theo hệ; toàn bộ `npm test` **14 bộ, 0 lỗi**,
 `npm run typecheck` và `npm run build` sạch.
 
-### 12.9 Người dùng cần làm gì sau khi nhận bản sửa này
+### 12.10 Người dùng cần làm gì sau khi nhận bản sửa này
 
 1. **Deploy lại** — bản đang chạy ở `chartbysun.vercel.app` vẫn là mã cũ (chưa có cả phần tự thử lại của
    lượt soát 11), nên mọi sửa đổi ở trên chưa có hiệu lực trên trang thật.
