@@ -57,6 +57,14 @@ const PROBE_TIMEOUT_MS = 9000;
 /** Một lần gọi Gemini phải còn ít nhất chừng này mili-giây thì mới đáng bắt đầu. */
 const MIN_ATTEMPT_MS = 4000;
 
+/**
+ * Trần ký tự của báo cáo bản đồ sao gửi lên Gemini.
+ * Báo cáo gồm cả phần biến thể (Vệ Đà, Tứ Trụ, Tử Vi, Human Design, hồi quy, tiến triển) cộng
+ * khối bầu trời thực tế và điểm ảo nên đo được ~11-12 nghìn ký tự; trần cũ 9000 cắt mất 2-2,7 nghìn.
+ * Câu hỏi nay nằm ở ĐẦU báo cáo nên kể cả khi bị cắt cũng không mất câu hỏi.
+ */
+export const REPORT_CHAR_LIMIT = 16000;
+
 /** Đọc số nguyên từ biến môi trường, sai định dạng thì dùng giá trị mặc định. */
 const numberFromEnv = (raw, fallback) => {
   if (typeof raw !== "string" || !raw.trim()) return fallback;
@@ -142,14 +150,21 @@ const upstreamStatusName = (data) => {
 
 export const SYSTEM_PROMPT = `Bạn là chuyên gia chiêm tinh phương Tây và quan sát bầu trời, đang trả lời bằng tiếng Việt có dấu cho người dùng Việt Nam.
 
-Nguyên tắc:
+Nguyên tắc về DỮ LIỆU (quan trọng nhất):
+- Chỉ dùng số liệu có trong "BÁO CÁO BẢN ĐỒ SAO" kèm theo. Không tự tính lại, không suy diễn thêm vị trí hành tinh, số nhà, góc chiếu, giờ mọc/lặn hay transit nào không có trong báo cáo. Nếu thiếu dữ liệu cần cho câu hỏi, nói rõ đang thiếu gì.
+- Báo cáo TỰ KHAI hệ hoàng đạo và hệ nhà đang dùng (nhiệt đới hay sidereal kèm ayanamsa; Whole Sign, Placidus, Koch…). Hãy luận đúng theo hệ đó và nêu rõ bạn đang dùng hệ nào, vì cùng một lá số đọc theo hệ khác nhau sẽ cho nghĩa khác nhau. Khi báo cáo ghi kinh độ là sidereal thì TUYỆT ĐỐI không gọi đó là vị trí nhiệt đới.
+- Mục "BẦU TRỜI THỰC TẾ LÚC NGƯỜI DÙNG HỎI" là số liệu quan sát tại THỜI ĐIỂM HỎI (khác với lúc sinh). Dùng nó cho câu hỏi kiểu "tối nay thấy hành tinh nào", "Trăng đang pha gì", "chòm nào đang mọc". Nếu mục đó nói không có hành tinh nào cao trên 5° hoặc trời còn sáng, đừng hứa là người dùng sẽ nhìn thấy. Kinh độ trong mục này là của BẦU TRỜI THẬT (nhiệt đới, theo chòm sao thực) nên có thể khác cung với bản đồ khi người dùng đang xem hệ sidereal — đừng trộn hai hệ quy chiếu trong cùng một câu.
+- Phân biệt rõ ba mốc thời gian trong báo cáo: lúc sinh (bản đồ natal), lúc hỏi (bầu trời thực tế + transit), và các mốc suy ra (hồi quy, tiến triển). Đừng lẫn mốc này với mốc khác.
+
+Nguyên tắc trả lời:
 - Trả lời đúng trọng tâm câu hỏi, mở đầu bằng kết luận ngắn rồi mới phân tích.
-- Luôn dẫn chứng bằng dữ liệu cụ thể trong báo cáo bản đồ sao: vị trí hành tinh, nhà, góc chiếu, transit, pha Mặt Trăng.
+- Luôn dẫn chứng bằng dữ liệu cụ thể trong báo cáo: vị trí hành tinh kèm cung và nhà, góc chiếu kèm orb, transit đang áp sát hay tách, pha Mặt Trăng.
+- Góc chiếu có orb nhỏ (chặt) thì nói mạnh; orb gần giới hạn thì nói nhẹ, đừng thổi phồng.
 - Văn phong tự nhiên, dễ hiểu, tránh khẳng định tuyệt đối về tương lai.
 - Không đưa lời khuyên y tế, pháp lý hoặc đầu tư cụ thể; chỉ nêu xu hướng và gợi ý hành vi an toàn.
-- Nếu câu hỏi cần dữ liệu chưa có (ví dụ ngày sinh của người khác), hãy nói rõ cần thêm gì.
+- Nếu câu hỏi cần dữ liệu chưa có (ví dụ ngày sinh của người khác để xem tương hợp), hãy nói rõ cần thêm gì.
 - Độ dài hợp lý: 150-450 từ, có thể dùng gạch đầu dòng và tiêu đề ngắn.
-- Có thể trả lời cả câu hỏi thiên văn quan sát (hành tinh nào thấy tối nay, pha Mặt Trăng, chòm sao nào đang mọc) dựa trên dữ liệu được cung cấp.`;
+- Khi báo cáo có kèm dữ liệu Vệ Đà, Tứ Trụ, Tử Vi Đẩu Số hay Human Design, chỉ dùng chúng khi người dùng hỏi tới hoặc khi cần đối chiếu; phải nói rõ đó là hệ quy chiếu khác với chiêm tinh phương Tây ở trên.`;
 
 /**
  * Chuẩn hoá khoá API do người dùng dán vào biến môi trường.
@@ -206,6 +221,23 @@ export const buildApiKeyList = (env = process.env) => {
   return [...new Set(collected)];
 };
 
+/**
+ * Chuỗi có DẤU HIỆU DÁN SAI hay không (không suy đoán từ tiền tố).
+ *
+ * Trước đây app coi "không bắt đầu bằng AIza" là khoá đáng ngờ, nhưng Google phát hành cả những
+ * khoá dài hơn và không theo tiền tố đó: một khoá 53 ký tự vẫn được Google chấp nhận (ListModels
+ * trả 200, 41 model) trong khi /api/health vẫn báo needsReview=1 và `npm run check:ai` in
+ * "⚠ không bắt đầu bằng AIza" — báo động giả khiến người dùng đi tạo khoá mới.
+ * Chỉ những chuỗi thật sự bất thường mới bị đánh dấu: quá ngắn, còn dấu bằng, dấu ngoặc, khoảng
+ * trắng hay ký tự không thuộc bảng chữ khoá. Muốn biết khoá CHẮC CHẮN dùng được hay không thì
+ * phải hỏi Google: /api/health?probe=1 hoặc `npm run check:ai`.
+ */
+export const looksLikePastedWrong = (value) => {
+  if (typeof value !== "string") return true;
+  if (value.length < 20) return true;
+  return !/^[A-Za-z0-9_\-]+$/.test(value);
+};
+
 /** Nhãn an toàn cho một khoá trong thông báo: chỉ số thứ tự + 4 ký tự cuối, không lộ khoá. */
 export const describeKey = (apiKey, index) => {
   const tail = typeof apiKey === "string" && apiKey.length >= 4 ? apiKey.slice(-4) : "";
@@ -259,12 +291,15 @@ export const buildHealthPayload = (env = process.env) => {
       usable: first.length > 0,
       length: first.length,
       hadWhitespace: typeof raw === "string" && raw !== raw.trim(),
-      looksLikeGoogleKey: first.startsWith("AIza")
+      /** "Không có dấu hiệu dán sai" — KHÔNG còn suy đoán từ tiền tố AIza (xem looksLikePastedWrong). */
+      looksLikeGoogleKey: first.length > 0 && !looksLikePastedWrong(first),
+      aizaPrefixed: first.startsWith("AIza")
     },
     keys: {
       total: keys.length,
-      usable: keys.filter((value) => value.startsWith("AIza")).length,
-      needsReview: keys.filter((value) => !value.startsWith("AIza")).length,
+      usable: keys.filter((value) => !looksLikePastedWrong(value)).length,
+      needsReview: keys.filter((value) => looksLikePastedWrong(value)).length,
+      aizaPrefixed: keys.filter((value) => value.startsWith("AIza")).length,
       sources,
       /** Chỉ độ dài của từng khoá — không bao giờ trả nội dung khoá. */
       lengths: keys.map((value) => value.length),
@@ -495,8 +530,9 @@ const callGemini = async ({ apiKey, model, contents, timeoutMs = TIMEOUT_MS }) =
         generationConfig: {
           temperature: 0.7,
           // Gemini 3 "suy luận" trước khi trả lời và phần suy luận cũng tính vào
-          // maxOutputTokens, nên cần khoảng đệm rộng để câu trả lời không bị cụt.
-          maxOutputTokens: 4096
+          // maxOutputTokens. Báo cáo gửi lên giờ dài hơn (thêm bầu trời thật, điểm ảo, cusp 12 nhà)
+          // nên câu trả lời cũng cần nhiều chỗ hơn: 4096 dễ chạm trần MAX_TOKENS và bị cụt.
+          maxOutputTokens: 8192
         }
       }),
       signal: controller.signal
@@ -815,7 +851,7 @@ export default async function handler(req, res) {
     const messages = Array.isArray(body.messages) ? body.messages : [];
     const chartReport =
       typeof body.chartReport === "string" && body.chartReport.trim()
-        ? body.chartReport
+        ? body.chartReport.slice(0, REPORT_CHAR_LIMIT)
         : "Chưa có dữ liệu bản đồ sao. Hãy nhắc người dùng tạo bản đồ sao trước.";
 
     const cleaned = messages
@@ -825,7 +861,7 @@ export default async function handler(req, res) {
 
     // Gemini gọi vai trợ lý là "model"; hệ thống đi qua systemInstruction riêng.
     const contents = [
-      { role: "user", parts: [{ text: `Dữ liệu bản đồ sao của người hỏi:\n${chartReport.slice(0, 9000)}` }] },
+      { role: "user", parts: [{ text: `Dữ liệu bản đồ sao của người hỏi:\n${chartReport}` }] },
       ...cleaned.map((item) => ({
         role: item.role === "assistant" ? "model" : "user",
         parts: [{ text: item.content }]

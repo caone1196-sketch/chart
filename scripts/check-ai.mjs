@@ -18,7 +18,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildApiKeyList, buildHealthPayload, generateReply, probeKeys, resolveModels } from "../api/_handler.js";
+import { buildApiKeyList, buildHealthPayload, generateReply, looksLikePastedWrong, probeKeys, resolveModels } from "../api/_handler.js";
 
 const args = process.argv.slice(2);
 const wantsAsk = args.includes("--ask");
@@ -48,7 +48,9 @@ console.log(`  Môi trường chạy : ${health.runtime}${health.region ? ` (${h
 console.log(`  Số khoá Gemini  : ${keys.length}${keys.length > 1 ? "  (tự xoay khi khoá lỗi / hết quota)" : ""}`);
 console.log(`  Nguồn khai báo  : ${health.keys.sources.length ? health.keys.sources.join(", ") : "—"}`);
 keys.forEach((value, index) => {
-  const suspicious = value.startsWith("AIza") ? "" : "  ⚠ không bắt đầu bằng “AIza”";
+  // Google có cả khoá không bắt đầu bằng "AIza" (khoá 53 ký tự vẫn hợp lệ) nên chỉ cảnh báo
+  // khi chuỗi có dấu hiệu dán sai thật sự; kết luận cuối cùng vẫn là phần gọi thử Google bên dưới.
+  const suspicious = looksLikePastedWrong(value) ? "  ⚠ có dấu hiệu dán sai (quá ngắn hoặc còn ký tự lạ)" : "";
   console.log(`    · khoá #${index + 1}      : ${maskKey(value)}${suspicious}`);
 });
 if (health.key.present) {

@@ -7,6 +7,7 @@
  */
 import handler, {
   backoffDelayMs,
+  looksLikePastedWrong,
   buildApiKeyList,
   buildHealthPayload,
   describeKey,
@@ -205,15 +206,26 @@ expect("nhiều khoá", splitApiKeys("").length, 0, "chuỗi rỗng → không k
 expect("nhiều khoá", splitApiKeys(undefined).length, 0, "không có biến → không khoá nào");
 
 const multiEnv = {
-  GEMINI_API_KEYS: "AIzaSyLIST-1, AIzaSyLIST-2\nAIzaSyDUP",
-  GEMINI_API_KEY: "AIzaSyDUP",
-  GEMINI_API_KEY_2: "  AIzaSySUB-2  ",
-  GEMINI_API_KEY_3: '"AIzaSySUB-3"',
+  GEMINI_API_KEYS: "AIzaSyLIST-1-0000000000000, AIzaSyLIST-2-0000000000000\nAIzaSyDUP-00000000000000",
+  GEMINI_API_KEY: "AIzaSyDUP-00000000000000",
+  GEMINI_API_KEY_2: "  AIzaSySUB-2-00000000000000  ",
+  GEMINI_API_KEY_3: '"AIzaSySUB-3-00000000000000"',
   GEMINI_API_KEY_4: "",
-  GEMINI_API_KEY_10: "AIzaSyQUA-10"
+  GEMINI_API_KEY_10: "AIzaSyQUA-10-000000000000"
 } as unknown as NodeJS.ProcessEnv;
 const multiKeys = buildApiKeyList(multiEnv);
-expect("nhiều khoá", multiKeys, ["AIzaSyLIST-1", "AIzaSyLIST-2", "AIzaSyDUP", "AIzaSySUB-2", "AIzaSySUB-3"], "gộp đúng thứ tự ưu tiên và khử trùng");
+expect(
+  "nhiều khoá",
+  multiKeys,
+  [
+    "AIzaSyLIST-1-0000000000000",
+    "AIzaSyLIST-2-0000000000000",
+    "AIzaSyDUP-00000000000000",
+    "AIzaSySUB-2-00000000000000",
+    "AIzaSySUB-3-00000000000000"
+  ],
+  "gộp đúng thứ tự ưu tiên và khử trùng"
+);
 ok();
 if (multiKeys.some((value) => value !== value.trim())) fail("nhiều khoá", "khoá còn khoảng trắng sau khi chuẩn hoá");
 ok();
@@ -226,15 +238,32 @@ expect("nhiều khoá", describeKey("", 4), "khoá #5", "khoá rỗng thì chỉ
 
 const multiHealth = buildHealthPayload(multiEnv);
 expect("nhiều khoá", multiHealth.keys.total, 5, "health báo tổng số khoá");
-expect("nhiều khoá", multiHealth.keys.usable, 5, "cả 5 khoá đều giống khoá Google");
+expect("nhiều khoá", multiHealth.keys.usable, 5, "cả 5 khoá đều không có dấu hiệu dán sai");
+expect("nhiều khoá", multiHealth.keys.aizaPrefixed, 5, "đếm riêng khoá có tiền tố AIza (chỉ để tham khảo)");
 expect("nhiều khoá", multiHealth.keys.rotation, true, "nhiều hơn 1 khoá → bật xoay khoá");
 expect("nhiều khoá", multiHealth.keys.sources, ["GEMINI_API_KEYS", "GEMINI_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3"], "health báo tên biến đang cấp khoá");
 expect("nhiều khoá", JSON.stringify(multiHealth).includes("AIzaSyLIST-1"), false, "health KHÔNG được chứa nội dung khoá");
-expect("nhiều khoá", multiHealth.key.length, "AIzaSyLIST-1".length, "trường key cũ vẫn báo độ dài khoá đầu tiên");
+expect("nhiều khoá", multiHealth.key.length, "AIzaSyLIST-1-0000000000000".length, "trường key cũ vẫn báo độ dài khoá đầu tiên");
 expect("nhiều khoá", multiHealth.model, "gemini-3.6-flash", "model không đổi khi có nhiều khoá");
 
-const quirkyHealth = buildHealthPayload({ GEMINI_API_KEYS: "khong-phai-khoa-google,AIzaSyOK" } as unknown as NodeJS.ProcessEnv);
-expect("nhiều khoá", quirkyHealth.keys.needsReview, 1, "đếm khoá trông không giống khoá Google để nhắc kiểm tra");
+// Khoá bị nghi dán sai là khoá CÓ DẤU HIỆU (còn dấu "=", quá ngắn, có ký tự lạ) — không phải
+// "không bắt đầu bằng AIza": Google phát hành cả khoá dài không theo tiền tố đó và vẫn hợp lệ.
+const LONG_NON_AIZA = "AgxK9vQ2mZ7pR4tW8yB1cD6fH3jL5nS0uX2eG7iV9kM4oT";
+const quirkyHealth = buildHealthPayload({
+  GEMINI_API_KEYS: `GEMINI_KEY=AIzaSyDaiDuHaiMuoiKyTuNhat0,AIzaSyOK,${LONG_NON_AIZA}`
+} as unknown as NodeJS.ProcessEnv);
+expect("nhiều khoá", quirkyHealth.keys.needsReview, 2, "đánh dấu khoá còn dấu “=” (dán kèm tên biến lạ) và khoá quá ngắn");
+expect("nhiều khoá", quirkyHealth.keys.usable, 1, "khoá dài không có tiền tố AIza vẫn được coi là hợp lệ về hình thức");
+expect("nhiều khoá", quirkyHealth.keys.aizaPrefixed, 1, "chỉ 1 khoá có tiền tố AIza");
+expect("heuristic", looksLikePastedWrong(LONG_NON_AIZA), false, "khoá 47 ký tự không tiền tố AIza → KHÔNG báo động giả");
+expect("heuristic", looksLikePastedWrong("AgxK9vQ2mZ7pR4tW8yB1cD6fH3jL5nS0uX2eG7iV9kM4oTzW1bQp"), false, "khoá 53 ký tự như trên bản deploy thật → không bị nghi");
+expect("heuristic", looksLikePastedWrong(KEY), false, "khoá AIza chuẩn → hợp lệ");
+expect("heuristic", looksLikePastedWrong("AIzaSyOK"), true, "khoá quá ngắn → nghi dán thiếu");
+expect("heuristic", looksLikePastedWrong("GEMINI_KEY=AIzaSyDaiDuHaiMuoiKyTuNhat0"), true, "dán kèm tên biến (còn dấu =) → nghi dán sai");
+expect("heuristic", looksLikePastedWrong(normalizeApiKey("GEMINI_API_KEY=AIzaSyDaiDuHaiMuoiKyTuNhat0")), false, "dán kèm ĐÚNG tên biến GEMINI_API_KEY= thì máy chủ tự gỡ nên không còn nghi");
+expect("heuristic", looksLikePastedWrong("AIzaSy co khoang trang trong khoa"), true, "còn khoảng trắng → nghi dán sai");
+expect("heuristic", looksLikePastedWrong(""), true, "chuỗi rỗng → nghi");
+expect("heuristic", buildHealthPayload({ GEMINI_API_KEY: LONG_NON_AIZA } as unknown as NodeJS.ProcessEnv).key.looksLikeGoogleKey, true, "khoá không tiền tố AIza vẫn báo looksLikeGoogleKey=true");
 
 /* ── 3c. Chỉ xoay khoá với lỗi thuộc về khoá ──────────────────────────── */
 

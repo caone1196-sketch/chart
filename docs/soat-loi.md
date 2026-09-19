@@ -486,3 +486,145 @@ Kết quả sau khi sửa: `npm run test:ai` **190** phép kiểm (từ 113), `n
    (`GEMINI_API_KEYS=khoá1,khoá2,khoá3`) và/hoặc `GEMINI_MODEL_FALLBACKS=gemini-3.5-flash`, rồi deploy lại.
 4. Muốn app trả lời nhanh hơn bằng bộ nội bộ thay vì chờ Google: đặt `GEMINI_MAX_ATTEMPTS=1`
    (hành vi cũ) hoặc hạ `GEMINI_BUDGET_MS`.
+
+## 12. Lượt soát 19/09/2026 — “dữ liệu gửi AI và cách luận có chuẩn không”
+
+Ngày soát: 19/09/2026 · phạm vi: `src/lib/astro.ts` (`buildChartReport`), `src/App.tsx` (`ask()`),
+`api/_handler.js` (`SYSTEM_PROMPT`, trần ký tự, `maxOutputTokens`, `/api/health`), `src/lib/interpret.ts`
+(`sourceNote`), `src/lib/sky.ts` (`skyObservationLines`), `src/components/VariantPanel.tsx` ·
+nhánh `arena/01a0b487-chart`.
+
+Cách soát: dựng lại **đúng** payload mà `App.tsx` gửi lên `/api/ai-chat` bằng một công cụ offline
+(`.cache/dump-payload.ts`, không nằm trong git) với lá số ví dụ 00:30 11/11/1996 tại Hà Nội, ở hai cấu hình
+(Placidus + nhiệt đới và Placidus + Lahiri), rồi in ra soi từng dòng. Đối chiếu song song với
+`/api/health` của bản đang chạy thật (`chartbysun.vercel.app`).
+
+Kết luận ngắn: **số liệu thiên văn thì chuẩn** (engine đã khoá bằng Swiss Ephemeris), nhưng **báo cáo gửi
+mô hình lớn từng tự mô tả SAI chính dữ liệu nó chứa và thiếu dữ liệu mà `SYSTEM_PROMPT` hứa hẹn**. Đây là
+lớp lỗi nguy hiểm nhất: mô hình lớn không nghi ngờ nhãn sai, nó luận rất tự tin theo nhãn đó.
+
+### 12.1 Báo cáo nói sai về hệ quy chiếu (nghiêm trọng nhất)
+
+| Dòng trong báo cáo | Mã cũ (sai) | Thực tế engine | Mã mới |
+| --- | --- | --- | --- |
+| Hệ nhà | `Hệ thống nhà: Whole Sign (toàn cung)` — **chuỗi ghi cứng** | người dùng chọn được 12 hệ (`chart.houseSystem` = `placidus`, `koch`, …) | `HỆ THỐNG NHÀ đang dùng: Placidus (thời gian bán cung) — … Số "Nhà n" bên dưới tính theo hệ này.` |
+| Hệ hoàng đạo | `VỊ TRÍ HÀNH TINH (tropical, geocentric)` — **ghi cứng** | ở hệ Lahiri mọi kinh độ **đã trừ ayanamsa 23,8132°** (gần trọn một cung) | `HỆ HOÀNG ĐẠO đang dùng: Vệ Đà - Lahiri (Chitrapaksha) — ayanamsa 23.8132° ĐÃ ĐƯỢC TRỪ vào mọi kinh độ bên dưới (đây là số liệu sidereal, KHÔNG phải nhiệt đới).` + nhãn `(sidereal, geocentric)` |
+| Ayanamsa | không khai ở báo cáo chính | `chart.ayanamsa` có sẵn | đã khai tới 4 chữ số |
+| `houseNote` (Placidus ngoài vòng cực phải đổi hệ) | chỉ có trong báo cáo biến thể | có ở `chart.houseNote` | đã đưa vào báo cáo chính |
+
+Hệ quả cụ thể với lá số ví dụ: Cung Mọc thật (Lahiri) là **Sư Tử 6°59**, báo cáo cũ dán nhãn “tropical” nên
+mô hình lớn sẽ luận **Xử Nữ** — sai hẳn một cung, và mâu thuẫn với chính mục biến thể trong cùng một
+prompt (mục đó có khai ayanamsa). Nay cả hai đều nhất quán.
+
+### 12.2 `SYSTEM_PROMPT` hứa một đằng, dữ liệu gửi một nẻo
+
+Prompt dặn mô hình trả lời được “tối nay nhìn lên trời thấy hành tinh nào”, nhưng các khối
+`skySnapshot` / `riseSet` / `fixedStars` **chỉ** được dùng trong bộ luận giải nội bộ
+(`answerLocally`, chạy trên trình duyệt) — không bao giờ nằm trong báo cáo gửi Gemini. Mô hình chỉ còn
+cách đoán mò hoặc bịa giờ mọc/lặn.
+
+Đã thêm vào `buildChartReport` (tham số `extra`, tuỳ chọn nên không phá chữ ký cũ):
+
+- `skyLines` — hàm mới `skyObservationLines(sky, riseSet)` trong `src/lib/sky.ts`: mốc quan sát + bán cầu,
+  giờ Mặt Trời/Mặt Trăng mọc lặn, Mặt Trời đang trên hay dưới chân trời, pha và độ sáng Trăng, danh sách
+  hành tinh **đang nổi trên 5°** kèm độ cao/hướng/chòm sao (trời trống thì nói thẳng
+  “đừng hứa là nhìn thấy được”), và vị trí hành tinh trên trời thật. Dòng này **tự khai** là kinh độ
+  nhiệt đới của trời thật, không đổi theo hệ hoàng đạo người dùng chọn — nếu không, người xem sidereal sẽ
+  thấy hai bộ cung khác nhau trong cùng một báo cáo.
+- `fixedStarLines` — tối đa `AI_FIXED_STAR_LIMIT = 6` sao cố định gần nhất, kèm chòm, cấp sao, orb và ý nghĩa.
+- `extraPoints` — 10 **thiên thể thật** (`AI_EXTRA_POINT_KEYS`: Bắc giao điểm thật, Nam giao điểm, Lilith,
+  Chiron, Ceres, Pallas, Juno, Vesta, Eris, Sedna). Kinh độ nhiệt đới từ `computeExtraPoints` được quy về
+  đúng hệ đang xem (trừ `chart.ayanamsa`), còn **số nhà giữ nguyên** vì nhà là hình học. Các điểm giả định
+  trường phái Hamburg cố tình **không** gửi: không có thiên thể thật, dễ bị mô hình luận như hành tinh.
+- `cuspLine` — đủ 12 cusp theo hệ nhà đang chọn (trước chỉ có AC/MC/IC/DC).
+- `gender`, `localBirth` — giới tính khai trong form và **giờ sinh địa phương** như người dùng nhập
+  (máy chủ chỉ giữ mốc UTC nên mô hình rất dễ suy diễn sai múi giờ, lệch 7 tiếng ở Việt Nam).
+- Góc chiếu được **xếp theo orb chặt dần** và ghi rõ giới hạn orb, kèm dặn trong prompt: orb nhỏ nói mạnh,
+  orb sát giới hạn nói nhẹ.
+
+### 12.3 Trần ký tự cắt mất dữ liệu, câu hỏi nằm ở cuối
+
+Đo được trên lá số ví dụ (payload = báo cáo chính + báo cáo biến thể):
+
+| Cấu hình | Mã cũ | Mã mới | Trần cũ 9.000 | Trần mới `REPORT_CHAR_LIMIT` 16.000 |
+| --- | --- | --- | --- | --- |
+| Placidus + nhiệt đới | 7.921 ký tự | 11.067 ký tự | **mất 2.067** | mất 0 |
+| Placidus + Lahiri | 9.336 ký tự | 11.678 ký tự | **mất 2.678** | mất 0 |
+
+Phần bị mất là **đuôi báo cáo biến thể** (Tử Vi, Human Design, dự báo) — tức đúng phần người dùng hỏi tới
+khi chọn câu hỏi về biến thể. Tệ hơn: mã cũ đặt câu hỏi ở **cuối** báo cáo, nên báo cáo càng dài thì câu
+hỏi càng dễ bị cắt; mô hình nhận một đống số liệu mà không biết phải trả lời gì.
+
+Đã sửa: câu hỏi chuyển lên **ngay đầu** (đo được ở ký tự thứ 668/11.067), giới hạn
+`REPORT_QUESTION_LIMIT = 2.000` ký tự (cắt kèm ghi chú để phần dữ liệu không bị đẩy ra ngoài), trần nâng
+lên `REPORT_CHAR_LIMIT = 16.000` (đã `export` để test dùng chung một con số với mã chạy thật),
+`maxOutputTokens` 4.096 → 8.192 cho yêu cầu “luận chi tiết từng nhà”.
+
+### 12.4 `/api/health` báo động giả về khoá API
+
+Bản đang chạy thật trả về: khoá dài **53** ký tự, `usable: true`, nhưng `looksLikeGoogleKey: false` và
+`needsReview: 1` — vì heuristic cũ chỉ nhận khoá “đúng chuẩn” khi bắt đầu bằng `AIza`. Kiểm
+`/api/health?probe=1` trên chính bản đó: `ok: true`, `status: 200`, `modelCount: 41`, model
+`gemini-3.6-flash` dùng được → **khoá hoàn toàn hợp lệ**, cờ “cần xem lại” là báo động giả (Google đã
+phát hành định dạng khoá không còn tiền tố `AIza`). Người dùng thấy cờ đó lại đi tạo khoá mới, vô ích.
+
+Đã thay bằng `looksLikePastedWrong(value)` (đã `export`): đáng ngờ khi **ngắn hơn 20 ký tự** hoặc chứa ký
+tự ngoài `[A-Za-z0-9_-]` (dấu cách, ngoặc, dấu bằng, chữ `sk-…` của nhà cung cấp khác, cả câu lệnh bị dán
+nhầm). `/api/health` nay trả `key.looksLikeGoogleKey` = “không có dấu hiệu dán sai”, thêm
+`key.aizaPrefixed` và `keys.aizaPrefixed` chỉ để tham khảo; `scripts/check-ai.mjs` và `server/index.mjs`
+đổi thông điệp từ “khoá không bắt đầu bằng AIza” thành “khoá có dấu hiệu dán sai”.
+
+### 12.5 Bộ luận giải nội bộ chỉ sai biến môi trường
+
+`sourceNote` trong `src/lib/interpret.ts` bảo người dùng “chưa cấu hình `OPENAI_API_KEY`” trong khi app này
+dùng `GEMINI_API_KEY` / `GEMINI_API_KEYS` → người đọc đi tìm một biến không tồn tại. Đã sửa thành
+`GEMINI_API_KEY(S)`, đồng thời mọi câu trả lời nội bộ nay **nêu rõ hệ nhà và hệ hoàng đạo/ayanamsa** đang
+dùng (trước đây trả lời “Mặt Trời Bọ Cạp” mà không nói đó là nhiệt đới hay sidereal).
+
+### 12.6 Hiển thị lệch hệ quy chiếu ở thẻ “Điểm ảo”
+
+`VariantPanel` luôn in `point.longitude` của `computeExtraPoints` — vốn **luôn là nhiệt đới** — kể cả khi
+người dùng đang xem Lahiri, nên thẻ này lệch ~23,8° so với bản đồ, cusp và báo cáo gửi AI. Đã đổi sang
+`variant.sidereal[point.key]` và ghi chú “kinh độ đã quy về … (trừ ayanamsa …)”.
+
+### 12.7 Giới hạn còn lại (có chủ ý, không phải lỗi)
+
+- `SIGN_RULER` trong `interpret.ts` chỉ theo chủ tinh **hiện đại** (Thiên Vương/Hải Vương/Diêm Vương cai
+  Bảo Bình/Song Ngư/Bọ Cạp) và chưa ghi chú đó là phái hiện đại — khác với chủ tinh truyền thống mà Vệ Đà
+  dùng. Không sai, nhưng người dùng hỏi “vì sao Bọ Cạp do Diêm Vương cai quản” sẽ thấy hai câu trả lời khác
+  nhau giữa hai mục.
+- Điểm giả định Hamburg (Cupido…Poseidon, Isis-Transpluto, Selena) không gửi mô hình lớn.
+- Khối bầu trời chỉ có khi toạ độ hợp lệ (`skySnapshot`/`riseSet` khác `null`); không có thì báo cáo
+  **không** bịa mục đó (test khoá cả hai chiều).
+- Sao cố định gửi tối đa 6, câu hỏi tối đa 2.000 ký tự, báo cáo tối đa 16.000 ký tự.
+
+### 12.8 Bất biến mới được khoá bằng test (`npm run test:ai-payload`)
+
+| Bất biến | Test |
+| --- | --- |
+| Báo cáo khai **đúng nhãn** của hệ nhà và hệ hoàng đạo đang chọn — quét đủ 12 × 7 = **84 cặp** | `npm run test:ai-payload` |
+| Không cặp nào còn ghi cứng “Whole Sign” khi đang dùng hệ khác; sidereal thì không được nhận là `(tropical, geocentric)` | `test:ai-payload` |
+| Hệ sidereal phải khai đúng giá trị ayanamsa của engine và in đúng Cung Mọc sidereal | `test:ai-payload` |
+| Mô tả hệ nhà nối câu không sinh dấu chấm đôi | `test:ai-payload` |
+| Placidus ở vĩ độ 78° phải kèm `houseNote`; không có note thì không được bịa dòng lưu ý | `test:ai-payload` |
+| Câu hỏi nằm đầu báo cáo và **vẫn còn** sau khi cắt ở `REPORT_CHAR_LIMIT`; payload đầy đủ lọt trần | `test:ai-payload` |
+| Câu hỏi dài quá `REPORT_QUESTION_LIMIT` bị cắt kèm ghi chú | `test:ai-payload` |
+| Có `skyLines` thì mới có mục bầu trời (giờ mọc/lặn, độ sáng Trăng, bán cầu); không có thì không bịa; trời trống phải nói thẳng | `test:ai-payload` |
+| Khối bầu trời tự khai là kinh độ **trời thật (nhiệt đới)**, không đổi theo hệ sidereal | `test:ai-payload` |
+| Điểm ảo in theo đúng hệ đang xem (sidereal = nhiệt đới − ayanamsa) và **giữ nguyên số nhà** | `test:ai-payload`, `test:variants` |
+| Đủ 12 cusp, giới tính, giờ sinh địa phương, sao cố định; góc chiếu xếp orb tăng dần | `test:ai-payload` |
+| `SYSTEM_PROMPT` dặn: chỉ dùng dữ liệu trong báo cáo, tự nêu hệ quy chiếu, tách ba mốc thời gian, tôn trọng orb, không tư vấn y tế/pháp lý, không nhắc nhà cung cấp khác | `test:ai-payload` |
+| Bộ luận giải nội bộ **không** nhắc `OPENAI_API_KEY` và có nêu hệ nhà + hệ quy chiếu | `test:ai-payload` |
+| Khoá hợp lệ nhưng không có tiền tố `AIza` (53 ký tự) **không** bị coi là dán sai; khoá ngắn/có khoảng trắng/dán kèm `sk-` thì bị | `test:ai` |
+
+Kết quả sau khi sửa: `npm run test:ai-payload` **872** phép kiểm (bộ mới), `npm run test:ai` **202** (từ 190),
+`npm run test:variants` thêm nhóm kiểm kinh độ điểm ảo theo hệ; toàn bộ `npm test` **14 bộ, 0 lỗi**,
+`npm run typecheck` và `npm run build` sạch.
+
+### 12.9 Người dùng cần làm gì sau khi nhận bản sửa này
+
+1. **Deploy lại** — bản đang chạy ở `chartbysun.vercel.app` vẫn là mã cũ (chưa có cả phần tự thử lại của
+   lượt soát 11), nên mọi sửa đổi ở trên chưa có hiệu lực trên trang thật.
+2. Sau khi deploy, mở `/api/health`: `needsReview` phải là **0** với khoá 53 ký tự đang dùng; muốn chắc khoá
+   gọi được thì thêm `?probe=1` (chỉ gọi `ListModels`, không tốn quota sinh nội dung).
+3. Không cần đổi khoá API, không cần thêm biến môi trường mới — mọi thay đổi đều nằm trong mã.

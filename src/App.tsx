@@ -19,6 +19,7 @@ import {
   displayAngle,
   formatLocalDate,
   formatLocalTime,
+  formatReportTimestamp,
   getOffsetHours,
   localSiderealDegrees,
   transitToLines,
@@ -28,10 +29,20 @@ import {
 import { askServerAi, checkServerHealth, type ChatEngine, type ChatTurn, type ServerHealth } from "@/lib/ai";
 import { geocodePlace } from "@/lib/geocode";
 import { answerLocally } from "@/lib/interpret";
-import { computeSkySnapshot, findFixedStarHits, riseSetForDay, type FixedStarHit } from "@/lib/sky";
+import { computeSkySnapshot, findFixedStarHits, riseSetForDay, skyObservationLines, type FixedStarHit } from "@/lib/sky";
 
 const STORAGE_FORM = "astral-chart-vn:form";
 const STORAGE_CHAT = "astral-chart-vn:chat";
+
+/**
+ * Điểm ảo đưa vào báo cáo gửi mô hình lớn: chỉ thiên thể thật + hai giao điểm + Lilith/Chiron.
+ * Bỏ nhóm hành tinh giả định (Hamburg/Uranian) để khỏi phình prompt bằng những điểm mà chính
+ * giao diện cũng ghi rõ là "không có thiên thể thật".
+ */
+const AI_EXTRA_POINT_KEYS = ["trueNode", "southNode", "lilith", "chiron", "ceres", "pallas", "juno", "vesta", "eris", "sedna"];
+
+/** Số sao cố định tối đa đưa vào báo cáo (đã xếp theo orb chặt dần). */
+const AI_FIXED_STAR_LIMIT = 6;
 
 /** Trạng thái lớp AI phía máy chủ hiển thị trên giao diện. */
 type ServerLlmState = "checking" | "gemini" | "local" | "unreachable";
@@ -310,7 +321,21 @@ export default function App() {
     if (!isRetry) setEngine(null);
 
     const report = [
-      buildChartReport(chart, senderName.trim() || "Người dùng", value, transitToLines(transits)),
+      buildChartReport(chart, senderName.trim() || "Người dùng", value, transitToLines(transits), {
+        gender: form.gender,
+        // Mốc sinh theo giờ ĐỊA PHƯƠNG nơi sinh (máy chủ chỉ nhận UTC nên dễ bị AI suy diễn sai múi giờ).
+        localBirth: `${formatReportTimestamp(new Date(chart.utcDate.getTime() + chart.timezoneOffset * 3600000))} (giờ địa phương nơi sinh)`,
+        extraPoints: (variant?.extraPoints ?? []).filter((point) => AI_EXTRA_POINT_KEYS.includes(point.key)),
+        // Bầu trời THẬT lúc hỏi: trước đây chỉ bộ luận giải nội bộ có, còn Gemini thì phải đoán mò
+        // dù SYSTEM_PROMPT hứa trả lời được "tối nay thấy hành tinh nào".
+        skyLines: skySnapshot && riseSet ? skyObservationLines(skySnapshot, riseSet) : undefined,
+        fixedStarLines: fixedStars.slice(0, AI_FIXED_STAR_LIMIT).map(
+          (star) =>
+            `- ${star.starName} (${star.constellation}, cấp sao ${star.starMag.toFixed(
+              1
+            )}) trùng ${star.natalLabel} với orb ${star.orb.toFixed(2)}° — ${star.meaning}`
+        )
+      }),
       variant ? variantReport(variant) : ""
     ]
       .filter(Boolean)

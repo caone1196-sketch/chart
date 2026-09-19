@@ -244,20 +244,31 @@ export default function VariantPanel({
 
       {tab === "points" && (
         <div className="grid gap-4 md:grid-cols-2">
-          {variant.extraPoints.map((point) => (
-            <div key={point.key} className={card}>
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-semibold" style={{ color: point.color }}>
-                  {point.label}
-                </h3>
-                <span className="text-sm text-slate-200">{displayAngle(point.longitude)}</span>
+          {variant.extraPoints.map((point) => {
+            // computeExtraPoints LUÔN trả kinh độ nhiệt đới. Khi người dùng xem hệ sidereal thì thẻ này
+            // phải hiển thị cùng hệ quy chiếu với bản đồ, cusp và báo cáo gửi AI (variant.sidereal);
+            // nếu không số ở đây lệch ~23,8° (gần trọn một cung) so với mọi nơi khác trong app.
+            const shown =
+              variant.zodiacFrame === "tropical" ? point.longitude : (variant.sidereal[point.key] ?? point.longitude);
+            const frameLabel = ZODIAC_FRAMES.find((frame) => frame.id === variant.zodiacFrame)?.label ?? variant.zodiacFrame;
+            return (
+              <div key={point.key} className={card}>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-semibold" style={{ color: point.color }}>
+                    {point.label}
+                  </h3>
+                  <span className="text-sm text-slate-200">{displayAngle(shown)}</span>
+                </div>
+                <p className="mt-2 text-sm text-slate-300">{point.meaning}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Nhà {point.house} · {point.kind === "hypothetical" ? "điểm quy ước (không có thiên thể thật)" : "thiên thể thật"}
+                  {variant.zodiacFrame === "tropical"
+                    ? ""
+                    : ` · kinh độ đã quy về ${frameLabel} (trừ ayanamsa ${variant.ayanamsaValue.toFixed(2)}°)`}
+                </p>
               </div>
-              <p className="mt-2 text-sm text-slate-300">{point.meaning}</p>
-              <p className="mt-1 text-xs text-slate-500">
-                Nhà {point.house} · {point.kind === "hypothetical" ? "điểm quy ước (không có thiên thể thật)" : "thiên thể thật"}
-              </p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

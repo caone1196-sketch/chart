@@ -373,7 +373,11 @@ const sourceNote = (input: LocalAnswerInput) => {
   return (
     `**Nguồn luận giải:** bộ quy tắc nội bộ của Astral Chart VN, tính trực tiếp từ bản đồ sao bạn vừa lập ` +
     `(${chart.locationLabel}, ${chart.utcDate.toUTCString()}) — không cần API key nên luôn hoạt động. ` +
-    `Nếu bạn cấu hình OPENAI_API_KEY cho máy chủ, hệ thống sẽ tự chuyển sang mô hình ngôn ngữ lớn để trả lời linh hoạt hơn. ` +
+    `Nếu máy chủ có GEMINI_API_KEY (hoặc GEMINI_API_KEYS), hệ thống sẽ tự chuyển sang Gemini để trả lời linh hoạt hơn; ` +
+    `kiểm tra bằng /api/health hoặc \`npm run check:ai\`. ` +
+    `Hệ đang dùng: ${chart.houseSystem !== "wholeSign" ? chart.houseSystem : "Whole Sign"} · ${
+      chart.zodiacFrame === "tropical" ? "hoàng đạo nhiệt đới" : `hoàng đạo sidereal ${chart.zodiacFrame} (ayanamsa ${chart.ayanamsa.toFixed(2)}°)`
+    }. ` +
     `Chiêm tinh là hệ thống tham khảo về xu hướng và tính cách, không thay thế quyết định y tế, tài chính hay pháp lý.`
   );
 };
