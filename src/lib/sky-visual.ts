@@ -656,13 +656,15 @@ export const buildSkyFrame = (date: Date, latitude: number, longitude: number): 
 
   const lines: SkyPolyline[] = Object.entries(CONSTELLATION_LINES).map(([abbr, polylines]) => ({
     abbr,
+    // Điểm NaN chỉ dùng để tách các polyline CỦA CÙNG một chòm khỏi nhau — không chèn
+    // giữa các đỉnh liên tiếp, nếu không renderer chỉ vẽ được đoạn đầu của mỗi dải.
     points: polylines.flatMap((flat) => {
       const points: SkyPoint[] = [];
       for (let i = 0; i < flat.length; i += 2) {
         const ofDate = precessFromJ2000(flat[i], flat[i + 1], date);
         points.push(project(ofDate.ra, ofDate.dec));
-        if (i > 0) points.push({ ra: Number.NaN, dec: Number.NaN, alt: Number.NaN, az: Number.NaN });
       }
+      points.push({ ra: Number.NaN, dec: Number.NaN, alt: Number.NaN, az: Number.NaN });
       return points;
     })
   }));

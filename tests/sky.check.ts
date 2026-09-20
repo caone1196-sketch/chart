@@ -55,7 +55,7 @@ import {
   MILKY_WAY_POINTS
 } from "../src/lib/sky-visual.ts";
 import { createSpriteCache, drawSky, sunMagnitudePenalty } from "../src/lib/sky-render.ts";
-import { eclipticPath, galacticToEquatorial, precessFromJ2000 } from "../src/lib/sky.ts";
+import { CONSTELLATION_LINES, CONSTELLATION_META, STARS, eclipticPath, galacticToEquatorial, precessFromJ2000 } from "../src/lib/sky.ts";
 
 let checks = 0;
 let failures = 0;
@@ -667,6 +667,91 @@ const CASES: Array<{ name: string; lat: number; lon: number; utc: Date }> = [
   // Tuế sai: J2000 → J2000 không đổi.
   const fixed = precessFromJ2000(83.82, -5.39, new Date(Date.UTC(2000, 0, 1, 12)));
   if (!near(fixed.ra, 83.82, 0.02) || !near(fixed.dec, -5.39, 0.02)) fail("phụ trợ", "precessFromJ2000 không giữ nguyên ở J2000");
+  ok();
+}
+
+/* --------------------------------------------------- 14. liên kết chòm sao */
+{
+  // Mỗi chòm phải có cùng số polyline và cùng số đỉnh giữa dữ liệu thô và frame đã dựng.
+  const frame = buildSkyFrame(new Date(Date.UTC(1996, 10, 10, 17, 30)), 21.0285, 105.8542);
+  const byAbbr = new Map(frame.lines.map((line) => [line.abbr, line.points]));
+  const metaAbbrs = new Set(CONSTELLATION_META.map((meta) => meta.abbr));
+
+  let expectedSegments = 0;
+  let drawnSegments = 0;
+
+  for (const [abbr, polylines] of Object.entries(CONSTELLATION_LINES)) {
+    if (!metaAbbrs.has(abbr)) fail("chòm sao", `${abbr} có đường nối nhưng thiếu trong meta`);
+    ok();
+
+    const points = byAbbr.get(abbr);
+    if (!points) {
+      fail("chòm sao", `${abbr} không có trong frame.lines`);
+      continue;
+    }
+    ok();
+
+    // Tách các dải điểm liên tiếp (không NaN) trong frame.
+    const runs: number[] = [];
+    let current = 0;
+    for (const point of points) {
+      if (Number.isFinite(point.ra) && Number.isFinite(point.dec)) current += 1;
+      else {
+        if (current > 0) runs.push(current);
+        current = 0;
+      }
+    }
+    if (current > 0) runs.push(current);
+
+    // Số dải và số đỉnh từng dải phải khớp dữ liệu thô — tức là không dải nào bị
+    // chèn NaN giữa chừng khiến nó gãy thành các mảnh 1 đỉnh.
+    const expectedSizes = polylines.map((flat) => flat.length / 2);
+    if (runs.length !== expectedSizes.length) {
+      fail("chòm sao", `${abbr}: chờ ${expectedSizes.length} dải, nhận ${runs.length} dải`);
+      continue;
+    }
+    ok();
+    for (let i = 0; i < expectedSizes.length; i += 1) {
+      if (runs[i] !== expectedSizes[i]) {
+        fail("chòm sao", `${abbr} dải ${i}: chờ ${expectedSizes[i]} đỉnh liên tiếp, nhận ${runs[i]}`);
+      }
+      ok();
+    }
+
+    // Đoạn vẽ được của frame phải bằng số đoạn của dữ liệu (mỗi dải n đỉnh → n-1 đoạn).
+    drawnSegments += runs.filter((size) => size >= 2).reduce((sum, size) => sum + size - 1, 0);
+    expectedSegments += expectedSizes.filter((size) => size >= 2).reduce((sum, size) => sum + size - 1, 0);
+  }
+
+  if (drawnSegments !== expectedSegments) {
+    fail("chòm sao", `mất nét: vẽ được ${drawnSegments}/${expectedSegments} đoạn (${expectedSegments - drawnSegments} đoạn bị gãy)`);
+  }
+  ok();
+
+  // Mỗi đỉnh của đường nối phải khớp một sao thật trong catalogue (liên kết sao↔chòm).
+  let matched = 0;
+  let vertices = 0;
+  for (const polylines of Object.values(CONSTELLATION_LINES)) {
+    for (const flat of polylines) {
+      for (let i = 0; i < flat.length; i += 2) {
+        vertices += 1;
+        const ra = flat[i];
+        const dec = flat[i + 1];
+        let best = Infinity;
+        for (const star of STARS) {
+          const dra = Math.abs((((star.ra - ra + 180) % 360) + 360) % 360 - 180);
+          const ddec = Math.abs(star.dec - dec);
+          const dist = Math.hypot(dra * Math.cos((dec * Math.PI) / 180 || 0.0001), ddec);
+          if (dist < best) best = dist;
+        }
+        if (best <= 0.35) matched += 1;
+      }
+    }
+  }
+  const matchRatio = matched / vertices;
+  if (matchRatio < 0.98) {
+    fail("chòm sao", `chỉ ${matched}/${vertices} (${(matchRatio * 100).toFixed(1)}%) đỉnh đường nối khớp sao thật (<0.35°)`);
+  }
   ok();
 }
 
