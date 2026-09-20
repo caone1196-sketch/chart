@@ -12,14 +12,17 @@ import {
   calcObliquity,
   calculateChart,
   computeTransits,
+  computeTransitCalendar,
   displayAngle,
   formatLocalDate,
   formatLocalTime,
   getOffsetHours,
   localSiderealDegrees,
   transitToLines,
+  transitCalendarToLines,
   type ChartData,
-  type TransitHit
+  type TransitHit,
+  type TransitCalendarEvent
 } from "@/lib/astro";
 import { askServerAi, checkServerHealth, type ChatEngine, type ChatTurn, type ServerHealth } from "@/lib/ai";
 import { geocodePlace } from "@/lib/geocode";
@@ -132,6 +135,11 @@ export default function App() {
   const lon = Number(form.longitude);
 
   const transits: TransitHit[] = useMemo(() => (chart ? computeTransits(chart, now, 4) : []), [chart, now]);
+
+  const transitCalendar: TransitCalendarEvent[] = useMemo(
+    () => (chart ? computeTransitCalendar(chart, new Date(), 365) : []),
+    [chart]
+  );
 
   const fixedStars: FixedStarHit[] = useMemo(
     () => (chart ? findFixedStarHits(chart, calcObliquity(chart.utcDate), 1.5) : []),
@@ -251,7 +259,7 @@ export default function App() {
     setStatus("");
     setEngine(null);
 
-    const report = buildChartReport(chart, senderName.trim() || "Người dùng", value, transitToLines(transits), extraPointsToLines(extraPoints, chart.ascendant));
+    const report = buildChartReport(chart, senderName.trim() || "Người dùng", value, transitToLines(transits), extraPointsToLines(extraPoints, chart.ascendant), transitCalendarToLines(transitCalendar));
 
     const fallback = () =>
       answerLocally({
@@ -263,6 +271,7 @@ export default function App() {
         transits,
         fixedStars,
         extraPoints,
+        transitCalendar,
         riseSet: riseSet ?? { sunRise: "—", sunSet: "—", moonRise: "—", moonSet: "—", timeZoneLabel: "giờ máy của bạn" }
       });
 
@@ -566,7 +575,7 @@ export default function App() {
                     màu: góc chiếu chính.
                   </p>
                 </div>
-                <ChartPanel chart={chart} transits={transits} fixedStars={fixedStars} extraPoints={extraPoints} />
+                <ChartPanel chart={chart} transits={transits} fixedStars={fixedStars} extraPoints={extraPoints} transitCalendar={transitCalendar} />
               </div>
             </motion.div>
           ) : (

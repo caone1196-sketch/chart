@@ -1,5 +1,5 @@
-import type { Aspect, ChartData, PlanetPosition, TransitHit } from "@/lib/astro";
-import { ELEMENT_VI, MODALITY_VI, displayAngle, houseOfLongitude, normalizeDegree } from "@/lib/astro";
+import type { Aspect, ChartData, PlanetPosition, TransitCalendarEvent, TransitHit } from "@/lib/astro";
+import { ELEMENT_VI, MODALITY_VI, displayAngle, formatShortDate, houseOfLongitude, normalizeDegree } from "@/lib/astro";
 import {
   ASPECT_TONES,
   ELEMENT_TRAITS,
@@ -25,6 +25,7 @@ export type LocalAnswerInput = {
   transits: TransitHit[];
   fixedStars: FixedStarHit[];
   extraPoints: ExtraPointPosition[];
+  transitCalendar: TransitCalendarEvent[];
   riseSet: { sunRise: string; sunSet: string; moonRise: string; moonSet: string; timeZoneLabel: string };
 };
 
@@ -36,12 +37,23 @@ const ASPECT_VI: Record<string, string> = {
   Opposition: "đối đỉnh"
 };
 
-const detectIntents = (question: string): Intent[] => {
+/** Từ khoá chỉ khớp khi bắt đầu ở đầu câu hoặc sau ký tự phân tách (dấu cách, câu…),
+ *  để "tac dong" không bị nhận nhầm thành "ac " (cung Mọc), "2026" vẫn khớp "202". */
+const hitKey = (normalized: string, key: string) => {
+  let index = normalized.indexOf(key);
+  while (index !== -1) {
+    if (index === 0 || /[^a-z0-9]/.test(normalized[index - 1])) return true;
+    index = normalized.indexOf(key, index + 1);
+  }
+  return false;
+};
+
+export const detectIntents = (question: string): Intent[] => {
   const normalized = normalizeVietnamese(question);
   const found: Intent[] = [];
 
   for (const entry of INTENT_KEYWORDS) {
-    if (entry.keys.some((key) => normalized.includes(key))) found.push(entry.intent);
+    if (entry.keys.some((key) => hitKey(normalized, key))) found.push(entry.intent);
   }
 
   if (!found.length) found.push("overview");
@@ -140,6 +152,39 @@ const coreLine = (chart: ChartData) => {
     `Mặt Trăng ở ${signNameOf(moon.longitude)} (nhà ${moon.house}) — nhu cầu cảm xúc: ${SIGN_TRAITS[signNameOf(moon.longitude)]?.core}; ` +
     `Cung Mọc ${asc} — ấn tượng bạn tạo ra ban đầu: ${SIGN_TRAITS[asc]?.core}.`
   );
+};
+
+const transitCalendarSection = (input: LocalAnswerInput) => {
+  const events = input.transitCalendar;
+  if (!events.length) return "";
+  const slowKeys = ["jupiter", "saturn", "uranus", "neptune", "pluto"];
+  const byMonth = new Map<string, TransitCalendarEvent[]>();
+  for (const event of events) {
+    const key = `${event.exactDate.getFullYear()}-${String(event.exactDate.getMonth() + 1).padStart(2, "0")}`;
+    const group = byMonth.get(key) ?? [];
+    group.push(event);
+    byMonth.set(key, group);
+  }
+  const lines = [
+    `**Lịch transit 12 tháng tới** — ${events.length} đợt chạm (orb ≤ 4°, không tính Mặt Trăng đổi góc theo giờ), đỉnh điểm rơi vào:`
+  ];
+  for (const [, group] of [...byMonth].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+    const first = group[0];
+    const label = `Tháng ${first.exactDate.getMonth() + 1}/${first.exactDate.getFullYear()}`;
+    const slow = group.filter((event) => slowKeys.includes(event.transitKey));
+    const fastCount = group.length - slow.length;
+    if (!slow.length) {
+      lines.push(`- ${label}: ${fastCount} transit hành tinh nhanh (nhịp ngắn hạn — xem chi tiết trong tab Lịch 12 tháng).`);
+      continue;
+    }
+    for (const event of slow) {
+      lines.push(
+        `- ${label}: ${event.transitLabel} ${ASPECT_VI[event.aspect] ?? event.aspect} ${event.natalLabel} natal (đỉnh ${formatShortDate(event.exactDate)}, orb ${event.minOrb.toFixed(1)}°${event.retrograde ? ", nghịch hành" : ""}), tác động tới ${houseTopics(event.natalHouse)}`
+      );
+    }
+    if (fastCount) lines.push(`  + thêm ${fastCount} transit hành tinh nhanh trong tháng này.`);
+  }
+  return lines.join("\n");
 };
 
 const transitSection = (input: LocalAnswerInput, limit = 4) => {
@@ -307,7 +352,7 @@ const sourceNote = (input: LocalAnswerInput) => {
   return (
     `**Nguồn luận giải:** bộ quy tắc nội bộ của Astral Chart VN, tính trực tiếp từ bản đồ sao bạn vừa lập ` +
     `(${chart.locationLabel}, ${chart.utcDate.toUTCString()}) — không cần API key nên luôn hoạt động. ` +
-    `Nếu bạn cấu hình OPENAI_API_KEY cho máy chủ, hệ thống sẽ tự chuyển sang mô hình ngôn ngữ lớn để trả lời linh hoạt hơn. ` +
+    `Nếu bạn cấu hình GEMINI_API_KEY cho máy chủ, hệ thống sẽ tự chuyển sang mô hình ngôn ngữ lớn để trả lời linh hoạt hơn. ` +
     `Chiêm tinh là hệ thống tham khảo về xu hướng và tính cách, không thay thế quyết định y tế, tài chính hay pháp lý.`
   );
 };
@@ -469,14 +514,14 @@ export const answerLocally = (input: LocalAnswerInput): string => {
   }
 
   if (has("timing")) {
-    sections.push(
-      [
-        "**Vận hạn giai đoạn hiện tại (transit)**",
-        transitSection(input),
-        "",
-        `Pha Mặt Trăng hôm nay: ${input.sky.moonPhase} — ${MOON_PHASE_TRAITS[input.sky.moonPhase] ?? ""}. Mặt Trăng đi hết một vòng 12 cung trong khoảng 27,3 ngày nên có thể dùng để chọn ngày cho việc nhỏ.`
-      ].join("\n")
+    const calendarPart = transitCalendarSection(input);
+    const timingParts = ["**Vận hạn giai đoạn hiện tại (transit)**", transitSection(input)];
+    if (calendarPart) timingParts.push("", calendarPart);
+    timingParts.push(
+      "",
+      `Pha Mặt Trăng hôm nay: ${input.sky.moonPhase} — ${MOON_PHASE_TRAITS[input.sky.moonPhase] ?? ""}. Mặt Trăng đi hết một vòng 12 cung trong khoảng 27,3 ngày nên có thể dùng để chọn ngày cho việc nhỏ.`
     );
+    sections.push(timingParts.join("\n"));
   }
 
   if (has("compatibility")) {

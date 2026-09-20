@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { ChartData, TransitHit } from "@/lib/astro";
-import { ELEMENT_VI, MODALITY_VI, displayAngle, formatOffset, houseOfLongitude } from "@/lib/astro";
+import type { ChartData, TransitCalendarEvent, TransitHit } from "@/lib/astro";
+import { ELEMENT_VI, MODALITY_VI, displayAngle, formatOffset, formatShortDate, houseOfLongitude } from "@/lib/astro";
 import { EXTRA_POINT_KIND_ORDER, EXTRA_POINT_KIND_VI, type ExtraPointPosition } from "@/lib/points";
 import type { FixedStarHit } from "@/lib/sky";
 
@@ -16,24 +16,45 @@ const ASPECT_VI: Record<string, string> = {
   Opposition: "Đối đỉnh"
 };
 
-type TabId = "overview" | "planets" | "extra" | "houses" | "aspects" | "fixed" | "transits";
+/** Gom các đợt transit theo tháng đỉnh điểm (YYYY-MM) để hiển thị lịch năm. */
+const groupCalendarByMonth = (events: TransitCalendarEvent[]) => {
+  const groups = new Map<string, TransitCalendarEvent[]>();
+  for (const event of events) {
+    const key = `${event.exactDate.getFullYear()}-${String(event.exactDate.getMonth() + 1).padStart(2, "0")}`;
+    const group = groups.get(key) ?? [];
+    group.push(event);
+    groups.set(key, group);
+  }
+  return [...groups]
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([key, monthEvents]) => {
+      const [year, month] = key.split("-");
+      return { key, label: `${Number(month)}/${year}`, events: monthEvents };
+    });
+};
+
+type TabId = "overview" | "planets" | "extra" | "houses" | "aspects" | "fixed" | "transits" | "calendar";
 
 export default function ChartPanel({
   chart,
   transits,
   fixedStars,
-  extraPoints
+  extraPoints,
+  transitCalendar
 }: {
   chart: ChartData;
   transits: TransitHit[];
   fixedStars: FixedStarHit[];
   extraPoints: ExtraPointPosition[];
+  transitCalendar: TransitCalendarEvent[];
 }) {
   const [tab, setTab] = useState<TabId>("overview");
 
   const elements = Object.entries(chart.elements).sort((a, b) => b[1] - a[1]);
   const modalities = Object.entries(chart.modalities).sort((a, b) => b[1] - a[1]);
   const total = elements.reduce((sum, [, value]) => sum + value, 0) || 1;
+
+  const calendarMonths = groupCalendarByMonth(transitCalendar);
 
   const tabs: { id: TabId; label: string }[] = [
     { id: "overview", label: "Tổng quan" },
@@ -42,7 +63,8 @@ export default function ChartPanel({
     { id: "houses", label: "12 nhà" },
     { id: "aspects", label: `Góc chiếu (${chart.aspects.length})` },
     { id: "fixed", label: `Sao cố định (${fixedStars.length})` },
-    { id: "transits", label: `Transit (${transits.length})` }
+    { id: "transits", label: `Transit (${transits.length})` },
+    { id: "calendar", label: `Lịch 12 tháng (${transitCalendar.length})` }
   ];
 
   return (
@@ -230,6 +252,36 @@ export default function ChartPanel({
                   orb {hit.orb.toFixed(2)}° · {hit.applying ? "áp sát" : "tách"}
                   {hit.transitRetrograde ? " · R" : ""}
                 </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {tab === "calendar" ? (
+          <div>
+            <p className="mb-1 text-xs text-slate-400">
+              Đợt chạm giữa trời hiện tại và bản đồ natal trong 12 tháng tới (quét từng ngày, orb ≤ 4°, không tính Mặt Trăng). Nhóm theo tháng đỉnh điểm.
+            </p>
+            {transitCalendar.length === 0 ? <p className="text-sm text-slate-400">Không có đợt chạm nào trong 12 tháng tới.</p> : null}
+            {calendarMonths.map((month) => (
+              <div key={month.key} className="mb-2">
+                <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Tháng {month.label} ({month.events.length})
+                </p>
+                {month.events.map((event) => (
+                  <div
+                    key={`${event.transitKey}-${event.natalKey}-${event.aspect}-${event.exactDate.getTime()}`}
+                    className={row}
+                  >
+                    <span className="text-slate-200">
+                      {event.transitLabel} {ASPECT_VI[event.aspect] ?? event.aspect} {event.natalLabel}
+                    </span>
+                    <span className="text-right text-xs text-slate-400">
+                      {formatShortDate(event.fromDate)}\u2013{formatShortDate(event.toDate)} · đỉnh {formatShortDate(event.exactDate)} (orb {event.minOrb.toFixed(1)}°)
+                      {event.retrograde ? " · R" : ""}
+                    </span>
+                  </div>
+                ))}
               </div>
             ))}
           </div>

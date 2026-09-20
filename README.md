@@ -10,6 +10,7 @@ Web app tiếng Việt: **lập bản đồ sao (natal chart) → ngắm bầu t
    - Tính Mặt Trời, Mặt Trăng, 10 hành tinh (kể cả nghịch hành), AC/DC/MC/IC, góc chiếu (0°, 60°, 90°, 120°, 180°) kèm orb và trạng thái áp sát/tách.
    - Một chuẩn duy nhất, không biến thể: **hoàng đạo nhiệt đới (tropical, geocentric)** + **nhà Whole Sign** (mỗi cung là một nhà, tính từ cung Mọc).
    - Cân bằng nguyên tố - tính chất, pha Mặt Trăng lúc sinh, sao cố định nằm gần các điểm natal (orb 1.5°), transit hiện tại lên bản đồ (orb 4°).
+   - **Lịch transit 12 tháng**: quét từng ngày trong năm tới, gom thành từng đợt chạm (bắt đầu – đỉnh điểm – kết thúc) nhóm theo tháng; tab riêng trong kết quả, bản tóm tắt (hành tinh chậm trước) đưa vào báo cáo AI và bộ luận giải nội bộ.
    - **21 điểm bổ sung**: Chiron, Ceres, Pallas, Juno, Vesta, Eris, Sedna, Bắc/Nam giao điểm, Lilith + 10 điểm quy ước (Uranian/Hamburg, Transpluto, Selena) — tab riêng kèm nhà, màu sắc và ý nghĩa, đồng thời đưa vào báo cáo gửi AI.
 
 2. **Bản đồ sao 3D (bầu trời thật, khung nhìn phối cảnh)** — khung ngắm trời duy nhất của app (bản đồ 2D cũ đã được thay bằng bản 3D), chi tiết trong `docs/ban-do-3d.md`
@@ -20,7 +21,7 @@ Web app tiếng Việt: **lập bản đồ sao (natal chart) → ngắm bầu t
    - **Tua giờ thấy vòm trời quay**: lưới xích đạo khoá vào khung sao + vệt sao thành cung tròn dài theo tốc độ (thời gian thực tới 6 giờ/giây); sao quay bằng ma trận ΔLST nên mượt 60 fps.
    - **Điều khiển**: kéo nhìn quanh, lăn chuột/chụm phóng to **quanh con trỏ mà trang không cuộn**, nháy đúp đưa vật thể vào giữa, bấm vật thể → thẻ thông tin + **Hỏi AI về riêng nó**, ô tra cứu gõ được tiếng Việt không dấu, phím ←→↑↓ +/− và phím cách tua giờ, 13 nút bật/tắt lớp, toàn màn hình.
    - Thẻ phụ: hành tinh đang thấy được, giờ mọc/lặn Mặt Trời - Mặt Trăng, hành tinh theo cung.
-   - **Giao diện & cảm ứng**: hero mở đầu chuyển màu, overline đánh số mục, thẻ `.card` thống nhất, nền trời đêm hai quầng sáng; kết quả natal gom vào **một thẻ có tab** (Tổng quan · Hành tinh · Điểm thêm · 12 nhà · Góc chiếu · Sao cố định · Transit, kèm số lượng) thay vì sáu thẻ xếp chồng, danh sách dài tự cuộn trong khung cao cố định; nav cuộn ngang trên màn hẹp; ô nhập/select/checkbox/nút đạt cỡ chạm ≥44 px trên thiết bị cảm ứng; `scroll-padding` bù header dính; tôn trọng `prefers-reduced-motion`.
+   - **Giao diện & cảm ứng**: hero mở đầu chuyển màu, overline đánh số mục, thẻ `.card` thống nhất, nền trời đêm hai quầng sáng; kết quả natal gom vào **một thẻ có tab** (Tổng quan · Hành tinh · Điểm thêm · 12 nhà · Góc chiếu · Sao cố định · Transit · Lịch 12 tháng, kèm số lượng) thay vì sáu thẻ xếp chồng, danh sách dài tự cuộn trong khung cao cố định; nav cuộn ngang trên màn hẹp; ô nhập/select/checkbox/nút đạt cỡ chạm ≥44 px trên thiết bị cảm ứng; `scroll-padding` bù header dính; tôn trọng `prefers-reduced-motion`.
 
 3. **Hỏi AI (Gemini)**
 
@@ -36,6 +37,7 @@ Các engine được kiểm chứng tự động với **Swiss Ephemeris** (`npm
 | --- | --- | --- |
 | Ví dụ natal 11/11/1996 | 10 hành tinh + Cung Mọc/Thiên Đỉnh + 12 cusp Whole Sign so với Swiss Ephemeris 2.10 | hành tinh ≤ 0,03° · góc & nhà ≤ 0,01° |
 | Điểm bổ sung | 41 mốc 1900–2100 so Swiss Ephemeris (Kepler 2 vật thể cho tiểu hành tinh) | node 0,00015° · Lilith 0,12° · giả định ≤ 0,007° · tiểu hành tinh TB ≤ 0,25° |
+| Vận hạn & lịch transit | 18 phép kiểm: nhận diện ý định timing ('tác động' không nhầm thành AC), quét 365 ngày gom ~395 đợt chạm (tất định, đỉnh phủ khắp năm), dòng gửi AI ≤ 25 | 0 lỗi |
 | Bản đồ sao (hiển thị) | 14.950 phép kiểm: khúc xạ/hấp thụ, phép chiếu & nghịch đảo, phóng to quanh con trỏ, **quy đổi lăn chuột & giới hạn dịch chuyển khung**, dựng khung 4 vĩ độ, Ngân Hà, pha Trăng, tra cứu | 0 lỗi (sai số nghịch đảo < 0,05°) |
 | Bầu trời 3D | 1.510 phép kiểm: hình học camera phối cảnh (chân trời thẳng, nghịch đảo < 1e-6 px), zoom quanh con trỏ nghiệm kín, quay ΔLST khớp khung dựng lại ≤ vài phần triệu độ, cắt mặt phẳng gần, lưới mặt đất, vệt sao, pha hành tinh theo tam giác khoảng cách, lưới xích đạo; kèm **vẽ thật trên canvas** và so sánh điểm ảnh (tất định từng byte) | 0 lỗi |
 | Vòng bản đồ sao natal | 1.985 phép kiểm: render thật `ChartWheel` rồi soi lại SVG (hộp bao từng phần tử kể cả nửa nét và chữ), 4 lá số thật, ca AC ở đỉnh vòng, vĩ độ 78°, 10 hành tinh dồn một độ, dữ liệu NaN/Infinity — kèm **đối chứng**: hình học cũ phải trượt đúng phép kiểm | 0 lỗi (mọi nét vẽ nằm trong vùng đệm 16/600 ≈ 2,7%) |

@@ -457,9 +457,10 @@ export type TransitHit = {
 };
 
 /** Góc chiếu của các hành tinh hiện tại lên bản đồ sao natal (transit). */
-export const computeTransits = (chart: ChartData, date: Date, maxOrb = 4): TransitHit[] => {
-  const now = computePlanetLongitudes(date);
-  const soon = computePlanetLongitudes(new Date(date.getTime() + 24 * 60 * 60 * 1000));
+type TransitLongitude = { key: string; longitude: number; body: Body };
+
+/** Dựng các điểm chạm transit từ kinh độ đã tính sẵn (dùng chung cho ảnh chụp 1 ngày và lịch cả năm). */
+const buildTransitHits = (chart: ChartData, now: TransitLongitude[], soon: TransitLongitude[], maxOrb: number): TransitHit[] => {
   const soonMap = new Map(soon.map((item) => [item.key, item.longitude]));
   const natalKeys = ["ascendant", "midheaven", ...chart.planets.map((planet) => planet.key)];
   const natalLabel = (key: string) => {
@@ -508,7 +509,125 @@ export const computeTransits = (chart: ChartData, date: Date, maxOrb = 4): Trans
     }
   }
 
-  return hits.sort((a, b) => a.orb - b.orb);
+  return hits;
+};
+
+export const computeTransits = (chart: ChartData, date: Date, maxOrb = 4): TransitHit[] => {
+  const now = computePlanetLongitudes(date);
+  const soon = computePlanetLongitudes(new Date(date.getTime() + 24 * 60 * 60 * 1000));
+  return buildTransitHits(chart, now, soon, maxOrb).sort((a, b) => a.orb - b.orb);
+};
+
+/* ------------------------------------------------------- lịch transit 12 tháng */
+
+export type TransitCalendarEvent = {
+  transitKey: string;
+  transitLabel: string;
+  natalKey: string;
+  natalLabel: string;
+  natalHouse: number;
+  aspect: string;
+  aspectLabel: string;
+  /** Ngày đầu - ngày cuối còn trong ngưỡng orb, và ngày chạm khít nhất. */
+  fromDate: Date;
+  toDate: Date;
+  exactDate: Date;
+  minOrb: number;
+  retrograde: boolean;
+};
+
+/** Ngày-tháng-năm gọn cho lịch transit (20/09/2026). */
+export const formatShortDate = (date: Date) => {
+  const d = String(date.getDate()).padStart(2, "0");
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  return `${d}/${m}/${date.getFullYear()}`;
+};
+
+const SLOW_TRANSIT_KEYS = ["jupiter", "saturn", "uranus", "neptune", "pluto"];
+
+/**
+ * Quét từng ngày trong `days` ngày kể từ `startDate`, gom các điểm chạm liên tiếp
+ * (cùng hành tinh - điểm natal - góc chiếu) thành từng đợt, kèm ngày đỉnh điểm.
+ * Bỏ qua Mặt Trăng vì đổi góc theo giờ, quét theo ngày sẽ thành nhiễu.
+ */
+export const computeTransitCalendar = (
+  chart: ChartData,
+  startDate: Date,
+  days = 365,
+  maxOrb = 4
+): TransitCalendarEvent[] => {
+  const start = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate(), 12));
+  const longitudes: TransitLongitude[][] = [];
+  for (let d = 0; d <= days; d += 1) {
+    longitudes.push(computePlanetLongitudes(new Date(start.getTime() + d * 24 * 60 * 60 * 1000)));
+  }
+
+  type OpenRun = { event: TransitCalendarEvent; lastDay: number };
+  const open = new Map<string, OpenRun>();
+  const done: TransitCalendarEvent[] = [];
+
+  for (let day = 0; day < days; day += 1) {
+    const hits = buildTransitHits(chart, longitudes[day], longitudes[day + 1], maxOrb).filter(
+      (hit) => hit.transitKey !== "moon"
+    );
+    for (const hit of hits) {
+      const key = `${hit.transitKey}|${hit.natalKey}|${hit.aspect}`;
+      const date = new Date(start.getTime() + day * 24 * 60 * 60 * 1000);
+      const run = open.get(key);
+      if (run) {
+        run.event.toDate = date;
+        run.lastDay = day;
+        if (hit.orb < run.event.minOrb) {
+          run.event.minOrb = hit.orb;
+          run.event.exactDate = date;
+          run.event.retrograde = hit.transitRetrograde;
+        }
+      } else {
+        open.set(key, {
+          event: {
+            transitKey: hit.transitKey,
+            transitLabel: hit.transitLabel,
+            natalKey: hit.natalKey,
+            natalLabel: hit.natalLabel,
+            natalHouse: hit.natalHouse,
+            aspect: hit.aspect,
+            aspectLabel: hit.aspectLabel,
+            fromDate: date,
+            toDate: date,
+            exactDate: date,
+            minOrb: hit.orb,
+            retrograde: hit.transitRetrograde
+          },
+          lastDay: day
+        });
+      }
+    }
+    // Dung sai ngắt quãng 2 ngày: orb flicker quanh ngưỡng 4° vẫn tính là một đợt.
+    for (const [key, run] of open) {
+      if (day - run.lastDay > 2) {
+        done.push(run.event);
+        open.delete(key);
+      }
+    }
+  }
+  for (const run of open.values()) done.push(run.event);
+
+  return done.sort((a, b) => a.fromDate.getTime() - b.fromDate.getTime());
+};
+
+/** Dòng tóm tắt lịch transit gửi kèm báo cáo AI: hành tinh chậm trước, tối đa `limit` dòng. */
+export const transitCalendarToLines = (events: TransitCalendarEvent[], limit = 24) => {
+  const slow = events.filter((event) => SLOW_TRANSIT_KEYS.includes(event.transitKey));
+  const fast = events.filter((event) => !SLOW_TRANSIT_KEYS.includes(event.transitKey));
+  const ordered = [...slow, ...fast];
+  const lines = ordered.slice(0, limit).map(
+    (event) =>
+      `- ${event.transitLabel} ${event.aspect} ${event.natalLabel} natal, đỉnh ${formatShortDate(event.exactDate)} (orb ${event.minOrb.toFixed(1)}°${event.retrograde ? ", nghịch hành" : ""}) · ${formatShortDate(event.fromDate)}\u2013${formatShortDate(event.toDate)}`
+  );
+  if (ordered.length > limit) {
+    lines.push(`- \u2026còn ${ordered.length - limit} đợt chạm khác trong 12 tháng (xem đầy đủ trong tab Lịch 12 tháng của app).`);
+  }
+  return lines;
 };
 
 export const formatReportTimestamp = (date: Date) =>
@@ -524,7 +643,7 @@ export const formatReportTimestamp = (date: Date) =>
   }).format(date);
 
 /** Bản mô tả chart dạng văn bản để gửi kèm câu hỏi cho mô hình ngôn ngữ. */
-export const buildChartReport = (chart: ChartData, senderName: string, question: string, transitLines: string[] = [], extraLines: string[] = []) => {
+export const buildChartReport = (chart: ChartData, senderName: string, question: string, transitLines: string[] = [], extraLines: string[] = [], calendarLines: string[] = []) => {
   const planetLines = chart.planets
     .map(
       (planet) =>
@@ -572,6 +691,9 @@ export const buildChartReport = (chart: ChartData, senderName: string, question:
     "",
     "ĐIỂM BỔ SUNG (TIỂU HÀNH TINH, GIAO ĐIỂM, ĐIỂM QUY ƯỚC)",
     extraLines.length ? extraLines.join("\n") : "- Không có.",
+    "",
+    "LỊCH TRANSIT 12 THÁNG TỚI (ĐỢT CHẠM CHÍNH, orb <= 4°, không tính Mặt Trăng)",
+    calendarLines.length ? calendarLines.join("\n") : "- Không có.",
     "",
     "CÂU HỎI CẦN LUẬN GIẢI",
     question
