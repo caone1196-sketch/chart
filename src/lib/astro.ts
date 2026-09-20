@@ -1,6 +1,4 @@
 import { Body, PairLongitude, SiderealTime, SunPosition } from "astronomy-engine";
-import { armcToMc, computeHouses, houseOfLongitude, type HouseSystemId } from "@/lib/houses";
-import { ayanamsa, type ZodiacFrameId } from "@/lib/zodiac";
 import { calcObliquity, normalizeDegree, signedSeparation } from "@/lib/mathx";
 
 export { calcObliquity, normalizeDegree, signedSeparation };
@@ -58,17 +56,6 @@ export type ChartData = {
   aspects: Aspect[];
   elements: BalanceMap;
   modalities: ModalityMap;
-  /** Hệ thống chia nhà đang dùng. */
-  houseSystem: HouseSystemId;
-  /** Hệ hoàng đạo đang dùng (tropical hoặc sidereal). */
-  zodiacFrame: ZodiacFrameId;
-  /** Ayanamsa đã trừ (0 nếu dùng hệ nhiệt đới). */
-  ayanamsa: number;
-  /** Các điểm ảo cơ bản của hệ nhà đang dùng. */
-  vertex: number;
-  eastPoint: number;
-  /** Ghi chú khi hệ nhà đang chọn không xác định ở vĩ độ này và đã phải thay thế. */
-  houseNote?: string;
 };
 
 export type BalanceMap = {
@@ -274,6 +261,29 @@ export const moonPhaseFromPair = (moonRelativeSun: number) => {
 export const localSiderealDegrees = (date: Date, longitude: number) =>
   normalizeDegree(SiderealTime(date) * 15 + longitude);
 
+/**
+ * MC từ ARMC: tan(MC) = tan(ARMC) / cos ε (khớp Swiss Ephemeris).
+ * App chỉ dùng nhà Whole Sign và hoàng đạo nhiệt đới nên không cần hệ nhà/hệ hoàng đạo khác.
+ */
+export const armcToMc = (armc: number, obliquity: number) => {
+  const DEG = Math.PI / 180;
+  const EPS = 1e-12;
+  const cosE = Math.cos(obliquity * DEG);
+  if (Math.abs(armc - 90) > EPS && Math.abs(armc - 270) > EPS) {
+    let mc = Math.atan(Math.tan(armc * DEG) / cosE) / DEG;
+    if (armc > 90 && armc <= 270) mc = normalizeDegree(mc + 180);
+    return normalizeDegree(mc);
+  }
+  return Math.abs(armc - 90) <= EPS ? 90 : 270;
+};
+
+/** Số nhà Whole Sign chứa một kinh độ hoàng đạo (mỗi cung là một nhà, tính từ cung Mọc). */
+export const houseOfLongitude = (longitude: number, ascendant: number) => {
+  const ascSign = Math.floor(normalizeDegree(ascendant) / 30);
+  const sign = Math.floor(normalizeDegree(longitude) / 30);
+  return ((sign - ascSign + 12) % 12) + 1;
+};
+
 export const calcAngles = (utcDate: Date, latitude: number, longitude: number) => {
   const epsilon = (calcObliquity(utcDate) * Math.PI) / 180;
   const lstDegrees = localSiderealDegrees(utcDate, longitude);
@@ -337,26 +347,20 @@ const elementBalanceOf = (longitudes: number[], ascendant: number): { elements: 
   return { elements, modalities };
 };
 
-export type ChartOptions = {
-  houseSystem?: HouseSystemId;
-  zodiacFrame?: ZodiacFrameId;
-};
-
+/**
+ * Dựng bản đồ sao natal: hoàng đạo nhiệt đới (tropical, geocentric) + nhà Whole Sign.
+ * App đã lược bỏ các biến thể hệ nhà / hệ hoàng đạo / điểm ảo — mọi bản đồ dùng chung một chuẩn này.
+ */
 export const calculateChart = (
   utcDate: Date,
   latitude: number,
   longitude: number,
   locationLabel: string,
   timezoneId: string | null,
-  timezoneOffset: number,
-  options: ChartOptions = {}
+  timezoneOffset: number
 ): ChartData => {
-  const houseSystem = options.houseSystem ?? "wholeSign";
-  const zodiacFrame = options.zodiacFrame ?? "tropical";
   const angles = calcAngles(utcDate, latitude, longitude);
-  const houseSet = computeHouses(houseSystem, angles.localSiderealDegrees, latitude, calcObliquity(utcDate));
-  const cusps = houseSet.cusps;
-  const ayan = zodiacFrame === "tropical" ? 0 : ayanamsa(zodiacFrame, utcDate);
+  const houses = buildWholeSignHouses(angles.ascendant);
   const nextDate = new Date(utcDate.getTime() + 24 * 60 * 60 * 1000);
   const current = new Map(computePlanetLongitudes(utcDate).map((item) => [item.key, item.longitude]));
   const next = new Map(computePlanetLongitudes(nextDate).map((item) => [item.key, item.longitude]));
@@ -365,14 +369,13 @@ export const calculateChart = (
     const longitudeNow = current.get(planet.key) ?? 0;
     const longitudeNext = next.get(planet.key) ?? longitudeNow;
     const step = signedSeparation(longitudeNow, longitudeNext);
-    const shown = normalizeDegree(longitudeNow - ayan);
 
     return {
       ...planet,
-      longitude: shown,
+      longitude: normalizeDegree(longitudeNow),
       retrograde: step < 0,
       speed: step,
-      house: houseOfLongitude(longitudeNow, cusps)
+      house: houseOfLongitude(longitudeNow, angles.ascendant)
     };
   });
 
@@ -416,12 +419,6 @@ export const calculateChart = (
     angles.ascendant
   );
 
-  const houses: House[] = cusps.map((cusp, index) => ({
-    house: index + 1,
-    cusp: normalizeDegree(cusp - ayan),
-    signName: ZODIAC_SIGNS[Math.floor(normalizeDegree(cusp - ayan) / 30)].name
-  }));
-
   return {
     utcDate,
     timezoneId,
@@ -431,22 +428,15 @@ export const calculateChart = (
     longitude,
     moonPhase: moonPhaseFromPair(moonPhaseAngle),
     moonPhaseAngle,
-    ascendant: normalizeDegree(angles.ascendant - ayan),
-    descendant: normalizeDegree(angles.descendant - ayan),
-    midheaven: normalizeDegree(angles.midheaven - ayan),
-    imumCoeli: normalizeDegree(angles.imumCoeli - ayan),
+    ascendant: normalizeDegree(angles.ascendant),
+    descendant: normalizeDegree(angles.descendant),
+    midheaven: normalizeDegree(angles.midheaven),
+    imumCoeli: normalizeDegree(angles.imumCoeli),
     houses,
     planets,
     aspects: aspects.sort((a, b) => a.orb - b.orb),
     elements,
-    modalities,
-    houseSystem,
-    zodiacFrame,
-    ayanamsa: ayan,
-    vertex: normalizeDegree(houseSet.vertex - ayan),
-    eastPoint: normalizeDegree(houseSet.eastPoint - ayan),
-    // Một số hệ nhà không xác định ngoài vòng cực và đã được thay bằng Porphyry — nói rõ cho người dùng.
-    houseNote: houseSet.note
+    modalities
   };
 };
 

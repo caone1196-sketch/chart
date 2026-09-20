@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { ChartData, TransitHit } from "@/lib/astro";
 import { ELEMENT_VI, MODALITY_VI, displayAngle, formatOffset } from "@/lib/astro";
-import { HOUSE_SYSTEMS } from "@/lib/houses";
 import type { FixedStarHit } from "@/lib/sky";
 
 // Cho phép xuống dòng trên màn hình hẹp để không tràn ngang (tên dài + số liệu).
@@ -129,7 +128,7 @@ export default function ChartPanel({
         {tab === "houses" ? (
           <div>
             <p className="mb-1 text-xs text-slate-400">
-              Hệ nhà: {HOUSE_SYSTEMS.find((system) => system.id === chart.houseSystem)?.label ?? chart.houseSystem}
+              Hệ nhà: Toàn cung (Whole Sign) — mỗi cung hoàng đạo là một nhà, tính từ cung Mọc.
             </p>
             <div className="grid gap-x-6 sm:grid-cols-2">
               {chart.houses.map((house) => (
@@ -141,7 +140,6 @@ export default function ChartPanel({
                 </div>
               ))}
             </div>
-            {chart.houseNote ? <p className="mt-2 text-xs text-amber-200">⚠ {chart.houseNote}</p> : null}
           </div>
         ) : null}
 

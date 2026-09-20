@@ -24,8 +24,8 @@ type Scenario = {
   note: string;
 };
 
-const build = (utc: Date, lat: number, lon: number, label: string, extra: Partial<Parameters<typeof calculateChart>[6]> = {}) =>
-  calculateChart(utc, lat, lon, label, null, 7, { houseSystem: "wholeSign", zodiacFrame: "tropical", ...extra });
+const build = (utc: Date, lat: number, lon: number, label: string) =>
+  calculateChart(utc, lat, lon, label, null, 7);
 
 /** Vòng tròn dựng từ dữ liệu tự đặt — dùng để thử các ca xấu (10 hành tinh dồn một chỗ). */
 const stellium = (): ChartData => {
@@ -67,13 +67,13 @@ const scenarios: Scenario[] = [
   },
   {
     name: "wheel-04-vong-cuc",
-    chart: build(new Date(Date.UTC(1985, 5, 21, 10, 0)), 69.65, 18.96, "Tromsø", { houseSystem: "placidus" }),
-    note: "vĩ độ 69,65° (ngoài vòng cực) — hệ Placidus tự chuyển Porphyry"
+    chart: build(new Date(Date.UTC(1985, 5, 21, 10, 0)), 69.65, 18.96, "Tromsø"),
+    note: "vĩ độ 69,65° (gần vòng cực) — nhà Whole Sign luôn xác định"
   },
   {
-    name: "wheel-05-ve-da-lahiri",
-    chart: build(new Date(Date.UTC(2004, 4, 5, 11, 45)), 10.7769, 106.7009, "Sài Gòn", { zodiacFrame: "lahiri" }),
-    note: "hệ hoàng đạo sidereal (Lahiri)"
+    name: "wheel-05-sai-gon-2004",
+    chart: build(new Date(Date.UTC(2004, 4, 5, 11, 45)), 10.7769, 106.7009, "Sài Gòn"),
+    note: "lá số Sài Gòn 05/05/2004 (nhiệt đới + Whole Sign)"
   }
 ];
 

@@ -16,9 +16,6 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ChartWheel from "../src/components/ChartWheel.tsx";
 import { calculateChart, type PlanetPosition } from "../src/lib/astro.ts";
-import type { ZodiacFrameId } from "../src/lib/zodiac.ts";
-import type { HouseSystemId } from "../src/lib/houses.ts";
-import { computeExtraPoints } from "../src/lib/points.ts";
 import {
   WHEEL_CENTER,
   WHEEL_GLYPH_MAX_OFFSET,
@@ -64,15 +61,13 @@ type Case = {
   utc: Date;
   lat: number;
   lon: number;
-  houseSystem?: HouseSystemId;
-  zodiacFrame?: ZodiacFrameId;
 };
 
 const CASES: Case[] = [
   { name: "Hà Nội 11/11/1996 00:30", utc: new Date(Date.UTC(1996, 10, 10, 17, 30)), lat: 21.0285, lon: 105.8542 },
-  { name: "Sydney 03/03/1990 08:15", utc: new Date(Date.UTC(1990, 2, 2, 21, 15)), lat: -33.87, lon: 151.21, houseSystem: "placidus" },
-  { name: "Tromsø 21/06/1985 12:00", utc: new Date(Date.UTC(1985, 5, 21, 10, 0)), lat: 69.65, lon: 18.96, houseSystem: "koch" },
-  { name: "Sài Gòn 05/05/2004 18:45 (Vệ Đà)", utc: new Date(Date.UTC(2004, 4, 5, 11, 45)), lat: 10.7769, lon: 106.7009, zodiacFrame: "lahiri" }
+  { name: "Sydney 03/03/1990 08:15", utc: new Date(Date.UTC(1990, 2, 2, 21, 15)), lat: -33.87, lon: 151.21 },
+  { name: "Tromsø 21/06/1985 12:00", utc: new Date(Date.UTC(1985, 5, 21, 10, 0)), lat: 69.65, lon: 18.96 },
+  { name: "Sài Gòn 05/05/2004 18:45", utc: new Date(Date.UTC(2004, 4, 5, 11, 45)), lat: 10.7769, lon: 106.7009 }
 ];
 
 type ChartLike = ReturnType<typeof calculateChart>;
@@ -228,10 +223,7 @@ const renderAndCheck = (group: string, chart: ChartLike, highlightKeys: string[]
 
 for (const item of CASES) {
   const group = item.name;
-  const chart = calculateChart(item.utc, item.lat, item.lon, item.name, null, 7, {
-    houseSystem: item.houseSystem ?? "wholeSign",
-    zodiacFrame: item.zodiacFrame ?? "tropical"
-  });
+  const chart = calculateChart(item.utc, item.lat, item.lon, item.name, null, 7);
   const { elements, layout } = renderAndCheck(group, chart);
 
   // Số lượng phần tử đúng như dữ liệu: 12 vạch cung, 12 ký hiệu cung, 12 vạch nhà, 12 số nhà,
@@ -258,10 +250,7 @@ for (const item of CASES) {
 /* ── 3. Nhãn AC/DC/MC/IC phải vẽ trong vành cho phép, không đè lên ký hiệu cung ── */
 
 {
-  const chart = calculateChart(CASES[0].utc, CASES[0].lat, CASES[0].lon, CASES[0].name, null, 7, {
-    houseSystem: "wholeSign",
-    zodiacFrame: "tropical"
-  });
+  const chart = calculateChart(CASES[0].utc, CASES[0].lat, CASES[0].lon, CASES[0].name, null, 7);
   const { elements } = renderAndCheck("nhãn góc", chart, ["sun"]);
 
   const labels = elements.filter((element) => element.tag === "text" && ["AC", "DC", "MC", "IC"].includes(element.text ?? ""));
@@ -357,10 +346,7 @@ for (const item of CASES) {
 
 {
   const group = "thứ tự vành";
-  const chart = calculateChart(CASES[0].utc, CASES[0].lat, CASES[0].lon, CASES[0].name, null, 7, {
-    houseSystem: "wholeSign",
-    zodiacFrame: "tropical"
-  });
+  const chart = calculateChart(CASES[0].utc, CASES[0].lat, CASES[0].lon, CASES[0].name, null, 7);
   const layout: WheelLayout = buildWheelLayout({
     planets: chart.planets.map((planet) => ({ key: planet.key, longitude: planet.longitude })),
     houses: chart.houses.map((house) => ({ house: house.house, cusp: house.cusp })),
@@ -474,10 +460,7 @@ for (const item of CASES) {
 {
   const group = "vùng đệm";
   assert(group, WHEEL_SAFE_MARGIN >= 12, "vùng an toàn tối thiểu 12 đơn vị (≈2% cạnh khung)");
-  const chart = calculateChart(CASES[0].utc, CASES[0].lat, CASES[0].lon, CASES[0].name, null, 7, {
-    houseSystem: "wholeSign",
-    zodiacFrame: "tropical"
-  });
+  const chart = calculateChart(CASES[0].utc, CASES[0].lat, CASES[0].lon, CASES[0].name, null, 7);
   const layout = buildWheelLayout({
     planets: chart.planets.map((planet) => ({ key: planet.key, longitude: planet.longitude })),
     houses: chart.houses.map((house) => ({ house: house.house, cusp: house.cusp })),
@@ -487,33 +470,13 @@ for (const item of CASES) {
   assert(group, gap >= WHEEL_SAFE_MARGIN - 0.001, `phải chừa ≥ ${WHEEL_SAFE_MARGIN} đơn vị ở mọi mép (đang chừa ${gap.toFixed(2)})`);
 
   // Vòng cực: Cung Mọc/Cung Lặn có thể trùng nhau, nhãn không được kéo hình học ra ngoài.
-  const polar = calculateChart(new Date(Date.UTC(1985, 5, 21, 10, 0)), 78.2, 15.6, "Svalbard", null, 2, {
-    houseSystem: "placidus",
-    zodiacFrame: "tropical"
-  });
+  const polar = calculateChart(new Date(Date.UTC(1985, 5, 21, 10, 0)), 78.2, 15.6, "Svalbard", null, 2);
   const polarLayout = buildWheelLayout({
     planets: polar.planets.map((planet) => ({ key: planet.key, longitude: planet.longitude })),
     houses: polar.houses.map((house) => ({ house: house.house, cusp: house.cusp })),
     angles: anglesOf(polar)
   });
   for (const box of polarLayout.boxes) assert(group, fits(box), "vĩ độ 78° vẫn phải nằm trong khung");
-}
-
-/* ── 9. Điểm ảo (21 điểm) không phá hình học khi nằm cùng vành ── */
-
-{
-  const group = "điểm ảo";
-  const chart = calculateChart(CASES[0].utc, CASES[0].lat, CASES[0].lon, CASES[0].name, null, 7, {
-    houseSystem: "wholeSign",
-    zodiacFrame: "tropical"
-  });
-  const extras = computeExtraPoints(chart.utcDate);
-  const { boxes } = buildWheelLayout({
-    planets: extras.slice(0, 10).map((point) => ({ key: point.key, longitude: point.longitude })),
-    houses: chart.houses.map((house) => ({ house: house.house, cusp: house.cusp })),
-    angles: anglesOf(chart)
-  });
-  for (const box of boxes) assert(group, fits(box), "điểm ảo dùng thay hành tinh vẫn phải nằm trong khung");
 }
 
 console.log(`\n${failures.length ? "✘" : "✔"} Vòng bản đồ sao: ${checks} phép kiểm, ${failures.length} lỗi.`);
