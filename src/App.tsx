@@ -6,28 +6,28 @@ import ChartPanel from "@/components/ChartPanel";
 import ChartWheel from "@/components/ChartWheel";
 import ChatPanel from "@/components/ChatPanel";
 import Sky3D from "@/components/Sky3D";
-import VariantPanel from "@/components/VariantPanel";
-import { buildVariantChart, variantReport } from "@/lib/chart-variants";
-import type { HouseSystemId } from "@/lib/houses";
-import type { ZodiacFrameId } from "@/lib/zodiac";
 import {
   buildChartReport,
   buildUtcDate,
   calcObliquity,
   calculateChart,
   computeTransits,
+  computeTransitCalendar,
   displayAngle,
   formatLocalDate,
   formatLocalTime,
   getOffsetHours,
   localSiderealDegrees,
   transitToLines,
+  transitCalendarToLines,
   type ChartData,
-  type TransitHit
+  type TransitHit,
+  type TransitCalendarEvent
 } from "@/lib/astro";
 import { askServerAi, checkServerHealth, type ChatEngine, type ChatTurn, type ServerHealth } from "@/lib/ai";
 import { geocodePlace } from "@/lib/geocode";
 import { answerLocally } from "@/lib/interpret";
+import { computeExtraPoints, extraPointsToLines, type ExtraPointPosition } from "@/lib/points";
 import { computeSkySnapshot, findFixedStarHits, riseSetForDay, type FixedStarHit } from "@/lib/sky";
 
 const STORAGE_FORM = "astral-chart-vn:form";
@@ -45,8 +45,7 @@ const defaultForm = (): BirthFormValues => {
     birthPlace: "Hà Nội, Việt Nam",
     latitude: "21.0285",
     longitude: "105.8542",
-    timeZoneId: "Asia/Ho_Chi_Minh",
-    gender: "nam"
+    timeZoneId: "Asia/Ho_Chi_Minh"
   };
 };
 
@@ -80,16 +79,6 @@ const INTRO_MESSAGE: ChatTurn = {
 export default function App() {
   const [form, setForm] = useState<BirthFormValues>(loadForm);
   const [chart, setChart] = useState<ChartData | null>(null);
-  const [houseSystem, setHouseSystem] = useState<HouseSystemId>("wholeSign");
-  const [zodiacFrame, setZodiacFrame] = useState<ZodiacFrameId>("tropical");
-  const [birthInputs, setBirthInputs] = useState<{
-    utcDate: Date;
-    latitude: number;
-    longitude: number;
-    label: string;
-    timeZoneId: string | null;
-    timezoneOffset: number;
-  } | null>(null);
   const [error, setError] = useState("");
   const [geocodeNote, setGeocodeNote] = useState("");
   const [isGeocoding, setIsGeocoding] = useState(false);
@@ -145,36 +134,19 @@ export default function App() {
   const lat = Number(form.latitude);
   const lon = Number(form.longitude);
 
-  // Khi đổi hệ nhà hoặc hệ hoàng đạo, lập lại bản đồ từ dữ liệu sinh đã nhập.
-  useEffect(() => {
-    if (!birthInputs) return;
-    setChart(
-      calculateChart(birthInputs.utcDate, birthInputs.latitude, birthInputs.longitude, birthInputs.label, birthInputs.timeZoneId, birthInputs.timezoneOffset, {
-        houseSystem,
-        zodiacFrame
-      })
-    );
-  }, [birthInputs, houseSystem, zodiacFrame]);
-
-  const variant = useMemo(() => {
-    if (!chart || !birthInputs) return null;
-    const localDate = new Date(birthInputs.utcDate.getTime() + birthInputs.timezoneOffset * 3600 * 1000);
-    return buildVariantChart({
-      chart,
-      localDate,
-      localHour: localDate.getUTCHours() + localDate.getUTCMinutes() / 60,
-      gender: form.gender,
-      houseSystem,
-      zodiacFrame
-    });
-  }, [chart, birthInputs, houseSystem, zodiacFrame, form.gender]);
-
   const transits: TransitHit[] = useMemo(() => (chart ? computeTransits(chart, now, 4) : []), [chart, now]);
+
+  const transitCalendar: TransitCalendarEvent[] = useMemo(
+    () => (chart ? computeTransitCalendar(chart, new Date(), 365) : []),
+    [chart]
+  );
 
   const fixedStars: FixedStarHit[] = useMemo(
     () => (chart ? findFixedStarHits(chart, calcObliquity(chart.utcDate), 1.5) : []),
     [chart]
   );
+
+  const extraPoints: ExtraPointPosition[] = useMemo(() => (chart ? computeExtraPoints(chart.utcDate) : []), [chart]);
 
   const skySnapshot = useMemo(
     () =>
@@ -240,12 +212,8 @@ export default function App() {
 
       const timed = buildUtcDate(form.birthDate, form.birthTime, offset, timeZoneId);
       const label = form.birthPlace.trim() || "Không rõ địa điểm";
-      const result = calculateChart(timed.utcDate, latitude, longitude, label, timeZoneId, timed.resolvedOffset, {
-        houseSystem,
-        zodiacFrame
-      });
+      const result = calculateChart(timed.utcDate, latitude, longitude, label, timeZoneId, timed.resolvedOffset);
 
-      setBirthInputs({ utcDate: timed.utcDate, latitude, longitude, label, timeZoneId, timezoneOffset: timed.resolvedOffset });
       setChart(result);
       setStatus("");
       setChatMessages((previous) => [
@@ -291,12 +259,7 @@ export default function App() {
     setStatus("");
     setEngine(null);
 
-    const report = [
-      buildChartReport(chart, senderName.trim() || "Người dùng", value, transitToLines(transits)),
-      variant ? variantReport(variant) : ""
-    ]
-      .filter(Boolean)
-      .join("\n\n");
+    const report = buildChartReport(chart, senderName.trim() || "Người dùng", value, transitToLines(transits), extraPointsToLines(extraPoints, chart.ascendant), transitCalendarToLines(transitCalendar));
 
     const fallback = () =>
       answerLocally({
@@ -307,7 +270,8 @@ export default function App() {
         sky: skySnapshot ?? computeSkySnapshot(now, chart.latitude, chart.longitude, localSiderealDegrees(now, chart.longitude), calcObliquity(now)),
         transits,
         fixedStars,
-        variant: variant ?? undefined,
+        extraPoints,
+        transitCalendar,
         riseSet: riseSet ?? { sunRise: "—", sunSet: "—", moonRise: "—", moonSet: "—", timeZoneLabel: "giờ máy của bạn" }
       });
 
@@ -480,7 +444,7 @@ export default function App() {
             {[
               ["5.044", "sao Hipparcos"],
               ["88", "chòm sao tên Việt"],
-              ["12", "hệ nhà chiêm tinh"],
+              ["10", "hành tinh natal"],
               ["60 fps", "vòm trời quay mượt"]
             ].map(([value, label]) => (
               <div key={label} className="card flex flex-col px-4 py-3">
@@ -607,23 +571,12 @@ export default function App() {
                     imumCoeli={chart.imumCoeli}
                   />
                   <p className="mt-4 text-center text-xs text-slate-500">
-                    Vòng ngoài: 12 cung hoàng đạo · vòng trong: 12 nhà (hệ {variant?.houseSystemLabel ?? "Toàn cung (Whole Sign)"}) · đường nối
+                    Vòng ngoài: 12 cung hoàng đạo · vòng trong: 12 nhà (hệ Toàn cung — Whole Sign) · đường nối
                     màu: góc chiếu chính.
                   </p>
                 </div>
-                <ChartPanel chart={chart} transits={transits} fixedStars={fixedStars} />
+                <ChartPanel chart={chart} transits={transits} fixedStars={fixedStars} extraPoints={extraPoints} transitCalendar={transitCalendar} />
               </div>
-
-              {variant ? (
-                <div className="mt-6">
-                  <VariantPanel
-                    variant={variant}
-                    chart={chart}
-                    onHouseSystem={setHouseSystem}
-                    onZodiacFrame={setZodiacFrame}
-                  />
-                </div>
-              ) : null}
             </motion.div>
           ) : (
             <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-6">

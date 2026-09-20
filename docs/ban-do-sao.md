@@ -69,7 +69,7 @@ Mặt Trời dưới −18° trở đi mới thấy tới cấp 6, chạng vạn
 | --- | --- | --- |
 | `npm run test:sky` | 14 nhóm: khúc xạ (đơn điệu, nghịch đảo), khối khí quyển (so số tra cứu), hấp thụ, bảng màu trời đơn điệu, phép chiếu chân trời (thiên đỉnh ở tâm, bán kính, phương vị), phép chiếu bản đồ, **phóng to quanh con trỏ ở cả 2 chế độ**, dựng khung 4 vĩ độ (Hà Nội/Sydney/Tromsø/xích đạo), Ngân Hà (rãnh tối tối hơn nhánh sáng ≥ 25 %, Sgr A\* ở 266,42° / −28,94°), pha Trăng, tra cứu, định dạng toạ độ, **quy đổi lăn chuột & giới hạn dịch chuyển (7b)**, dựng giao diện | **14.963 phép kiểm · 0 lỗi** |
 | `npm run test:ui` | chạy thật giao diện trong jsdom với canvas giả có ghi lại lời gọi: gắn giao diện, vẽ, **lăn chuột thật bằng `WheelEvent` và khẳng định `defaultPrevented` (trang không cuộn) + mức phóng tăng/giảm đúng hướng (kể cả `deltaMode = 1` của Firefox và Ctrl + lăn)**, kéo, bấm chọn sao, đổi chế độ, tắt/bật lớp, tra cứu "Sao Thiên Lang", phím tắt; chờ lần vẽ đầu bằng poll thay vì hẹn giờ cứng | **≈133.000 lời gọi vẽ · 0 lỗi · 0 console.error** |
-| `npm test` | toàn bộ chuỗi cũ (12 hệ nhà 42.952 điểm · ayanamsa · âm lịch 32.874 · điểm ảo · biến thể · Tử Vi 11.848 · nhất quán 18.522 · ví dụ 11/11/1996 216) + 2 nhóm mới | **EXIT 0** |
+| `npm test` | toàn bộ chuỗi hiện tại (bản đồ sao · bầu trời 3D · giao diện 3D · vòng natal · AI · ví dụ 11/11/1996) — các nhóm biến thể cũ (hệ nhà, ayanamsa, âm lịch, điểm ảo, Tử Vi) đã được gỡ cùng tính năng | **EXIT 0** |
 | `npm run shot:sky` | render 12 cảnh ra PNG (đêm/chạng vạng/ban ngày, zoom, bán cầu nam, khung điện thoại) để soi bằng mắt; có bản "tăng sáng" để kiểm tra cấu trúc | dùng khi cần rà lại hình |
 
 Kiểm tra bằng mắt các cảnh tiêu biểu (rút ra từ bản render):

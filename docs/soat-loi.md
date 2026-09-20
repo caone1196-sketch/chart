@@ -1,3 +1,7 @@
+> **Lưu ý (20/09/2026):** app đã lược bỏ toàn bộ biến thể bản đồ sao (12 hệ nhà, 7 hệ hoàng đạo,
+> điểm ảo, Vệ Đà, Tứ Trụ/Tử Vi, Human Design, bản đồ phái sinh) — chỉ giữ bản đồ natal chuẩn
+> (nhiệt đới + Whole Sign) và bản đồ sao 3D. Biên bản dưới đây giữ lại làm hồ sơ lịch sử.
+
 # Soát lỗi toàn dự án — biên bản
 
 Ngày soát: 16/09/2026 · phạm vi: toàn bộ `src/`, `tests/`, `scripts/` · nhánh `arena/01a0a510-chart`.

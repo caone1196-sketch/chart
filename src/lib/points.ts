@@ -14,15 +14,41 @@
  */
 
 import { Body, GeoMoon, HelioVector, MakeTime } from "astronomy-engine";
-import { calcObliquity, normalizeDegree } from "@/lib/astro";
-import { julianDay } from "@/lib/sky";
-import { julianCenturies, precessionMatrix } from "@/lib/zodiac";
+import { calcObliquity, displayAngle, houseOfLongitude, normalizeDegree } from "@/lib/astro";
+import { julianDay } from "@/lib/mathx";
 
 const DEG = Math.PI / 180;
 const J2000 = 2451545.0;
 const EARTH_OBLIQUITY_J2000 = 23.4392911;
 /** Tốc độ ánh sáng, AU/ngày. */
 const LIGHT_DAY_AU = 173.144632674240;
+
+type Mat3 = [number, number, number, number, number, number, number, number, number];
+
+const julianCenturies = (date: Date) => (julianDay(date) - J2000) / 36525;
+
+const multiplyMat3 = (a: Mat3, b: Mat3): Mat3 => {
+  const out = new Array(9).fill(0) as Mat3;
+  for (let i = 0; i < 3; i += 1) {
+    for (let j = 0; j < 3; j += 1) {
+      out[i * 3 + j] = a[i * 3] * b[j] + a[i * 3 + 1] * b[3 + j] + a[i * 3 + 2] * b[6 + j];
+    }
+  }
+  return out;
+};
+
+const rotZ = (rad: number): Mat3 => [Math.cos(rad), Math.sin(rad), 0, -Math.sin(rad), Math.cos(rad), 0, 0, 0, 1];
+
+/** Ma trận tiến động IAU 1976 từ J2000 sang hệ xích đạo trung bình của ngày. */
+const precessionMatrix = (date: Date): Mat3 => {
+  const T = julianCenturies(date);
+  const zeta = ((2306.2181 * T + 0.30188 * T * T + 0.017998 * T * T * T) / 3600) * DEG;
+  const z = ((2306.2181 * T + 1.09468 * T * T + 0.018203 * T * T * T) / 3600) * DEG;
+  const theta = ((2004.3109 * T - 0.42665 * T * T - 0.041833 * T * T * T) / 3600) * DEG;
+  // P = Rz(-z) · Ry(theta) · Rz(-zeta)
+  const ry: Mat3 = [Math.cos(theta), 0, -Math.sin(theta), 0, 1, 0, Math.sin(theta), 0, Math.cos(theta)];
+  return multiplyMat3(rotZ(-z), multiplyMat3(ry, rotZ(-zeta)));
+};
 
 export const AXIS = {
   x: [1, 0, 0] as [number, number, number],
@@ -620,3 +646,23 @@ export const computeExtraPoints = (utcDate: Date, keys?: string[]): ExtraPointPo
 
   return results;
 };
+
+/* ----------------------------------------------------------- nhãn & báo cáo */
+
+export const EXTRA_POINT_KIND_VI: Record<ExtraPointKind, string> = {
+  node: "Giao điểm Mặt Trăng",
+  blackmoon: "Mặt Trăng đen",
+  asteroid: "Tiểu hành tinh",
+  tno: "Thiên thể xa",
+  hypothetical: "Điểm quy ước (không có thiên thể thật)"
+};
+
+/** Thứ tự nhóm khi hiển thị: thiên thể thật trước, điểm quy ước sau. */
+export const EXTRA_POINT_KIND_ORDER: ExtraPointKind[] = ["asteroid", "tno", "node", "blackmoon", "hypothetical"];
+
+/** Dòng mô tả các điểm bổ sung để gửi kèm báo cáo AI (kèm nhà Whole Sign). */
+export const extraPointsToLines = (points: ExtraPointPosition[], ascendant: number) =>
+  points.map(
+    (point) =>
+      `- ${point.label}: ${displayAngle(point.longitude)} | Nhà ${houseOfLongitude(point.longitude, ascendant)}${point.kind === "hypothetical" ? " | Điểm quy ước" : ""}`
+  );
