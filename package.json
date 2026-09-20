@@ -10,7 +10,7 @@
     "preview": "node server/index.mjs --prod",
     "typecheck": "tsc --noEmit",
     "data": "node scripts/build-data.mjs",
-    "test": "npm run test:sky && npm run test:sky3d && npm run test:ui3d && npm run test:wheel && npm run test:health-ui && npm run test:example && npm run test:ai",
+    "test": "npm run test:points && npm run test:sky && npm run test:sky3d && npm run test:ui3d && npm run test:wheel && npm run test:health-ui && npm run test:example && npm run test:ai",
     "test:example": "esbuild tests/example.check.ts --bundle --platform=node --format=esm --outfile=.cache/example.check.mjs --log-level=error && node .cache/example.check.mjs",
     "test:sky": "esbuild tests/sky.check.ts --bundle --platform=node --format=esm --external:@napi-rs/canvas --external:react --external:react-dom --outfile=.cache/sky.check.mjs --log-level=error && node .cache/sky.check.mjs",
     "test:sky3d": "esbuild tests/sky3d.check.ts --bundle --platform=node --format=esm --external:@napi-rs/canvas --outfile=.cache/sky3d.check.mjs --log-level=error && node .cache/sky3d.check.mjs",
@@ -20,7 +20,8 @@
     "check:ai": "node scripts/check-ai.mjs",
     "test:ai": "esbuild tests/ai-api.check.ts --bundle --platform=node --format=esm --outfile=.cache/ai-api.check.mjs --log-level=error && node .cache/ai-api.check.mjs",
     "test:health-ui": "esbuild tests/health-ui.check.ts --bundle --platform=node --format=esm --external:react --external:react-dom --outfile=.cache/health-ui.check.mjs --alias:@=./src --log-level=error && node .cache/health-ui.check.mjs",
-    "test:wheel": "esbuild tests/wheel.check.ts --bundle --platform=node --format=esm --external:react --external:react-dom --outfile=.cache/wheel.check.mjs --log-level=error && node .cache/wheel.check.mjs"
+    "test:wheel": "esbuild tests/wheel.check.ts --bundle --platform=node --format=esm --external:react --external:react-dom --outfile=.cache/wheel.check.mjs --log-level=error && node .cache/wheel.check.mjs",
+    "test:points": "esbuild tests/points.check.ts --bundle --platform=node --format=esm --outfile=.cache/points.check.mjs --log-level=error && node .cache/points.check.mjs"
   },
   "dependencies": {
     "astronomy-engine": "^2.1.19",

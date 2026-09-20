@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ChartData, TransitHit } from "@/lib/astro";
-import { ELEMENT_VI, MODALITY_VI, displayAngle, formatOffset } from "@/lib/astro";
+import { ELEMENT_VI, MODALITY_VI, displayAngle, formatOffset, houseOfLongitude } from "@/lib/astro";
+import { EXTRA_POINT_KIND_ORDER, EXTRA_POINT_KIND_VI, type ExtraPointPosition } from "@/lib/points";
 import type { FixedStarHit } from "@/lib/sky";
 
 // Cho phép xuống dòng trên màn hình hẹp để không tràn ngang (tên dài + số liệu).
@@ -15,16 +16,18 @@ const ASPECT_VI: Record<string, string> = {
   Opposition: "Đối đỉnh"
 };
 
-type TabId = "overview" | "planets" | "houses" | "aspects" | "fixed" | "transits";
+type TabId = "overview" | "planets" | "extra" | "houses" | "aspects" | "fixed" | "transits";
 
 export default function ChartPanel({
   chart,
   transits,
-  fixedStars
+  fixedStars,
+  extraPoints
 }: {
   chart: ChartData;
   transits: TransitHit[];
   fixedStars: FixedStarHit[];
+  extraPoints: ExtraPointPosition[];
 }) {
   const [tab, setTab] = useState<TabId>("overview");
 
@@ -35,6 +38,7 @@ export default function ChartPanel({
   const tabs: { id: TabId; label: string }[] = [
     { id: "overview", label: "Tổng quan" },
     { id: "planets", label: `Hành tinh (${chart.planets.length})` },
+    { id: "extra", label: `Điểm thêm (${extraPoints.length})` },
     { id: "houses", label: "12 nhà" },
     { id: "aspects", label: `Góc chiếu (${chart.aspects.length})` },
     { id: "fixed", label: `Sao cố định (${fixedStars.length})` },
@@ -180,6 +184,36 @@ export default function ChartPanel({
                 {hit.meaning ? <p className="mt-0.5 text-xs text-slate-400">{hit.meaning}.</p> : null}
               </div>
             ))}
+          </div>
+        ) : null}
+
+        {tab === "extra" ? (
+          <div>
+            <p className="mb-1 text-xs text-slate-400">
+              Tiểu hành tinh, giao điểm Mặt Trăng và điểm quy ước (hoàng đạo nhiệt đới, nhà Whole Sign). Điểm quy ước không có thiên thể thật.
+            </p>
+            {extraPoints.length === 0 ? <p className="text-sm text-slate-400">Chưa tính được các điểm bổ sung.</p> : null}
+            {EXTRA_POINT_KIND_ORDER.map((kind) => {
+              const group = extraPoints.filter((point) => point.kind === kind);
+              if (group.length === 0) return null;
+              return (
+                <div key={kind} className="mb-2">
+                  <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{EXTRA_POINT_KIND_VI[kind]}</p>
+                  {group.map((point) => (
+                    <div key={point.key} className={row}>
+                      <span className="font-medium text-slate-200">
+                        <span className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ backgroundColor: point.color }} aria-hidden="true" />
+                        {point.label}
+                      </span>
+                      <span className="text-right text-xs text-slate-400">
+                        {displayAngle(point.longitude)} · Nhà {houseOfLongitude(point.longitude, chart.ascendant)}
+                      </span>
+                      <p className="w-full text-xs text-slate-500">{point.meaning}</p>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         ) : null}
 

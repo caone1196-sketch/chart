@@ -24,6 +24,7 @@ import {
 import { askServerAi, checkServerHealth, type ChatEngine, type ChatTurn, type ServerHealth } from "@/lib/ai";
 import { geocodePlace } from "@/lib/geocode";
 import { answerLocally } from "@/lib/interpret";
+import { computeExtraPoints, extraPointsToLines, type ExtraPointPosition } from "@/lib/points";
 import { computeSkySnapshot, findFixedStarHits, riseSetForDay, type FixedStarHit } from "@/lib/sky";
 
 const STORAGE_FORM = "astral-chart-vn:form";
@@ -137,6 +138,8 @@ export default function App() {
     [chart]
   );
 
+  const extraPoints: ExtraPointPosition[] = useMemo(() => (chart ? computeExtraPoints(chart.utcDate) : []), [chart]);
+
   const skySnapshot = useMemo(
     () =>
       Number.isFinite(lat) && Number.isFinite(lon)
@@ -248,7 +251,7 @@ export default function App() {
     setStatus("");
     setEngine(null);
 
-    const report = buildChartReport(chart, senderName.trim() || "Người dùng", value, transitToLines(transits));
+    const report = buildChartReport(chart, senderName.trim() || "Người dùng", value, transitToLines(transits), extraPointsToLines(extraPoints, chart.ascendant));
 
     const fallback = () =>
       answerLocally({
@@ -259,6 +262,7 @@ export default function App() {
         sky: skySnapshot ?? computeSkySnapshot(now, chart.latitude, chart.longitude, localSiderealDegrees(now, chart.longitude), calcObliquity(now)),
         transits,
         fixedStars,
+        extraPoints,
         riseSet: riseSet ?? { sunRise: "—", sunSet: "—", moonRise: "—", moonSet: "—", timeZoneLabel: "giờ máy của bạn" }
       });
 
@@ -562,7 +566,7 @@ export default function App() {
                     màu: góc chiếu chính.
                   </p>
                 </div>
-                <ChartPanel chart={chart} transits={transits} fixedStars={fixedStars} />
+                <ChartPanel chart={chart} transits={transits} fixedStars={fixedStars} extraPoints={extraPoints} />
               </div>
             </motion.div>
           ) : (

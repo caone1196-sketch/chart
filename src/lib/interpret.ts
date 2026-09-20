@@ -1,5 +1,5 @@
 import type { Aspect, ChartData, PlanetPosition, TransitHit } from "@/lib/astro";
-import { ELEMENT_VI, MODALITY_VI, displayAngle, normalizeDegree } from "@/lib/astro";
+import { ELEMENT_VI, MODALITY_VI, displayAngle, houseOfLongitude, normalizeDegree } from "@/lib/astro";
 import {
   ASPECT_TONES,
   ELEMENT_TRAITS,
@@ -14,6 +14,7 @@ import {
 } from "@/lib/knowledge";
 import type { FixedStarHit, SkySnapshot } from "@/lib/sky";
 import { compass, signPositionOf } from "@/lib/sky";
+import { EXTRA_POINT_KIND_ORDER, EXTRA_POINT_KIND_VI, type ExtraPointPosition } from "@/lib/points";
 
 export type LocalAnswerInput = {
   question: string;
@@ -23,6 +24,7 @@ export type LocalAnswerInput = {
   sky: SkySnapshot;
   transits: TransitHit[];
   fixedStars: FixedStarHit[];
+  extraPoints: ExtraPointPosition[];
   riseSet: { sunRise: string; sunSet: string; moonRise: string; moonSet: string; timeZoneLabel: string };
 };
 
@@ -171,6 +173,27 @@ const transitSection = (input: LocalAnswerInput, limit = 4) => {
   ].join(" ");
 
   return `${lines}\n\n${closing}`;
+};
+
+const extraPointsSection = (input: LocalAnswerInput) => {
+  const points = input.extraPoints;
+  if (!points.length) {
+    return "Chưa tính được các điểm bổ sung cho bản đồ này.";
+  }
+  const lines = [
+    `Bản đồ của bạn có ${points.length} điểm bổ sung (hoàng đạo nhiệt đới, nhà Whole Sign). Nhóm tiểu hành tinh thật là nhóm nên đọc trước; nhóm quy ước Hamburg chỉ nên dùng khi đã quen.`
+  ];
+  for (const kind of EXTRA_POINT_KIND_ORDER) {
+    const group = points.filter((point) => point.kind === kind);
+    if (!group.length) continue;
+    lines.push(`**${EXTRA_POINT_KIND_VI[kind]}**`);
+    for (const point of group) {
+      lines.push(
+        `- ${point.label} ở ${displayAngle(point.longitude)} (nhà ${houseOfLongitude(point.longitude, input.chart.ascendant)}) — ${point.meaning}`
+      );
+    }
+  }
+  return lines.join("\n");
 };
 
 const fixedStarSection = (input: LocalAnswerInput, limit = 6) => {
@@ -477,6 +500,10 @@ export const answerLocally = (input: LocalAnswerInput): string => {
     sections.push(["**Sao cố định gắn với bản đồ natal**", fixedStarSection(input)].join("\n"));
   }
 
+  if (has("points")) {
+    sections.push(["**Tiểu hành tinh & điểm bổ sung**", extraPointsSection(input)].join("\n"));
+  }
+
   if (has("sky")) {
     sections.push(["**Bầu trời tại thời điểm này**", skySection(input)].join("\n"));
   }
@@ -578,5 +605,7 @@ export const suggestionChips = [
   "Vận hạn 12 tháng tới theo transit?",
   "Sao cố định nào đang chiếu vào Mặt Trời của tôi?",
   "Tối nay tôi thấy được hành tinh nào trên bầu trời?",
-  "Nhà 7 của tôi nói gì về hôn nhân?"
+  "Nhà 7 của tôi nói gì về hôn nhân?",
+  "Chiron và Lilith trong bản đồ của tôi ở đâu?",
+  "Tiểu hành tinh Ceres, Pallas, Juno, Vesta nói gì?"
 ];

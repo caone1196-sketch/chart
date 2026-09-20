@@ -223,6 +223,7 @@ export type Intent =
   | "compatibility"
   | "sky"
   | "fixedstar"
+  | "points"
   | "chart"
   | "lucky";
 
@@ -238,6 +239,7 @@ export const INTENT_KEYWORDS: Array<{ intent: Intent; keys: string[]; label: str
   { intent: "timing", label: "Vận hạn & thời điểm", keys: ["khi nao", "thoi diem", "nam nay", "thang ", "tuan ", "tuong lai", "sap toi", "van ", "han ", "202", "thoi gian toi", "bao lau"] },
   { intent: "compatibility", label: "Tương hợp", keys: ["tuong hop", "hop voi", "cung nao", "nguoi ay", "doi phuong", "hop nhau", "synastry"] },
   { intent: "fixedstar", label: "Sao cố định", keys: ["sao co dinh", "fixed star", "ngoi sao nao", "regulus", "sirius", "aldebaran", "antares", "vega", "sao chieu", "chom sao nao"] },
+  { intent: "points", label: "Điểm bổ sung", keys: ["diem bo sung", "diem them", "tieu hanh tinh", "chiron", "lilith", "black moon", "ceres", "pallas", "juno", "vesta", "eris", "sedna", "giao diem", "true node", "mean node", "south node", "rahu", "ketu", "selena", "white moon", "hamburg", "uranian", "cupido", "hades", "zeus", "kronos", "apollon", "admetos", "vulkanus", "poseidon", "transpluto"] },
   { intent: "sky", label: "Bầu trời", keys: ["bau troi", "toi nay", "hom nay", "bay gio", "hien tai", "mat trang o", "hanh tinh nao", "moc ", "lan ", "quan sat", "ngam sao", "ngan ha"] },
   { intent: "personality", label: "Tính cách", keys: ["tinh cach", "diem manh", "diem yeu", "toi la nguoi", "ban than", "su manh", "su yeu", "mẫu nguoi", "mau nguoi", "noi tam"] },
   { intent: "lucky", label: "Màu sắc & may mắn", keys: ["mau ", "con so", "may man", "ngay tot", "vật phẩm", "phong thuy", "biet danh"] },

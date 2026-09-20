@@ -524,7 +524,7 @@ export const formatReportTimestamp = (date: Date) =>
   }).format(date);
 
 /** Bản mô tả chart dạng văn bản để gửi kèm câu hỏi cho mô hình ngôn ngữ. */
-export const buildChartReport = (chart: ChartData, senderName: string, question: string, transitLines: string[] = []) => {
+export const buildChartReport = (chart: ChartData, senderName: string, question: string, transitLines: string[] = [], extraLines: string[] = []) => {
   const planetLines = chart.planets
     .map(
       (planet) =>
@@ -569,6 +569,9 @@ export const buildChartReport = (chart: ChartData, senderName: string, question:
     "",
     "TRANSIT HIỆN TẠI LÊN BẢN ĐỒ (orb <= 4°)",
     transitLines.length ? transitLines.join("\n") : "- Không có transit nổi bật trong ngưỡng orb.",
+    "",
+    "ĐIỂM BỔ SUNG (TIỂU HÀNH TINH, GIAO ĐIỂM, ĐIỂM QUY ƯỚC)",
+    extraLines.length ? extraLines.join("\n") : "- Không có.",
     "",
     "CÂU HỎI CẦN LUẬN GIẢI",
     question
